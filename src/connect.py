@@ -135,12 +135,14 @@ class ClaudeCodeAdapter:
                 if backup:
                     print(f"Backed up configuration to {backup}")
                 
+                env = {"AGENTMEMORY_URL": os.environ.get("AGENTMEMORY_URL", "http://localhost:3111")}
+                secret = os.environ.get("AGENTMEMORY_SECRET")
+                if secret:
+                    env["AGENTMEMORY_SECRET"] = secret
                 servers["agentmemory"] = {
                     "command": sys.executable,
                     "args": [mcp_stdio_path],
-                    "env": {
-                        "AGENTMEMORY_URL": "http://localhost:3111"
-                    }
+                    "env": env
                 }
                 next_cfg["mcpServers"] = servers
                 write_json_atomic(claude_json, next_cfg)
@@ -177,13 +179,17 @@ class CodexAdapter:
         codex_toml = os.path.join(get_home_dir(), ".codex", "config.toml")
         mcp_stdio_path = get_mcp_stdio_path()
 
+        url = os.environ.get("AGENTMEMORY_URL", "http://localhost:3111")
+        secret = os.environ.get("AGENTMEMORY_SECRET")
         toml_block = f"""
 [mcp_servers.agentmemory]
 command = "{sys.executable.replace('\\', '/')}"
 args = ["{mcp_stdio_path.replace('\\', '/')}"]
 [mcp_servers.agentmemory.env]
-AGENTMEMORY_URL = "http://localhost:3111"
+AGENTMEMORY_URL = "{url}"
 """
+        if secret:
+            toml_block += f'AGENTMEMORY_SECRET = "{secret}"\n'
 
         exists = os.path.exists(codex_toml)
         current = ""
@@ -315,12 +321,14 @@ class AntigravityAdapter:
                 if backup:
                     print(f"Backed up config to {backup}")
                 
+                env = {"AGENTMEMORY_URL": os.environ.get("AGENTMEMORY_URL", "http://localhost:3111")}
+                secret = os.environ.get("AGENTMEMORY_SECRET")
+                if secret:
+                    env["AGENTMEMORY_SECRET"] = secret
                 servers["agentmemory"] = {
                     "command": sys.executable,
                     "args": [mcp_stdio_path],
-                    "env": {
-                        "AGENTMEMORY_URL": "http://localhost:3111"
-                    }
+                    "env": env
                 }
                 next_cfg["mcpServers"] = servers
                 write_json_atomic(mcp_config_path, next_cfg)
@@ -353,12 +361,14 @@ class KiroAdapter:
                 if backup:
                     print(f"Backed up config to {backup}")
                 
+                env = {"AGENTMEMORY_URL": os.environ.get("AGENTMEMORY_URL", "http://localhost:3111")}
+                secret = os.environ.get("AGENTMEMORY_SECRET")
+                if secret:
+                    env["AGENTMEMORY_SECRET"] = secret
                 servers["agentmemory"] = {
                     "command": sys.executable,
                     "args": [mcp_stdio_path],
-                    "env": {
-                        "AGENTMEMORY_URL": "http://localhost:3111"
-                    }
+                    "env": env
                 }
                 next_cfg["mcpServers"] = servers
                 write_json_atomic(mcp_config_path, next_cfg)
