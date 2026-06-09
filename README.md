@@ -1,6 +1,16 @@
+---
+title: AgentMemory Python
+emoji: 🧠
+colorFrom: blue
+colorTo: indigo
+sdk: docker
+pinned: false
+---
+
 <p align="center">
   <img src="assets/banner.png" alt="agentmemory — Persistent memory for AI coding agents" width="720" />
 </p>
+
 
 <p align="center">
   <strong>
