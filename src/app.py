@@ -419,8 +419,7 @@ def api_replay_sessions():
     if auth_err:
         return auth_err
         
-    sessions = kv.list(KV.sessions)
-    sessions.sort(key=lambda s: s.get("startedAt", ""), reverse=True)
+    sessions = functions.list_sessions(kv)
     return jsonify({"success": True, "sessions": sessions}), 200
 
 @app.route("/agentmemory/session/start", methods=["POST"])
@@ -1152,7 +1151,7 @@ def api_replay_load():
     session_id = request.args.get("sessionId")
     if not session_id:
         return jsonify({"error": "sessionId required"}), 400
-    session = kv.get(KV.sessions, session_id)
+    session = functions.get_session(kv, session_id)
     if not session:
         return jsonify({"error": "session not found"}), 404
     obs = kv.list(KV.observations(session_id))

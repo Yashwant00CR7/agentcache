@@ -1709,11 +1709,24 @@ def rebuild_index(kv: StateKV) -> int:
 
 def list_sessions(kv: StateKV) -> List[Dict[str, Any]]:
     sessions = kv.list(KV.sessions)
+    for s in sessions:
+        sid = s.get("id")
+        if sid:
+            summary = kv.get(KV.summaries, sid)
+            if summary:
+                s["title"] = summary.get("title")
+                s["summary"] = summary.get("narrative")
     sessions.sort(key=lambda s: s.get("startedAt", ""), reverse=True)
     return sessions
 
 def get_session(kv: StateKV, session_id: str) -> Optional[Dict[str, Any]]:
-    return kv.get(KV.sessions, session_id)
+    s = kv.get(KV.sessions, session_id)
+    if s:
+        summary = kv.get(KV.summaries, session_id)
+        if summary:
+            s["title"] = summary.get("title")
+            s["summary"] = summary.get("narrative")
+    return s
 
 def create_session(kv: StateKV, session: Dict[str, Any]) -> Dict[str, Any]:
     kv.set(KV.sessions, session["id"], session)
@@ -2150,6 +2163,13 @@ def summarize(kv: StateKV, data: Dict[str, Any]) -> Dict[str, Any]:
             return {"success": False, "error": f"Reduction failed: {e}"}
             
     kv.set(KV.summaries, session_id, final_summary)
+    
+    session = kv.get(KV.sessions, session_id)
+    if session:
+        session["title"] = final_summary["title"]
+        session["summary"] = final_summary["narrative"]
+        kv.set(KV.sessions, session_id, session)
+
     safe_audit(kv, "compress", "mem::summarize", [session_id], {
         "title": final_summary["title"],
         "observationCount": len(compressed)
