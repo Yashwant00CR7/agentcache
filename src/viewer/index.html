@@ -1224,7 +1224,8 @@
 
     var NODE_COLORS = {
       file: '#2D6A4F', function: '#1D4E89', concept: '#B8860B', error: '#CC0000',
-      decision: '#6B3FA0', pattern: '#2563EB', library: '#C2410C', person: '#111111'
+      decision: '#6B3FA0', pattern: '#2563EB', library: '#C2410C', person: '#111111',
+      folder: '#4F46E5'
     };
     var OP_BADGES = {
       observe: 'badge-blue', compress: 'badge-cyan', remember: 'badge-green',
@@ -1834,47 +1835,150 @@
       el.innerHTML = '<div class="graph-container"><div class="graph-canvas-wrap"><canvas id="graph-canvas"></canvas><div class="graph-controls"><button title="Zoom In" data-action="zoom-graph" data-dir="1">+</button><button title="Zoom Out" data-action="zoom-graph" data-dir="-1">&minus;</button><div class="ctrl-divider"></div><button title="Recenter" data-action="recenter-graph">⌖</button></div><div class="graph-tooltip" id="graph-tooltip"></div></div><div class="graph-sidebar" id="graph-sidebar"></div></div>';
 
       var results = await Promise.all([
-        apiPost('graph/query', { limit: GRAPH_INITIAL_LIMIT }),
+        apiGet('sessions'),
+        apiGet('memories?latest=true&limit=2000'),
         apiGet('graph/stats')
       ]);
-      var queryResult = results[0];
-      if (queryResult === null) {
-        state.graph.queryError = 'graph/query failed (check server logs for HTTP error)';
-        state.graph.nodes = [];
-        state.graph.edges = [];
-        state.graph.stats = results[1] || {};
-        state.graph.loaded = true;
-        renderGraphSidebar();
-        return;
-      }
-      state.graph.queryError = null;
-      state.graph.nodes = queryResult.nodes || [];
-      state.graph.edges = queryResult.edges || [];
-      state.graph.truncated = queryResult.truncated === true;
-      state.graph.totalNodes = typeof queryResult.totalNodes === 'number' ? queryResult.totalNodes : state.graph.nodes.length;
-      state.graph.totalEdges = typeof queryResult.totalEdges === 'number' ? queryResult.totalEdges : state.graph.edges.length;
-      state.graph.stats = results[1] || {};
 
-      if (state.graph.nodes.length === 0 && (state.graph.stats.totalNodes || state.graph.stats.nodes || 0) === 0) {
-        var sb = document.getElementById('graph-sidebar');
-        if (sb) sb.innerHTML = '<h3>Graph</h3><p style="font-size:12px;color:var(--ink-faint);margin:8px 0;font-style:italic;">No graph data yet. Building from observations and memories...</p>';
-        var buildResult = await apiPost('graph/build', {});
-        if (buildResult && buildResult.success && buildResult.nodes > 0) {
-          var freshResults = await Promise.all([
-            apiPost('graph/query', { limit: GRAPH_INITIAL_LIMIT }),
-            apiGet('graph/stats')
-          ]);
-          var freshQuery = freshResults[0];
-          if (freshQuery) {
-            state.graph.nodes = freshQuery.nodes || [];
-            state.graph.edges = freshQuery.edges || [];
-            state.graph.truncated = freshQuery.truncated === true;
-            state.graph.totalNodes = typeof freshQuery.totalNodes === 'number' ? freshQuery.totalNodes : state.graph.nodes.length;
-            state.graph.totalEdges = typeof freshQuery.totalEdges === 'number' ? freshQuery.totalEdges : state.graph.edges.length;
+      var sessions = (results[0] && results[0].sessions) || [];
+      var memories = (results[1] && results[1].memories) || [];
+      var stats = results[2] || {};
+
+      state.graph.queryError = null;
+
+      // Extract unique folders (projects)
+      var folderMap = {};
+      sessions.forEach(function(s) {
+        var path = s.project ? String(s.project).trim() : '';
+        if (!path) return;
+        if (!folderMap[path]) {
+          folderMap[path] = {
+            id: path,
+            name: path.split(/[\\/]/).pop() || path,
+            fullPath: path,
+            type: 'folder',
+            sessions: [],
+            memories: [],
+            concepts: new Set(),
+            firstPrompts: [],
+            summaries: []
+          };
+        }
+        folderMap[path].sessions.push(s);
+        if (s.firstPrompt) folderMap[path].firstPrompts.push(s.firstPrompt);
+        if (s.summary) folderMap[path].summaries.push(s.summary);
+      });
+
+      memories.forEach(function(m) {
+        var path = m.project ? String(m.project).trim() : '';
+        if (!path) return;
+        if (!folderMap[path]) {
+          // If the folder is not in sessions, create it
+          folderMap[path] = {
+            id: path,
+            name: path.split(/[\\/]/).pop() || path,
+            fullPath: path,
+            type: 'folder',
+            sessions: [],
+            memories: [],
+            concepts: new Set(),
+            firstPrompts: [],
+            summaries: []
+          };
+        }
+        folderMap[path].memories.push(m);
+        if (m.concepts && Array.isArray(m.concepts)) {
+          m.concepts.forEach(function(c) {
+            folderMap[path].concepts.add(c.toLowerCase());
+          });
+        }
+      });
+
+      var folders = Object.values(folderMap);
+      
+      // Compute detailed properties/descriptions
+      folders.forEach(function(f) {
+        var desc = '';
+        if (f.summaries.length > 0) {
+          desc += '<strong>Summaries:</strong><br>' + f.summaries.slice(0, 3).map(function(s) { return '&bull; ' + esc(s); }).join('<br>') + '<br><br>';
+        } else if (f.firstPrompts.length > 0) {
+          desc += '<strong>Prompts:</strong><br>' + f.firstPrompts.slice(0, 3).map(function(p) { return '&bull; ' + esc(p); }).join('<br>') + '<br><br>';
+        }
+        
+        var conceptsArr = Array.from(f.concepts);
+        if (conceptsArr.length > 0) {
+          desc += '<strong>Concepts:</strong><br>' + conceptsArr.slice(0, 10).map(function(c) { return '<span class="tag">' + esc(c) + '</span>'; }).join(' ') + '<br><br>';
+        }
+        
+        if (f.memories.length > 0) {
+          desc += '<strong>Memories:</strong><br>' + f.memories.slice(0, 5).map(function(m) { return '&bull; ' + esc(m.title); }).join('<br>');
+        }
+        
+        f.properties = {
+          description: desc || 'No description available for this folder.',
+          fullPath: f.fullPath,
+          sessionCount: f.sessions.length,
+          memoryCount: f.memories.length
+        };
+      });
+
+      // Compute edges (connections between folders)
+      var edges = [];
+      for (var i = 0; i < folders.length; i++) {
+        for (var j = i + 1; j < folders.length; j++) {
+          var f1 = folders[i];
+          var f2 = folders[j];
+          
+          var sharedConcepts = [];
+          f1.concepts.forEach(function(c) {
+            if (f2.concepts.has(c)) {
+              sharedConcepts.push(c);
+            }
+          });
+          
+          var path1 = f1.fullPath.split(/[\\/]/).filter(Boolean);
+          var path2 = f2.fullPath.split(/[\\/]/).filter(Boolean);
+          var commonSubdirs = 0;
+          for (var k = 0; k < Math.min(path1.length, path2.length); k++) {
+            if (path1[k].toLowerCase() === path2[k].toLowerCase()) {
+              var p = path1[k].toLowerCase();
+              if (p !== 'c:' && p !== 'd:' && p !== 'downloads' && p !== 'projects' && p !== 'other projects') {
+                commonSubdirs++;
+              }
+            } else {
+              break;
+            }
           }
-          state.graph.stats = freshResults[1] || {};
+          
+          var connectionType = [];
+          var weight = 0;
+          if (sharedConcepts.length > 0) {
+            connectionType.push('Shared concepts: ' + sharedConcepts.slice(0, 2).join(', '));
+            weight += sharedConcepts.length * 0.8;
+          }
+          if (commonSubdirs > 0) {
+            connectionType.push('Common parent path');
+            weight += commonSubdirs * 1.5;
+          }
+          
+          if (weight > 0) {
+            edges.push({
+              id: f1.fullPath + '->' + f2.fullPath,
+              sourceNodeId: f1.fullPath,
+              targetNodeId: f2.fullPath,
+              type: connectionType.join(' & '),
+              weight: Math.min(5, weight)
+            });
+          }
         }
       }
+
+      state.graph.nodes = folders;
+      state.graph.edges = edges;
+      state.graph.truncated = false;
+      state.graph.totalNodes = folders.length;
+      state.graph.totalEdges = edges.length;
+      state.graph.stats = { totalNodes: folders.length, totalEdges: edges.length };
 
       state.graph.loaded = true;
       var types = {};
@@ -1887,7 +1991,8 @@
 
     var NODE_SHAPES = {
       file: 'rect', function: 'circle', concept: 'circle', error: 'diamond',
-      decision: 'diamond', pattern: 'circle', library: 'hexagon', person: 'circle'
+      decision: 'diamond', pattern: 'circle', library: 'hexagon', person: 'circle',
+      folder: 'rect'
     };
     var graphSearchTerm = '';
 
@@ -2065,7 +2170,17 @@
             var conns = graphSim.edges.filter(function(ed) { return ed.sourceNodeId === hoverNode.id || ed.targetNodeId === hoverNode.id; }).length;
             var ttHtml = '<div class="tt-name">' + esc(hoverNode.name) + '</div>';
             ttHtml += '<div class="tt-type" style="color:' + (NODE_COLORS[hoverNode.type] || '#666') + '">' + esc(hoverNode.type) + '</div>';
-            if (hoverNode.properties) {
+            if (hoverNode.type === 'folder' && hoverNode.properties) {
+              if (hoverNode.properties.fullPath) {
+                ttHtml += '<div class="tt-prop">Path: ' + esc(truncate(hoverNode.properties.fullPath, 45)) + '</div>';
+              }
+              if (typeof hoverNode.properties.sessionCount === 'number') {
+                ttHtml += '<div class="tt-prop">Sessions: ' + hoverNode.properties.sessionCount + '</div>';
+              }
+              if (typeof hoverNode.properties.memoryCount === 'number') {
+                ttHtml += '<div class="tt-prop">Memories: ' + hoverNode.properties.memoryCount + '</div>';
+              }
+            } else if (hoverNode.properties) {
               var propKeys = Object.keys(hoverNode.properties).slice(0, 3);
               propKeys.forEach(function(k) {
                 ttHtml += '<div class="tt-prop">' + esc(k) + ': ' + esc(truncate(String(hoverNode.properties[k]), 30)) + '</div>';
@@ -2131,14 +2246,20 @@
       var html = '<div class="selected-node-info">';
       html += '<h4 style="color:' + color + '">' + esc(simNode.name) + '</h4>';
       html += '<div class="prop">Type: ' + esc(simNode.type) + '</div>';
-      if (simNode.properties) {
+      
+      if (simNode.type === 'folder' && simNode.properties && simNode.properties.description) {
+        html += '<div class="prop-desc" style="margin-top:10px;font-size:12px;color:var(--ink);line-height:1.5;max-height:300px;overflow-y:auto;border-top:1px solid var(--border);padding-top:10px;">' + simNode.properties.description + '</div>';
+      } else if (simNode.properties) {
         Object.keys(simNode.properties).forEach(function(k) {
           html += '<div class="prop">' + esc(k) + ': ' + esc(truncate(simNode.properties[k], 50)) + '</div>';
         });
       }
+      
       var conns = graphSim.edges.filter(function(e) { return e.sourceNodeId === simNode.id || e.targetNodeId === simNode.id; }).length;
-      html += '<div class="prop">Connections: ' + conns + '</div>';
-      html += '<button class="btn btn-primary" style="margin-top:8px;width:100%;" data-action="expand-node" data-node-id="' + esc(simNode.id) + '">Expand neighbors</button>';
+      html += '<div class="prop" style="margin-top:10px;">Connections: ' + conns + '</div>';
+      if (simNode.type !== 'folder') {
+        html += '<button class="btn btn-primary" style="margin-top:8px;width:100%;" data-action="expand-node" data-node-id="' + esc(simNode.id) + '">Expand neighbors</button>';
+      }
       html += '</div>';
       panel.innerHTML = html;
     }
