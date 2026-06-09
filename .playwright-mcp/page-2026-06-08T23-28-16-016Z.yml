@@ -1,0 +1,35 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - link "Open dashboard" [ref=e3] [cursor=pointer]:
+      - /url: "#dashboard"
+      - heading "agentmemory" [level=1] [ref=e4]
+      - generic [ref=e5]: v0.9.8
+    - generic [ref=e6]:
+      - generic [ref=e7]: Tue, Jun 9, 2026
+      - button "DARK" [ref=e8] [cursor=pointer]
+      - generic [ref=e9]: live updates off
+  - generic [ref=e10]:
+    - button "Dashboard" [ref=e11] [cursor=pointer]
+    - button "Graph" [ref=e12] [cursor=pointer]
+    - button "Memories" [ref=e13] [cursor=pointer]
+    - button "Timeline" [ref=e14] [cursor=pointer]
+    - button "Sessions" [ref=e15] [cursor=pointer]
+    - button "Lessons" [ref=e16] [cursor=pointer]
+    - button "Actions" [ref=e17] [cursor=pointer]
+    - button "Crystals" [ref=e18] [cursor=pointer]
+    - button "Audit" [ref=e19] [cursor=pointer]
+    - button "Activity" [ref=e20] [cursor=pointer]
+    - button "Profile" [ref=e21] [cursor=pointer]
+    - button "Replay" [ref=e22] [cursor=pointer]
+  - generic [ref=e24]: Loading dashboard...
+  - contentinfo [ref=e25]:
+    - generic [ref=e26]: agentmemory viewer · loading...
+    - generic [ref=e27]: ·
+    - link "github" [ref=e28] [cursor=pointer]:
+      - /url: https://github.com/rohitg00/agentmemory
+    - generic [ref=e29]: ·
+    - link "docs" [ref=e30] [cursor=pointer]:
+      - /url: https://github.com/rohitg00/agentmemory#readme
+    - generic [ref=e31]: ·
+    - link "report issue →" [ref=e32] [cursor=pointer]:
+      - /url: "#"

@@ -1,0 +1,40 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - link "Open dashboard" [ref=e3] [cursor=pointer]:
+      - /url: "#dashboard"
+      - heading "agentmemory" [level=1] [ref=e4]
+      - generic [ref=e5]: v0.9.8
+    - generic [ref=e6]:
+      - generic [ref=e7]: Tue, Jun 9, 2026
+      - button "DARK" [ref=e8] [cursor=pointer]
+      - generic [ref=e9]: live updates off
+  - generic [ref=e10]:
+    - button "Dashboard" [ref=e11] [cursor=pointer]
+    - button "Graph" [ref=e12] [cursor=pointer]
+    - button "Memories" [ref=e13] [cursor=pointer]
+    - button "Timeline" [ref=e14] [cursor=pointer]
+    - button "Sessions" [ref=e15] [cursor=pointer]
+    - button "Lessons" [ref=e16] [cursor=pointer]
+    - button "Actions" [ref=e17] [cursor=pointer]
+    - button "Crystals" [ref=e18] [cursor=pointer]
+    - button "Audit" [ref=e19] [cursor=pointer]
+    - button "Activity" [ref=e20] [cursor=pointer]
+    - button "Profile" [ref=e21] [cursor=pointer]
+    - button "Replay" [ref=e22] [cursor=pointer]
+  - button "1 off Feature flags — click to expand" [ref=e24] [cursor=pointer]:
+    - generic [ref=e25]: 1 off
+    - generic [ref=e26]: Feature flags
+    - generic [ref=e27]: — click to expand
+    - generic [ref=e28]: ▼
+  - generic [ref=e30]: Loading dashboard...
+  - contentinfo [ref=e31]:
+    - generic [ref=e32]: agentmemory viewer · v0.9.8
+    - generic [ref=e33]: ·
+    - link "github" [ref=e34] [cursor=pointer]:
+      - /url: https://github.com/rohitg00/agentmemory
+    - generic [ref=e35]: ·
+    - link "docs" [ref=e36] [cursor=pointer]:
+      - /url: https://github.com/rohitg00/agentmemory#readme
+    - generic [ref=e37]: ·
+    - link "report issue →" [ref=e38] [cursor=pointer]:
+      - /url: https://github.com/rohitg00/agentmemory/issues/new?title=%5Bviewer%5D%20&body=**Version%3A**%200.9.8%0A**Provider%3A**%20llm%0A**Embedding%3A**%20gemini%0A**Flags%3A**%20GRAPH_EXTRACTION_ENABLED%3Don%2C%20CONSOLIDATION_ENABLED%3Don%2C%20AGENTMEMORY_AUTO_COMPRESS%3Doff%0A**User%20agent%3A**%20Mozilla%2F5.0%20(Windows%20NT%2010.0%3B%20Win64%3B%20x64)%20AppleWebKit%2F537.36%20(KHTML%2C%20like%20Gecko)%20Chrome%2F149.0.0.0%20Safari%2F537.36%0A%0A%23%23%23%20What%20went%20wrong%0A%0A(describe%20the%20issue)%0A%0A%23%23%23%20Steps%20to%20reproduce%0A%0A1.%20%0A2.%20%0A3.%20%0A
