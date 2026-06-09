@@ -475,8 +475,6 @@ def get_agent_id() -> Optional[str]:
     return os.getenv("AGENT_ID") or None
 
 def commit_if_enabled(kv: StateKV, message: str, agent_id: Optional[str]) -> Optional[str]:
-    if os.getenv("DOLT_AUTO_COMMIT") == "false":
-        return None
     return kv.commit_version(message, agent_id or "unknown-agent")
 
 
