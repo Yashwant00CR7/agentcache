@@ -9,10 +9,11 @@ import sys
 import json
 import requests
 
-BASE = "http://127.0.0.1:3111/agentmemory"
-SECRET = None  # set via AGENTMEMORY_SECRET env var if auth enabled
-
 import os
+BASE = os.getenv("AGENTMEMORY_URL", "http://127.0.0.1:3111").rstrip("/")
+if not BASE.endswith("/agentmemory"):
+    BASE = f"{BASE}/agentmemory"
+
 _secret = os.getenv("AGENTMEMORY_SECRET")
 
 def headers():
