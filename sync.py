@@ -12,7 +12,7 @@ import shutil
 import tempfile
 
 try:
-    from huggingface_hub import HfApi, hf_hub_download, list_repo_files
+    from huggingface_hub import HfApi, snapshot_download, list_repo_files
     from huggingface_hub.utils import EntryNotFoundError, RepositoryNotFoundError
 except ImportError:
     print("[sync] huggingface_hub not installed, skipping sync")
@@ -54,36 +54,20 @@ def restore():
         print("[sync] No HF_TOKEN — skipping restore")
         return
     os.makedirs(DATA_DIR, exist_ok=True)
-    api = get_api()
     try:
-        files = list(list_repo_files(REPO_ID, repo_type="dataset", token=HF_TOKEN))
+        print(f"[sync] downloading snapshot from {REPO_ID}...")
+        snapshot_download(
+            repo_id=REPO_ID,
+            repo_type="dataset",
+            token=HF_TOKEN,
+            local_dir=DATA_DIR,
+            ignore_patterns=["*.lock"],
+        )
+        print("[sync] restore complete")
     except RepositoryNotFoundError:
         print(f"[sync] Dataset repo {REPO_ID} not found — will create on first backup")
-        return
     except Exception as e:
-        print(f"[sync] restore list error: {e}")
-        return
-
-    if not files:
-        print("[sync] Dataset empty — fresh start")
-        return
-
-    for fname in files:
-        try:
-            local_path = os.path.join(DATA_DIR, fname)
-            os.makedirs(os.path.dirname(local_path), exist_ok=True)
-            hf_hub_download(
-                repo_id=REPO_ID,
-                filename=fname,
-                repo_type="dataset",
-                token=HF_TOKEN,
-                local_dir=DATA_DIR,
-            )
-            print(f"[sync] restored {fname}")
-        except Exception as e:
-            print(f"[sync] restore {fname} error: {e}")
-
-    print("[sync] restore complete")
+        print(f"[sync] restore error: {e}")
 
 def backup():
     if not HF_TOKEN:
