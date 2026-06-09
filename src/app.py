@@ -1312,8 +1312,7 @@ def api_get_second_brain():
         return auth_err
         
     brain_dir = os.getenv("SECOND_BRAIN_DIR", os.path.join(os.path.expanduser("~"), ".agentmemory", "second-brain"))
-    if not os.path.exists(brain_dir):
-        return jsonify({"error": "Second brain directory not found", "path": brain_dir}), 404
+    os.makedirs(brain_dir, exist_ok=True)
         
     file_param = request.args.get("file")
     if file_param:

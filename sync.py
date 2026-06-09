@@ -7,8 +7,8 @@ Usage:
 """
 import os
 import sys
-import glob
 import shutil
+import tempfile
 
 try:
     from huggingface_hub import HfApi, hf_hub_download, list_repo_files
@@ -17,11 +17,12 @@ except ImportError:
     print("[sync] huggingface_hub not installed, skipping sync")
     sys.exit(0)
 
-HF_TOKEN   = os.environ.get("HF_TOKEN", "")
-REPO_ID    = os.environ.get("AGENTMEMORY_DATASET_REPO", "Yash030/agentmemory-python-data")
-DATA_DIR   = os.path.expanduser("~/.agentmemory")
-SKIP_FILES = {".env"}   # never upload secrets
-ALLOW_HIDDEN = {".hmac"}  # hidden files that ARE safe to backup
+HF_TOKEN     = os.environ.get("HF_TOKEN", "")
+REPO_ID      = os.environ.get("AGENTMEMORY_DATASET_REPO", "Yash030/agentmemory-python-data")
+DATA_DIR     = os.path.expanduser("~/.agentmemory")
+SKIP_FILES   = {".env"}
+ALLOW_HIDDEN = {".hmac"}
+SKIP_NAMES   = {"LOCK"}  # held open by Dolt — always skip
 
 def get_api():
     return HfApi(token=HF_TOKEN)
@@ -49,7 +50,7 @@ def restore():
         try:
             local_path = os.path.join(DATA_DIR, fname)
             os.makedirs(os.path.dirname(local_path), exist_ok=True)
-            downloaded = hf_hub_download(
+            hf_hub_download(
                 repo_id=REPO_ID,
                 filename=fname,
                 repo_type="dataset",
@@ -77,40 +78,46 @@ def backup():
         print(f"[sync] repo_info error: {e}")
         return
 
-    # Collect files to upload
-    all_files = []
-    for root, dirs, files in os.walk(DATA_DIR):
-        # Skip hidden directories, EXCEPT if they are inside the '.dolt' folder
-        is_inside_dolt = '.dolt' in root.replace('\\', '/').split('/')
-        if not is_inside_dolt:
-            dirs[:] = [d for d in dirs if not d.startswith('.') or d == '.dolt']
-        for f in files:
-            if f in SKIP_FILES:
-                continue
-            if f.startswith('.') and f not in ALLOW_HIDDEN:
-                continue
-            full = os.path.join(root, f)
-            rel  = os.path.relpath(full, DATA_DIR)
-            all_files.append((full, rel))
+    # Stage files into a temp dir then upload in one commit
+    staging = tempfile.mkdtemp(prefix="agentmemory_sync_")
+    try:
+        copied = 0
+        for root, dirs, files in os.walk(DATA_DIR):
+            is_inside_dolt = ".dolt" in root.replace("\\", "/").split("/")
+            if not is_inside_dolt:
+                dirs[:] = [d for d in dirs if not d.startswith(".") or d == ".dolt"]
+            for f in files:
+                if f in SKIP_FILES or f in SKIP_NAMES:
+                    continue
+                if f.startswith(".") and f not in ALLOW_HIDDEN:
+                    continue
+                full = os.path.join(root, f)
+                rel  = os.path.relpath(full, DATA_DIR).replace("\\", "/")
+                dest = os.path.join(staging, rel.replace("/", os.sep))
+                os.makedirs(os.path.dirname(dest), exist_ok=True)
+                try:
+                    shutil.copy2(full, dest)
+                    copied += 1
+                except Exception as e:
+                    print(f"[sync] stage {rel} error: {e}")
 
-    if not all_files:
-        print("[sync] nothing to backup")
-        return
+        if copied == 0:
+            print("[sync] nothing to backup")
+            return
 
-    for full_path, rel_path in all_files:
-        try:
-            api.upload_file(
-                path_or_fileobj=full_path,
-                path_in_repo=rel_path.replace('\\', '/'),
-                repo_id=REPO_ID,
-                repo_type="dataset",
-                token=HF_TOKEN,
-            )
-            print(f"[sync] backed up {rel_path}")
-        except Exception as e:
-            print(f"[sync] backup {rel_path} error: {e}")
-
-    print("[sync] backup complete")
+        print(f"[sync] uploading {copied} files to {REPO_ID}...")
+        api.upload_folder(
+            folder_path=staging,
+            repo_id=REPO_ID,
+            repo_type="dataset",
+            token=HF_TOKEN,
+            commit_message="sync: periodic backup",
+        )
+        print("[sync] backup complete")
+    except Exception as e:
+        print(f"[sync] backup error: {e}")
+    finally:
+        shutil.rmtree(staging, ignore_errors=True)
 
 if __name__ == "__main__":
     cmd = sys.argv[1] if len(sys.argv) > 1 else "backup"
