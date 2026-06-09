@@ -7,19 +7,21 @@ from datetime import datetime, timezone
 from hook_utils import resolve_project, is_sdk_child, api_call_bg
 
 def main():
+    try:
+        input_data = sys.stdin.read()
+    except Exception:
+        return
+
     # Log to file for debugging
     log_path = os.path.expanduser("~/.agentmemory/hook_log.txt")
     try:
         with open(log_path, "a", encoding="utf-8") as f:
             f.write(f"[{datetime.now(timezone.utc).isoformat()}] prompt_submit hook called\n")
-            f.write(f"stdin content: {sys.stdin.read()[:500]}\n")
+            f.write(f"stdin content: {input_data[:500]}\n")
     except Exception as e:
         pass
 
-    # Reset stdin for actual processing
-    sys.stdin = open(sys.stdin.fileno(), 'r')
     try:
-        input_data = sys.stdin.read()
         if not input_data:
             return
         data = json.loads(input_data)
