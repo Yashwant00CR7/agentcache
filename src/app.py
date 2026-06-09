@@ -224,7 +224,7 @@ def serve_viewer():
         csp = "; ".join([
             "default-src 'none'",
             "base-uri 'none'",
-            "frame-ancestors 'none'",
+            "frame-ancestors 'self' https://huggingface.co https://*.hf.space",
             "object-src 'none'",
             "form-action 'none'",
             f"script-src 'nonce-{nonce}'",
