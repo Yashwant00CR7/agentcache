@@ -219,7 +219,11 @@ def serve_viewer():
             template = f.read()
             
         nonce = base64.urlsafe_b64encode(secrets.token_bytes(16)).decode("utf-8").rstrip("=")
-        html = template.replace("__AGENTMEMORY_VIEWER_NONCE__", nonce).replace("__AGENTMEMORY_VERSION__", "0.9.8")
+        auto_token = os.environ.get("AGENTMEMORY_SECRET", "")
+        html = (template
+                .replace("__AGENTMEMORY_VIEWER_NONCE__", nonce)
+                .replace("__AGENTMEMORY_VERSION__", "0.9.8")
+                .replace("__AGENTMEMORY_AUTO_TOKEN__", auto_token))
         
         csp = "; ".join([
             "default-src 'none'",

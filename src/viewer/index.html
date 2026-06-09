@@ -1349,6 +1349,12 @@
         try { el.setSelectionRange(focus.start, focus.end); } catch (e) {}
       }
     }
+    (function() {
+      var autoToken = '__AGENTMEMORY_AUTO_TOKEN__';
+      if (autoToken && autoToken.length > 0 && autoToken !== '__AGENTMEMORY_AUTO_TOKEN__') {
+        try { sessionStorage.setItem(VIEWER_TOKEN_STORAGE_KEY, autoToken); } catch (_) {}
+      }
+    })();
     function getViewerToken() {
       try { return sessionStorage.getItem(VIEWER_TOKEN_STORAGE_KEY) || ''; } catch (_) { return ''; }
     }
