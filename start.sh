@@ -64,6 +64,21 @@ dolt sql-server --host 127.0.0.1 --port 3306 --data-dir /home/user/.agentmemory/
 echo "[start] Waiting for Dolt server to be ready..."
 sleep 5
 
+# One-time migration: import legacy state_store.db binary files into Dolt SQL
+STATE_STORE="/home/user/.agentmemory/state_store.db"
+MIGRATION_DONE="/home/user/.agentmemory/.migration_done"
+if [ -d "$STATE_STORE" ] && [ ! -f "$MIGRATION_DONE" ]; then
+  echo "[start] Found legacy state_store.db — running one-time migration to Dolt SQL..."
+  python3 -c "
+import sys, os
+sys.path.insert(0, '/app/src')
+from db import StateKV
+from import_data import import_old_data
+kv = StateKV()
+import_old_data('$STATE_STORE', kv)
+" && touch "$MIGRATION_DONE" && echo "[start] Migration complete."
+fi
+
 # Set the port for Flask application to run on (Hugging Face Space expects 7860)
 export PORT=7860
 export III_REST_PORT=7860
