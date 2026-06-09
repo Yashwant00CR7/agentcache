@@ -1246,6 +1246,21 @@ def api_auto_forget():
     except Exception as e:
         return jsonify({"error": str(e)}), 400
 
+@app.route("/agentmemory/summarize", methods=["POST"])
+def api_summarize():
+    auth_err = check_auth()
+    if auth_err:
+        return auth_err
+        
+    try:
+        body = request.get_json(force=True) or {}
+        res = functions.summarize(kv, body)
+        if not res.get("success"):
+            return jsonify(res), 400
+        return jsonify(res), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+
 @app.route("/agentmemory/consolidate", methods=["POST"])
 def api_consolidate():
     auth_err = check_auth()

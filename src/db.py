@@ -60,7 +60,12 @@ class StateKV:
                     "SELECT value FROM kv_store WHERE scope = ? AND key = ?",
                     (scope, key)
                 ).fetchone()
-                return json.loads(row["value"]) if row else None
+                if row:
+                    val = json.loads(row["value"])
+                    if isinstance(val, dict) and "id" not in val:
+                        val["id"] = key
+                    return val
+                return None
             finally:
                 conn.close()
         except Exception as e:
@@ -104,10 +109,16 @@ class StateKV:
             conn = self._get_conn()
             try:
                 rows = conn.execute(
-                    "SELECT value FROM kv_store WHERE scope = ?",
+                    "SELECT key, value FROM kv_store WHERE scope = ?",
                     (scope,)
                 ).fetchall()
-                return [json.loads(r["value"]) for r in rows]
+                results = []
+                for r in rows:
+                    val = json.loads(r["value"])
+                    if isinstance(val, dict) and "id" not in val:
+                        val["id"] = r["key"]
+                    results.append(val)
+                return results
             finally:
                 conn.close()
         except Exception as e:
@@ -126,6 +137,8 @@ class StateKV:
                     obj = json.loads(row["value"]) if row else {}
                     if not isinstance(obj, dict):
                         obj = {}
+                    if "id" not in obj:
+                        obj["id"] = key
 
                     for op in ops:
                         op_type = op.get("type")
