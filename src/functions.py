@@ -114,6 +114,22 @@ def fingerprint_id(prefix: str, content: str) -> str:
     h = hashlib.sha256(content.strip().lower().encode('utf-8')).hexdigest()
     return f"{prefix}_{h[:16]}"
 
+def auto_complete_old_active_sessions(kv: StateKV, current_session_id: str) -> int:
+    sessions = kv.list(KV.sessions)
+    count = 0
+    now = datetime.datetime.utcnow().isoformat() + "Z"
+    for s in sessions:
+        if s.get("id") != current_session_id and s.get("status") == "active":
+            s["status"] = "completed"
+            if "endedAt" not in s:
+                s["endedAt"] = now
+            s["updatedAt"] = now
+            kv.set(KV.sessions, s["id"], s)
+            count += 1
+    if count > 0:
+        print(f"[session] Auto-completed {count} dangling active sessions.")
+    return count
+
 def jaccard_similarity(a: str, b: str) -> float:
     tokens_a = [t for t in a.split() if len(t) > 2]
     tokens_b = [t for t in b.split() if len(t) > 2]
@@ -724,6 +740,7 @@ def observe(kv: StateKV, payload: Dict[str, Any]) -> Dict[str, Any]:
                 updates.append({"type": "set", "path": "firstPrompt", "value": trimmed[:200]})
         kv.update(KV.sessions, session_id, updates)
     else:
+        auto_complete_old_active_sessions(kv, session_id)
         project = payload.get("project") or "unknown"
         cwd = payload.get("cwd") or os.getcwd()
         trimmed_prompt = None
@@ -1729,6 +1746,7 @@ def get_session(kv: StateKV, session_id: str) -> Optional[Dict[str, Any]]:
     return s
 
 def create_session(kv: StateKV, session: Dict[str, Any]) -> Dict[str, Any]:
+    auto_complete_old_active_sessions(kv, session["id"])
     kv.set(KV.sessions, session["id"], session)
     return session
 
