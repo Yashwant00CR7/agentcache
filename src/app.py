@@ -212,10 +212,6 @@ functions.set_stream_broadcaster(broadcast_to_viewers)
 @app.route("/viewer")
 @app.route("/agentmemory/viewer")
 def serve_viewer():
-    auth_err = check_auth()
-    if auth_err:
-        return auth_err
-        
     try:
         base_dir = os.path.dirname(os.path.abspath(__file__))
         template_path = os.path.join(base_dir, "viewer", "index.html")
