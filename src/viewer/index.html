@@ -1868,6 +1868,7 @@
       sessions.forEach(function(s) {
         var path = s.project ? String(s.project).trim() : '';
         if (!path) return;
+        if (!path.includes('/') && !path.includes('\\')) return;
         if (!folderMap[path]) {
           folderMap[path] = {
             id: path,
@@ -1889,6 +1890,7 @@
       memories.forEach(function(m) {
         var path = m.project ? String(m.project).trim() : '';
         if (!path) return;
+        if (!path.includes('/') && !path.includes('\\')) return;
         if (!folderMap[path]) {
           // If the folder is not in sessions, create it
           folderMap[path] = {

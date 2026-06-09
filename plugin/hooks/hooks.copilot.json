@@ -1,0 +1,72 @@
+{
+  "version": 1,
+  "hooks": {
+    "sessionStart": [
+      {
+        "type": "command",
+        "command": "python \"${COPILOT_PLUGIN_ROOT}/scripts/session_start.py\""
+      }
+    ],
+    "userPromptSubmitted": [
+      {
+        "type": "command",
+        "command": "python \"${COPILOT_PLUGIN_ROOT}/scripts/prompt_submit.py\""
+      }
+    ],
+    "preToolUse": [
+      {
+        "type": "command",
+        "matcher": "edit|write|create|read|view|glob|grep",
+        "command": "python \"${COPILOT_PLUGIN_ROOT}/scripts/pre_tool_use.py\""
+      }
+    ],
+    "postToolUse": [
+      {
+        "type": "command",
+        "command": "python \"${COPILOT_PLUGIN_ROOT}/scripts/post_tool_use.py\""
+      }
+    ],
+    "postToolUseFailure": [
+      {
+        "type": "command",
+        "command": "python \"${COPILOT_PLUGIN_ROOT}/scripts/post_tool_failure.py\""
+      }
+    ],
+    "preCompact": [
+      {
+        "type": "command",
+        "command": "python \"${COPILOT_PLUGIN_ROOT}/scripts/pre_compact.py\""
+      }
+    ],
+    "agentStop": [
+      {
+        "type": "command",
+        "command": "python \"${COPILOT_PLUGIN_ROOT}/scripts/stop.py\""
+      }
+    ],
+    "sessionEnd": [
+      {
+        "type": "command",
+        "command": "python \"${COPILOT_PLUGIN_ROOT}/scripts/session_end.py\""
+      }
+    ],
+    "subagentStart": [
+      {
+        "type": "command",
+        "command": "python \"${COPILOT_PLUGIN_ROOT}/scripts/subagent_start.py\""
+      }
+    ],
+    "subagentStop": [
+      {
+        "type": "command",
+        "command": "python \"${COPILOT_PLUGIN_ROOT}/scripts/subagent_stop.py\""
+      }
+    ],
+    "notification": [
+      {
+        "type": "command",
+        "command": "python \"${COPILOT_PLUGIN_ROOT}/scripts/notification.py\""
+      }
+    ]
+  }
+}

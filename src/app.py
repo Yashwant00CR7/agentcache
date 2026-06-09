@@ -346,7 +346,7 @@ def api_agent_observe():
         session_id = body.get("sessionId")
         project = body.get("project")
         cwd = body.get("cwd") or ""
-        text = body.get("text") or ""
+        text = body.get("text") or body.get("content") or ""
         obs_type = body.get("type") or "other"
         title = body.get("title") or f"agent_{obs_type}"
         image_data = body.get("imageData")
@@ -409,9 +409,26 @@ def api_search():
         
         # smart search / hybrid search query
         res = functions._hybrid_search.search(query, limit)
+        res = enrich_search_results(kv, res)
         return jsonify(res), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 400
+
+@app.route("/agentmemory/export", methods=["GET"])
+def api_export():
+    auth_err = check_auth()
+    if auth_err:
+        return auth_err
+    try:
+        max_sess = request.args.get("maxSessions")
+        offset = request.args.get("offset")
+        payload = {}
+        if max_sess is not None: payload["maxSessions"] = max_sess
+        if offset is not None: payload["offset"] = offset
+        res = functions.export_data(kv, payload)
+        return jsonify(res), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 @app.route("/agentmemory/replay/sessions", methods=["GET"])
 def api_replay_sessions():
@@ -927,90 +944,13 @@ def api_profile():
     project = request.args.get("project")
     if not project:
         sessions = kv.list(KV.sessions)
-        projects = sorted(set(s.get("project", "") for s in sessions if s.get("project")))
-        return jsonify({"projects": projects, "success": True}), 200
+        projects = set(s.get("project", "") for s in sessions if s.get("project"))
+        memories = kv.list(KV.memories)
+        mem_projects = set(m.get("project", "") for m in memories if m.get("project"))
+        all_projects = sorted(projects.union(mem_projects))
+        return jsonify({"projects": all_projects, "success": True}), 200
 
     res = functions.get_project_profile(kv, project)
-
-    # Stored profile may lack topConcepts/topFiles — compute from observations if empty
-    if not res.get("topConcepts") and not res.get("topFiles"):
-        import re as _re, json as _j, os.path as _osp
-        from collections import Counter
-        sessions = kv.list(KV.sessions)
-        project_sessions = [s for s in sessions if s.get("project") == project]
-        concept_counts = Counter()
-        file_counts = Counter()
-
-        def _harvest_file(path, fc, cc):
-            if not isinstance(path, str) or not path:
-                return
-            fc[path] += 1
-            # dirname components → concepts
-            parts = _re.split(r'[\\/]', path)
-            fname = parts[-1] if parts else ""
-            # dir components (skip drive letters, temp paths)
-            skip = {"tmp", "temp", "claude", "appdata", "local", "users", "windows"}
-            for part in parts[:-1]:
-                p = part.lower().strip()
-                if p and len(p) > 2 and p not in skip and not _re.match(r'^[a-z]:|^\.|^--', p):
-                    cc[p] += 1
-            # file stem → concept
-            stem = _osp.splitext(fname)[0]
-            if stem and len(stem) > 2:
-                cc[stem.lower()] += 1
-            # extension → technology concept
-            ext = _osp.splitext(fname)[1].lstrip(".")
-            if ext in ("py", "ts", "js", "jsx", "tsx", "go", "rs", "java", "cs", "cpp"):
-                cc[ext] += 1
-
-        for s in project_sessions:
-            sid = s.get("id", "")
-            if not sid:
-                continue
-            for o in kv.list(KV.observations(sid)):
-                # top-level concepts / files
-                for c in (o.get("concepts") or []):
-                    if isinstance(c, str) and c:
-                        concept_counts[c] += 1
-                for f in (o.get("files") or []):
-                    _harvest_file(f, file_counts, concept_counts)
-                # toolName → concept
-                tn = o.get("toolName")
-                if tn:
-                    concept_counts[tn] += 1
-                # toolInput path fields
-                ti = o.get("toolInput")
-                if isinstance(ti, str):
-                    try: ti = _j.loads(ti)
-                    except Exception: ti = {}
-                if isinstance(ti, dict):
-                    for fk in ("path", "file_path", "file", "filename"):
-                        _harvest_file(ti.get(fk, ""), file_counts, concept_counts)
-                # narrative may be JSON string with path/tool info
-                narr = o.get("narrative") or o.get("raw") or ""
-                if isinstance(narr, str) and narr.startswith("{"):
-                    try:
-                        nd = _j.loads(narr)
-                        if isinstance(nd, dict):
-                            tn2 = nd.get("toolName") or nd.get("tool_name")
-                            if tn2: concept_counts[tn2] += 1
-                            for fk in ("path", "file_path", "file", "filename"):
-                                _harvest_file(nd.get(fk, ""), file_counts, concept_counts)
-                    except Exception:
-                        pass
-
-        # memories for this project
-        for m in kv.list(KV.memories):
-            if m.get("project") == project:
-                for c in (m.get("concepts") or []):
-                    if c: concept_counts[c] += 1
-                for f in (m.get("files") or []):
-                    _harvest_file(f, file_counts, concept_counts)
-
-        res["topConcepts"] = [{"concept": c, "frequency": n} for c, n in concept_counts.most_common(20)]
-        res["topFiles"] = [{"file": f, "frequency": n} for f, n in file_counts.most_common(20)]
-        res["sessionCount"] = len(project_sessions)
-
     return jsonify(res), 200
 
 # =====================================================================
@@ -1063,6 +1003,182 @@ def api_crystals_list():
         return auth_err
     items = kv.list(KV.crystals)
     return jsonify({"crystals": items, "total": len(items)}), 200
+
+
+def escape_xml(s: str) -> str:
+    return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;").replace("'", "&apos;")
+
+
+def get_file_context(kv_inst, session_id, files, project):
+    try:
+        sessions = kv_inst.list(KV.sessions)
+        other_sessions = [s for s in sessions if s.get("id") != session_id] if session_id else sessions
+        if project:
+            other_sessions = [s for s in other_sessions if s.get("project") == project]
+        
+        # Sort sessions by startedAt desc
+        other_sessions.sort(key=lambda s: s.get("startedAt") or "", reverse=True)
+        other_sessions = other_sessions[:15]
+        
+        obs_cache = {}
+        for s in other_sessions:
+            s_id = s["id"]
+            obs_cache[s_id] = kv_inst.list(KV.observations(s_id))
+            
+        results = []
+        for file in files:
+            history = {"file": file, "observations": []}
+            normalized_file = file.replace("./", "", 1)
+            
+            for s in other_sessions:
+                s_id = s["id"]
+                observations = obs_cache.get(s_id) or []
+                
+                for obs in observations:
+                    obs_files = obs.get("files") or []
+                    if isinstance(obs_files, str):
+                        obs_files = [f.strip() for f in obs_files.split(",") if f.strip()]
+                    obs_title = obs.get("title")
+                    if not obs_files or not obs_title:
+                        continue
+                    
+                    # Check match
+                    matches = False
+                    for f in obs_files:
+                        if f == file or f == normalized_file or f.endswith(f"/{normalized_file}") or normalized_file.endswith(f"/{f}"):
+                            matches = True
+                            break
+                    
+                    importance = int(obs.get("importance") or 0)
+                    if matches and importance >= 4:
+                        history["observations"].append({
+                            "sessionId": s_id,
+                            "obsId": obs.get("id"),
+                            "type": obs.get("type", "other"),
+                            "title": obs_title,
+                            "narrative": obs.get("narrative") or obs.get("content") or "",
+                            "importance": importance,
+                            "timestamp": obs.get("timestamp", "")
+                        })
+            
+            # Sort by importance desc
+            history["observations"].sort(key=lambda o: o["importance"], reverse=True)
+            history["observations"] = history["observations"][:5]
+            if history["observations"]:
+                results.append(history)
+                
+        if not results:
+            return ""
+            
+        lines = ["<agentmemory-file-context>"]
+        for fh in results:
+            lines.append(f"## {fh['file']}")
+            for obs in fh["observations"]:
+                lines.append(f"- [{obs['type']}] {obs['title']}: {obs['narrative']}")
+        lines.append("</agentmemory-file-context>")
+        return "\n".join(lines)
+    except Exception as e:
+        print(f"[enrich] Error generating file context: {e}")
+        return ""
+
+
+@app.route("/agentmemory/enrich", methods=["POST"])
+def api_enrich():
+    auth_err = check_auth()
+    if auth_err:
+        return auth_err
+    try:
+        data = request.get_json(force=True) or {}
+        session_id = data.get("sessionId")
+        files = data.get("files") or []
+        terms = data.get("terms") or []
+        project = data.get("project")
+        
+        parts = []
+        # 1. File Context
+        if files:
+            file_context = get_file_context(kv, session_id, files, project)
+            if file_context:
+                parts.append(file_context)
+                
+        # 2. Search
+        search_queries = [os.path.basename(f) for f in files] + terms
+        search_queries = [q for q in search_queries if q]
+        if search_queries:
+            query_str = " ".join(search_queries)
+            res = functions._hybrid_search.search(query_str, 5)
+            if project:
+                res = [r for r in res if r.get("observation", {}).get("project") == project or r.get("project") == project]
+            
+            obs_texts = []
+            for r in res:
+                obs = r.get("observation", r)
+                narrative = obs.get("narrative") or obs.get("content")
+                if narrative:
+                    obs_texts.append(escape_xml(narrative))
+            if obs_texts:
+                parts.append("<agentmemory-relevant-context>\n" + "\n".join(obs_texts) + "\n</agentmemory-relevant-context>")
+                
+        # 3. Bug memories
+        if files:
+            bugs = []
+            memories = kv.list(KV.memories)
+            for m in memories:
+                m_type = m.get("type")
+                m_is_latest = m.get("isLatest", True)
+                m_project = m.get("project")
+                m_files = m.get("files") or []
+                if isinstance(m_files, str):
+                    m_files = [f.strip() for f in m_files.split(",") if f.strip()]
+                
+                if m_type == "bug" and m_is_latest:
+                    if project and m_project and m_project != project:
+                        continue
+                    
+                    has_overlap = False
+                    for f in m_files:
+                        for df in files:
+                            if f in df or df in f:
+                                has_overlap = True
+                                break
+                        if has_overlap:
+                            break
+                    
+                    if has_overlap:
+                        bugs.append(m)
+            
+            bugs.sort(key=lambda m: m.get("updatedAt") or m.get("createdAt") or "", reverse=True)
+            bugs_lines = []
+            for m in bugs[:3]:
+                title = escape_xml(m.get("title") or "")
+                content = escape_xml(m.get("content") or "")
+                bugs_lines.append(f"- {title}: {content}")
+            if bugs_lines:
+                parts.append("<agentmemory-past-errors>\n" + "\n".join(bugs_lines) + "\n</agentmemory-past-errors>")
+                
+        context = "\n\n".join(parts)
+        if len(context) > 4000:
+            context = context[:4000]
+            
+        return jsonify({"context": context}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/agentmemory/crystals/auto", methods=["POST"])
+def api_crystals_auto():
+    auth_err = check_auth()
+    if auth_err:
+        return auth_err
+    return jsonify({"success": True, "message": "auto-crystallize stub (not implemented in Python version)"}), 200
+
+
+@app.route("/agentmemory/claude-bridge/sync", methods=["POST"])
+def api_claude_bridge_sync():
+    auth_err = check_auth()
+    if auth_err:
+        return auth_err
+    return jsonify({"success": True, "message": "claude-bridge/sync stub"}), 200
 
 @app.route("/agentmemory/actions", methods=["GET"])
 def api_actions_list():
@@ -1392,13 +1508,55 @@ def api_update_second_brain():
 # MCP Server Integration (JSON-RPC)
 # =====================================================================
 
+def parse_mcp_list_arg(arg_val):
+    if isinstance(arg_val, list):
+        return [str(item).strip() for item in arg_val if item]
+    if isinstance(arg_val, str) and arg_val:
+        return [item.strip() for item in arg_val.split(",") if item.strip()]
+    return []
+
+def enrich_search_results(kv_inst, results):
+    enriched = []
+    for r in results:
+        item = dict(r)
+        obs_id = item.get("obsId")
+        session_id = item.get("sessionId")
+        if not obs_id:
+            continue
+            
+        obj = None
+        if session_id == "memory" or obs_id.startswith("mem_"):
+            obj = kv_inst.get(KV.memories, obs_id)
+        elif session_id:
+            obj = kv_inst.get(KV.observations(session_id), obs_id)
+            
+        if obj:
+            item["title"] = obj.get("title") or ""
+            content_val = obj.get("content") or obj.get("narrative") or obj.get("raw") or ""
+            if not isinstance(content_val, str):
+                try:
+                    content_val = json.dumps(content_val)
+                except Exception:
+                    content_val = str(content_val)
+            item["content"] = content_val
+            item["type"] = obj.get("type") or ""
+            item["concepts"] = obj.get("concepts") or []
+            item["files"] = obj.get("files") or []
+        else:
+            item["title"] = ""
+            item["content"] = ""
+            item["type"] = ""
+            item["concepts"] = []
+            item["files"] = []
+        enriched.append(item)
+    return enriched
+
 @app.route("/agentmemory/mcp/tools", methods=["GET"])
 def mcp_tools_list():
     auth_err = check_auth()
     if auth_err:
         return auth_err
         
-    # Return core tools supported by our python daemon
     tools = [
         {
             "name": "memory_recall",
@@ -1420,8 +1578,18 @@ def mcp_tools_list():
                 "properties": {
                     "content": {"type": "string", "description": "The insight or decision to remember"},
                     "type": {"type": "string", "description": "Memory type: pattern, preference, architecture, bug, workflow, or fact"},
-                    "concepts": {"type": "string", "description": "Comma-separated key concepts"},
-                    "files": {"type": "string", "description": "Comma-separated relevant file paths"},
+                    "concepts": {
+                        "oneOf": [
+                            {"type": "string", "description": "Comma-separated key concepts"},
+                            {"type": "array", "items": {"type": "string"}, "description": "List of key concepts"}
+                        ]
+                    },
+                    "files": {
+                        "oneOf": [
+                            {"type": "string", "description": "Comma-separated relevant file paths"},
+                            {"type": "array", "items": {"type": "string"}, "description": "List of relevant file paths"}
+                        ]
+                    },
                     "project": {"type": "string", "description": "Canonical project identifier"}
                 },
                 "required": ["content"]
@@ -1430,6 +1598,11 @@ def mcp_tools_list():
         {
             "name": "memory_sessions",
             "description": "List recent sessions with their status and observation counts.",
+            "inputSchema": {"type": "object", "properties": {}}
+        },
+        {
+            "name": "memory_sessions_list",
+            "description": "Retrieve list of all memory sessions.",
             "inputSchema": {"type": "object", "properties": {}}
         },
         {
@@ -1451,9 +1624,21 @@ def mcp_tools_list():
                 "type": "object",
                 "properties": {
                     "anchor": {"type": "string", "description": "Anchor point date or keyword"},
-                    "project": {"type": "string", "description": "Filter by project path"}
+                    "project": {"type": "string", "description": "Filter by project path"},
+                    "sessionId": {"type": "string", "description": "Filter by session ID"}
                 },
                 "required": ["anchor"]
+            }
+        },
+        {
+            "name": "memory_observations",
+            "description": "Retrieve all observations for a given session ID.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "sessionId": {"type": "string", "description": "Session ID to fetch observations for"}
+                },
+                "required": ["sessionId"]
             }
         },
         {
@@ -1465,6 +1650,18 @@ def mcp_tools_list():
                     "project": {"type": "string", "description": "Project path"}
                 },
                 "required": ["project"]
+            }
+        },
+        {
+            "name": "memory_lessons",
+            "description": "List all saved lessons, optionally filtered by project.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "project": {"type": "string", "description": "Filter by project (optional)"},
+                    "minConfidence": {"type": "number", "description": "Filter by minimum confidence (optional, default 0.0)"},
+                    "limit": {"type": "number", "description": "Max results to return (optional, default 50)"}
+                }
             }
         },
         {
@@ -1493,20 +1690,83 @@ def mcp_tools_list():
             }
         },
         {
+            "name": "memory_lesson_search",
+            "description": "Search lessons learned by query.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "Search query keywords"},
+                    "project": {"type": "string", "description": "Filter by project path (optional)"}
+                },
+                "required": ["query"]
+            }
+        },
+        {
+            "name": "memory_consolidate",
+            "description": "Trigger the consolidation pipeline to summarize sessions and extract semantic/procedural memory.",
+            "inputSchema": {"type": "object", "properties": {}}
+        },
+        {
+            "name": "memory_reflect",
+            "description": "Trigger reflection for a session, updating pending items, project context, and session patterns.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "sessionId": {"type": "string", "description": "Session ID to reflect upon"},
+                    "maxObservations": {"type": "number", "description": "Max observations to scan (optional, default 50)"}
+                },
+                "required": ["sessionId"]
+            }
+        },
+        {
+            "name": "memory_diagnose",
+            "description": "Run diagnostic health checks across all memory subsystems.",
+            "inputSchema": {"type": "object", "properties": {}}
+        },
+        {
+            "name": "memory_forget",
+            "description": "Delete a memory, a session, or specific observations within a session.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "memoryId": {"type": "string", "description": "Memory ID to delete"},
+                    "sessionId": {"type": "string", "description": "Session ID to delete"},
+                    "observationIds": {
+                        "oneOf": [
+                            {"type": "string", "description": "Comma-separated observation IDs to delete"},
+                            {"type": "array", "items": {"type": "string"}, "description": "List of observation IDs to delete"}
+                        ]
+                    }
+                }
+            }
+        },
+        {
+            "name": "memory_export",
+            "description": "Export all memory data including sessions, memories, lessons, observations, and slots as JSON.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "maxSessions": {"type": "number", "description": "Max sessions to export (optional)"},
+                    "offset": {"type": "number", "description": "Pagination offset for sessions (optional)"}
+                }
+            }
+        },
+        {
             "name": "agent_observe",
             "description": "Log a direct observation, thought, command execution, or action from the agent's active execution.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
-                    "agentId": {"type": "string", "description": "ID/Name of the agent logging this (e.g. 'antigravity')"},
+                    "agentId": {"type": "string", "description": "ID/Name of the agent logging this (e.g. 'antigravity', optional)"},
                     "sessionId": {"type": "string", "description": "Active session ID"},
                     "project": {"type": "string", "description": "Canonical project path/identifier"},
                     "text": {"type": "string", "description": "The observation log, thought, or content"},
+                    "content": {"type": "string", "description": "The observation log, thought, or content (alternative to text)"},
                     "type": {"type": "string", "description": "Observation type: thought, command, tool, error, result, conversation, other"},
                     "title": {"type": "string", "description": "A short summary title for the observation"},
                     "cwd": {"type": "string", "description": "Current working directory"}
                 },
-                "required": ["agentId", "sessionId", "project", "text"]
+                "required": ["sessionId", "project"]
             }
         },
         {
@@ -1515,14 +1775,24 @@ def mcp_tools_list():
             "inputSchema": {
                 "type": "object",
                 "properties": {
-                    "agentId": {"type": "string", "description": "ID/Name of the agent (e.g. 'antigravity')"},
+                    "agentId": {"type": "string", "description": "ID/Name of the agent (e.g. 'antigravity', optional)"},
                     "content": {"type": "string", "description": "The memory content/insight"},
                     "project": {"type": "string", "description": "Canonical project path/identifier"},
                     "type": {"type": "string", "description": "Memory type: fact, preference, bug, workflow, architecture"},
-                    "concepts": {"type": "string", "description": "Comma-separated key concepts"},
-                    "files": {"type": "string", "description": "Comma-separated relevant file paths"}
+                    "concepts": {
+                        "oneOf": [
+                            {"type": "string", "description": "Comma-separated key concepts"},
+                            {"type": "array", "items": {"type": "string"}, "description": "List of key concepts"}
+                        ]
+                    },
+                    "files": {
+                        "oneOf": [
+                            {"type": "string", "description": "Comma-separated relevant file paths"},
+                            {"type": "array", "items": {"type": "string"}, "description": "List of relevant file paths"}
+                        ]
+                    }
                 },
-                "required": ["agentId", "content", "project"]
+                "required": ["content", "project"]
             }
         }
     ]
@@ -1549,22 +1819,23 @@ def mcp_tools_call():
             q = args.get("query")
             limit = int(args.get("limit") or 10)
             res = functions._hybrid_search.search(q, limit)
+            res = enrich_search_results(kv, res)
             text_out = json.dumps(res, indent=2)
             
         elif name == "memory_save":
             content = args.get("content")
-            concepts = args.get("concepts", "").split(",") if args.get("concepts") else []
-            files = args.get("files", "").split(",") if args.get("files") else []
+            concepts = parse_mcp_list_arg(args.get("concepts"))
+            files = parse_mcp_list_arg(args.get("files"))
             res = functions.remember(kv, {
                 "content": content,
                 "type": args.get("type") or "fact",
-                "concepts": [c.strip() for c in concepts if c.strip()],
-                "files": [f.strip() for f in files if f.strip()],
+                "concepts": concepts,
+                "files": files,
                 "project": args.get("project")
             })
             text_out = json.dumps(res)
             
-        elif name == "memory_sessions":
+        elif name in ("memory_sessions", "memory_sessions_list"):
             sessions = functions.list_sessions(kv)
             text_out = json.dumps({"sessions": sessions}, indent=2)
             
@@ -1572,19 +1843,37 @@ def mcp_tools_call():
             q = args.get("query")
             limit = int(args.get("limit") or 10)
             res = functions._hybrid_search.search(q, limit)
+            res = enrich_search_results(kv, res)
             text_out = json.dumps(res, indent=2)
             
         elif name == "memory_timeline":
             res = functions.timeline(kv, {
                 "anchor": args.get("anchor"),
-                "project": args.get("project")
+                "project": args.get("project"),
+                "sessionId": args.get("sessionId")
             })
             text_out = json.dumps(res, indent=2)
             
+        elif name == "memory_observations":
+            session_id = args.get("sessionId")
+            if not session_id:
+                return jsonify({"error": "sessionId is required"}), 400
+            obs = kv.list(KV.observations(session_id))
+            obs.sort(key=lambda o: o.get("timestamp", ""))
+            text_out = json.dumps({"observations": obs}, indent=2)
+
         elif name == "memory_profile":
-            res = functions.get_project_profile(kv, args.get("project"))
+            res = functions.build_project_profile(kv, args.get("project"))
             text_out = json.dumps(res, indent=2)
             
+        elif name == "memory_lessons":
+            res = functions.lesson_list(kv, {
+                "project": args.get("project"),
+                "minConfidence": args.get("minConfidence"),
+                "limit": args.get("limit")
+            })
+            text_out = json.dumps(res, indent=2)
+
         elif name == "memory_lesson_save":
             res = functions.lesson_save(kv, {
                 "content": args.get("content"),
@@ -1593,24 +1882,58 @@ def mcp_tools_call():
             })
             text_out = json.dumps(res)
             
-        elif name == "memory_lesson_recall":
+        elif name in ("memory_lesson_recall", "memory_lesson_search"):
             res = functions.lesson_recall(kv, {
                 "query": args.get("query"),
                 "project": args.get("project")
             })
             text_out = json.dumps(res, indent=2)
+            
+        elif name == "memory_consolidate":
+            res = functions.consolidate(kv)
+            text_out = json.dumps(res, indent=2)
+            
+        elif name == "memory_reflect":
+            session_id = args.get("sessionId")
+            max_obs = int(args.get("maxObservations") or 50)
+            if not session_id:
+                return jsonify({"error": "sessionId is required"}), 400
+            res = functions.slot_reflect(kv, session_id, max_obs)
+            text_out = json.dumps(res, indent=2)
+
+        elif name == "memory_diagnose":
+            res = functions.health_check(kv)
+            text_out = json.dumps(res, indent=2)
+
+        elif name == "memory_forget":
+            obs_ids = parse_mcp_list_arg(args.get("observationIds"))
+            res = functions.forget(kv, {
+                "memoryId": args.get("memoryId"),
+                "sessionId": args.get("sessionId"),
+                "observationIds": obs_ids
+            })
+            text_out = json.dumps(res, indent=2)
+
+        elif name == "memory_export":
+            max_sess = args.get("maxSessions")
+            offset = args.get("offset")
+            payload = {}
+            if max_sess is not None: payload["maxSessions"] = max_sess
+            if offset is not None: payload["offset"] = offset
+            res = functions.export_data(kv, payload)
+            text_out = json.dumps(res, indent=2)
 
         elif name == "agent_observe":
-            agent_id = args.get("agentId")
+            agent_id = args.get("agentId") or functions.get_agent_id() or "agent"
             session_id = args.get("sessionId")
             project = args.get("project")
-            text = args.get("text")
+            text = args.get("text") or args.get("content")
             obs_type = args.get("type") or "other"
             title = args.get("title") or f"agent_{obs_type}"
             cwd = args.get("cwd") or ""
             
-            if not agent_id or not session_id or not project or not text:
-                return jsonify({"error": "agentId, sessionId, project, and text are required"}), 400
+            if not session_id or not project or not text:
+                return jsonify({"error": "sessionId, project, and text (or content) are required"}), 400
                 
             payload = {
                 "sessionId": session_id,
@@ -1629,21 +1952,21 @@ def mcp_tools_call():
             text_out = json.dumps(res)
 
         elif name == "agent_remember":
-            agent_id = args.get("agentId")
+            agent_id = args.get("agentId") or functions.get_agent_id() or "agent"
             content = args.get("content")
             project = args.get("project")
             mem_type = args.get("type") or "fact"
-            concepts = args.get("concepts", "").split(",") if args.get("concepts") else []
-            files = args.get("files", "").split(",") if args.get("files") else []
+            concepts = parse_mcp_list_arg(args.get("concepts"))
+            files = parse_mcp_list_arg(args.get("files"))
             
-            if not agent_id or not content or not project:
-                return jsonify({"error": "agentId, content, and project are required"}), 400
+            if not content or not project:
+                return jsonify({"error": "content and project are required"}), 400
                 
             payload = {
                 "content": content,
                 "type": mem_type,
-                "concepts": [c.strip() for c in concepts if c.strip()],
-                "files": [f.strip() for f in files if f.strip()],
+                "concepts": concepts,
+                "files": files,
                 "project": project,
                 "agentId": agent_id
             }
@@ -1652,7 +1975,6 @@ def mcp_tools_call():
             
         else:
             return jsonify({"error": f"unknown tool: {name}"}), 400
-
             
         return jsonify({
             "content": [

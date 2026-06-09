@@ -1762,11 +1762,14 @@ def timeline(kv: StateKV, data: Dict[str, Any]) -> Dict[str, Any]:
     # Simple timeline query returning observations sorted by timestamp
     anchor = data.get("anchor")
     project = data.get("project")
+    session_id = data.get("sessionId")
     before = data.get("before") or 10
     after = data.get("after") or 10
 
     sessions = kv.list(KV.sessions)
-    if project:
+    if session_id:
+        sessions = [s for s in sessions if s.get("id") == session_id]
+    elif project:
         sessions = [s for s in sessions if s.get("project") == project]
 
     all_obs = []
@@ -1805,7 +1808,192 @@ def get_project_profile(kv: StateKV, project: str) -> Dict[str, Any]:
             "commonErrors": [],
             "updatedAt": datetime.datetime.utcnow().isoformat() + "Z"
         }
+    if not prof.get("topConcepts") and not prof.get("topFiles"):
+        prof = build_project_profile(kv, project)
     return prof
+
+def build_project_profile(kv: StateKV, project: str) -> Dict[str, Any]:
+    prof = kv.get(KV.profiles, project)
+    if not prof:
+        prof = {
+            "project": project,
+            "topConcepts": [],
+            "topFiles": [],
+            "conventions": [],
+            "commonErrors": [],
+            "updatedAt": datetime.datetime.utcnow().isoformat() + "Z"
+        }
+
+    # Stored profile may lack topConcepts/topFiles — compute from observations + memories if empty
+    if not prof.get("topConcepts") and not prof.get("topFiles"):
+        import re as _re, json as _j, os.path as _osp
+        from collections import Counter
+        sessions = kv.list(KV.sessions)
+        project_sessions = [s for s in sessions if s.get("project") == project]
+        concept_counts = Counter()
+        file_counts = Counter()
+
+        def _harvest_file(path, fc, cc):
+            if not isinstance(path, str) or not path:
+                return
+            fc[path] += 1
+            parts = _re.split(r'[\\/]', path)
+            fname = parts[-1] if parts else ""
+            skip = {"tmp", "temp", "claude", "appdata", "local", "users", "windows"}
+            for part in parts[:-1]:
+                p = part.lower().strip()
+                if p and len(p) > 2 and p not in skip and not _re.match(r'^[a-z]:|^\.|^--', p):
+                    cc[p] += 1
+            stem = _osp.splitext(fname)[0]
+            if stem and len(stem) > 2:
+                cc[stem.lower()] += 1
+            ext = _osp.splitext(fname)[1].lstrip(".")
+            if ext in ("py", "ts", "js", "jsx", "tsx", "go", "rs", "java", "cs", "cpp"):
+                cc[ext] += 1
+
+        for s in project_sessions:
+            sid = s.get("id", "")
+            if not sid:
+                continue
+            for o in kv.list(KV.observations(sid)):
+                for c in (o.get("concepts") or []):
+                    if isinstance(c, str) and c:
+                        concept_counts[c] += 1
+                for f in (o.get("files") or []):
+                    _harvest_file(f, file_counts, concept_counts)
+                tn = o.get("toolName")
+                if tn:
+                    concept_counts[tn] += 1
+                ti = o.get("toolInput")
+                if isinstance(ti, str):
+                    try: ti = _j.loads(ti)
+                    except Exception: ti = {}
+                if isinstance(ti, dict):
+                    for fk in ("path", "file_path", "file", "filename"):
+                        _harvest_file(ti.get(fk, ""), file_counts, concept_counts)
+                narr = o.get("narrative") or o.get("raw") or ""
+                if isinstance(narr, str) and narr.startswith("{"):
+                    try:
+                        nd = _j.loads(narr)
+                        if isinstance(nd, dict):
+                            tn2 = nd.get("toolName") or nd.get("tool_name")
+                            if tn2: concept_counts[tn2] += 1
+                            for fk in ("path", "file_path", "file", "filename"):
+                                _harvest_file(nd.get(fk, ""), file_counts, concept_counts)
+                    except Exception:
+                        pass
+
+        # memories for this project
+        for m in kv.list(KV.memories):
+            if m.get("project") == project:
+                for c in (m.get("concepts") or []):
+                    if c: concept_counts[c] += 1
+                for f in (m.get("files") or []):
+                    _harvest_file(f, file_counts, concept_counts)
+
+        prof["topConcepts"] = [{"concept": c, "frequency": n} for c, n in concept_counts.most_common(20)]
+        prof["topFiles"] = [{"file": f, "frequency": n} for f, n in file_counts.most_common(20)]
+        prof["sessionCount"] = len(project_sessions)
+
+    return prof
+
+def export_data(kv: StateKV, data: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    if data is None:
+        data = {}
+    raw_max = data.get("maxSessions")
+    max_sessions = None
+    if raw_max is not None:
+        try:
+            max_sessions = min(max(int(raw_max), 1), 1000)
+        except Exception:
+            pass
+            
+    raw_offset = data.get("offset")
+    offset = 0
+    if raw_offset is not None:
+        try:
+            offset = max(int(raw_offset), 0)
+        except Exception:
+            pass
+            
+    all_sessions = kv.list(KV.sessions)
+    all_sessions.sort(key=lambda s: s.get("startedAt", ""), reverse=True)
+    
+    if max_sessions is not None:
+        paginated_sessions = all_sessions[offset:offset + max_sessions]
+    else:
+        paginated_sessions = all_sessions
+        
+    memories = kv.list(KV.memories)
+    summaries = kv.list(KV.summaries)
+    
+    observations = {}
+    for s in paginated_sessions:
+        sid = s.get("id")
+        if sid:
+            obs = kv.list(KV.observations(sid))
+            if obs:
+                observations[sid] = obs
+                
+    profiles = []
+    unique_projects = list(set(s.get("project") for s in paginated_sessions if s.get("project")))
+    for proj in unique_projects:
+        p = kv.get(KV.profiles, proj)
+        if p:
+            profiles.append(p)
+            
+    graph_nodes = kv.list(KV.graphNodes)
+    graph_edges = kv.list(KV.graphEdges)
+    semantic_memories = kv.list(KV.semantic)
+    procedural_memories = kv.list(KV.procedural)
+    actions = kv.list(KV.actions)
+    action_edges = kv.list(KV.actionEdges)
+    sentinels = kv.list(KV.sentinels)
+    sketches = kv.list(KV.sketches)
+    crystals = kv.list(KV.crystals)
+    facets = kv.list(KV.facets)
+    lessons = kv.list(KV.lessons)
+    insights = kv.list(KV.insights)
+    routines = kv.list(KV.routines)
+    signals = kv.list(KV.signals)
+    checkpoints = kv.list(KV.checkpoints)
+    access_logs = kv.list(KV.accessLog)
+    
+    res = {
+        "version": "0.9.21",
+        "exportedAt": datetime.datetime.utcnow().isoformat() + "Z",
+        "sessions": paginated_sessions,
+        "observations": observations,
+        "memories": memories,
+        "summaries": summaries
+    }
+    if profiles: res["profiles"] = profiles
+    if graph_nodes: res["graphNodes"] = graph_nodes
+    if graph_edges: res["graphEdges"] = graph_edges
+    if semantic_memories: res["semanticMemories"] = semantic_memories
+    if procedural_memories: res["proceduralMemories"] = procedural_memories
+    if actions: res["actions"] = actions
+    if action_edges: res["actionEdges"] = action_edges
+    if sentinels: res["sentinels"] = sentinels
+    if sketches: res["sketches"] = sketches
+    if crystals: res["crystals"] = crystals
+    if facets: res["facets"] = facets
+    if lessons: res["lessons"] = lessons
+    if insights: res["insights"] = insights
+    if routines: res["routines"] = routines
+    if signals: res["signals"] = signals
+    if checkpoints: res["checkpoints"] = checkpoints
+    if access_logs: res["accessLogs"] = access_logs
+    
+    if max_sessions is not None:
+        res["pagination"] = {
+            "offset": offset,
+            "limit": max_sessions,
+            "total": len(all_sessions),
+            "hasMore": offset + max_sessions < len(all_sessions)
+        }
+    return res
+
 
 def set_project_profile(kv: StateKV, project: str, profile: Dict[str, Any]) -> Dict[str, Any]:
     profile["updatedAt"] = datetime.datetime.utcnow().isoformat() + "Z"
