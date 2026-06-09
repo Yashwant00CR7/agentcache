@@ -1257,7 +1257,7 @@
       activeTab: 'dashboard',
       dashboard: { loaded: false, health: null, sessions: [], memories: [], graphStats: null, recentAudit: [], lessons: [], crystals: [], semantic: [], procedural: [] },
       graph: { loaded: false, nodes: [], edges: [], stats: null, filters: {}, selectedNode: null, queryError: null, truncated: false, totalNodes: 0, totalEdges: 0 },
-      memories: { loaded: false, items: [], search: '', typeFilter: '' },
+      memories: { loaded: false, items: [], search: '', typeFilter: '', folderFilter: '' },
       timeline: { loaded: false, observations: [], sessionId: '', minImportance: 0, page: 0, pageSize: 50 },
       sessions: { loaded: false, items: [], selectedId: null, folderFilter: '' },
       audit: { loaded: false, entries: [], opFilter: '' },
@@ -2528,9 +2528,32 @@
       var items = state.memories.items;
       var search = state.memories.search.toLowerCase();
       var typeFilter = state.memories.typeFilter;
+      var folderFilter = state.memories.folderFilter || '';
+
+      var projects = [];
+      var hasNoFolder = false;
+      items.forEach(function(m) {
+        var pPath = m.project ? String(m.project).trim() : '';
+        if (pPath) {
+          if (!projects.includes(pPath)) {
+            projects.push(pPath);
+          }
+        } else {
+          hasNoFolder = true;
+        }
+      });
+      projects.sort();
 
       var filtered = items.filter(function(m) {
         if (typeFilter && m.type !== typeFilter) return false;
+        var pPath = m.project ? String(m.project).trim() : '';
+        if (folderFilter) {
+          if (folderFilter === '_none_') {
+            if (pPath) return false;
+          } else if (pPath !== folderFilter) {
+            return false;
+          }
+        }
         const normalizedSearch = (search || '').normalize("NFKC").toLowerCase();
         const normalizedTitle = (m.title || '').normalize("NFKC").toLowerCase();
         const normalizedContent = (m.content || '').normalize("NFKC").toLowerCase();
@@ -2556,7 +2579,16 @@
       typeOptions.forEach(function(t) {
         html += '<option value="' + esc(t) + '"' + (typeFilter === t ? ' selected' : '') + '>' + esc(t) + '</option>';
       });
-      html += '</select></div>';
+      html += '</select>';
+      html += '<select id="mem-folder-filter"><option value="">All folders</option>';
+      if (hasNoFolder) {
+        html += '<option value="_none_"' + (folderFilter === '_none_' ? ' selected' : '') + '>Uncategorized (No Folder)</option>';
+      }
+      projects.forEach(function(p) {
+        html += '<option value="' + esc(p) + '"' + (folderFilter === p ? ' selected' : '') + '>' + esc(p) + '</option>';
+      });
+      html += '</select>';
+      html += '</div>';
 
       if (filtered.length === 0) {
         html += '<div class="empty-state">' +
@@ -2610,6 +2642,13 @@
       if (typeSelect) {
         typeSelect.addEventListener('change', function() {
           state.memories.typeFilter = this.value;
+          renderMemories();
+        });
+      }
+      var folderSelect = document.getElementById('mem-folder-filter');
+      if (folderSelect) {
+        folderSelect.addEventListener('change', function() {
+          state.memories.folderFilter = this.value;
           renderMemories();
         });
       }
