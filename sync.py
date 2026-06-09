@@ -5,6 +5,7 @@ Usage:
   python3 sync.py restore   -- download DB from HF on startup
   python3 sync.py backup    -- upload DB to HF (called in loop)
 """
+import json
 import os
 import sys
 import shutil
@@ -23,6 +24,27 @@ DATA_DIR     = os.path.expanduser("~/.agentmemory")
 SKIP_FILES   = {".env"}
 ALLOW_HIDDEN = {".hmac"}
 SKIP_NAMES   = {"LOCK"}  # held open by Dolt — always skip
+
+def _quick_hash(data_dir):
+    """Build a fingerprint from file sizes+mtimes — fast, no file reads."""
+    entries = {}
+    for root, dirs, files in os.walk(data_dir):
+        is_inside_dolt = ".dolt" in root.replace("\\", "/").split("/")
+        if not is_inside_dolt:
+            dirs[:] = [d for d in dirs if not d.startswith(".") or d == ".dolt"]
+        for f in files:
+            if f in SKIP_FILES or f in SKIP_NAMES:
+                continue
+            if f.startswith(".") and f not in ALLOW_HIDDEN:
+                continue
+            full = os.path.join(root, f)
+            rel  = os.path.relpath(full, data_dir).replace("\\", "/")
+            try:
+                s = os.stat(full)
+                entries[rel] = (s.st_size, s.st_mtime)
+            except OSError:
+                pass
+    return json.dumps(entries, sort_keys=True)
 
 def get_api():
     return HfApi(token=HF_TOKEN)
@@ -67,6 +89,17 @@ def backup():
     if not HF_TOKEN:
         return
     api = get_api()
+
+    # Fast change detection — skip everything if nothing modified
+    state_file = os.path.join(DATA_DIR, ".backup_state")
+    current_state = _quick_hash(DATA_DIR)
+    if os.path.exists(state_file):
+        try:
+            if open(state_file).read() == current_state:
+                print("[sync] no changes — skipping backup")
+                return
+        except Exception:
+            pass
 
     # Ensure repo exists
     try:
@@ -114,6 +147,11 @@ def backup():
             commit_message="sync: periodic backup",
         )
         print("[sync] backup complete")
+        # Save state fingerprint so next cycle skips if nothing changed
+        try:
+            open(state_file, "w").write(current_state)
+        except Exception:
+            pass
     except Exception as e:
         print(f"[sync] backup error: {e}")
     finally:
