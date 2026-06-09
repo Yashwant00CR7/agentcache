@@ -1227,6 +1227,15 @@
       decision: '#6B3FA0', pattern: '#2563EB', library: '#C2410C', person: '#111111',
       folder: '#4F46E5'
     };
+
+    function folderColor(id) {
+      var h = 0;
+      for (var i = 0; i < id.length; i++) { h = (h * 31 + id.charCodeAt(i)) & 0xfffffff; }
+      var hue = (h % 360 + 360) % 360;
+      var sat = 55 + (h % 25);
+      var lig = isDarkMode() ? 52 + (h % 16) : 38 + (h % 14);
+      return 'hsl(' + hue + ',' + sat + '%,' + lig + '%)';
+    }
     var OP_BADGES = {
       observe: 'badge-blue', compress: 'badge-cyan', remember: 'badge-green',
       forget: 'badge-red', evolve: 'badge-purple', consolidate: 'badge-yellow',
@@ -2311,7 +2320,7 @@
       graphSim.tickCount = (graphSim.tickCount || 0) + 1;
       var coolBoost = Math.min(0.4, graphSim.tickCount / 1500);
       var damping = 0.9 - coolBoost;
-      var repulsion = nodeCount > 1000 ? 3000 : nodeCount > 100 ? 2000 : nodeCount > 50 ? 1800 : nodeCount > 10 ? 3500 : 6000;
+      var repulsion = nodeCount > 1000 ? 3000 : nodeCount > 100 ? 2000 : nodeCount > 50 ? 1800 : nodeCount > 10 ? 8000 : 18000;
       var attraction = nodeCount > 100 ? 0.002 : 0.005;
       var centerGravity = nodeCount > 1000 ? 0.012 : nodeCount > 100 ? 0.005 : 0.01;
       var velocityCap = nodeCount > 1000 ? 6 : nodeCount > 200 ? 12 : 24;
@@ -2523,9 +2532,7 @@
           ctx.fill();
         }
 
-        var showEdgeLabel = e.type && !edgeDimmed && (
-          s.type === 'folder' || t.type === 'folder' || isConnectedToFocus ? graphSim.zoom > 0.4 : graphSim.zoom > edgeLabelZoomThreshold
-        );
+        var showEdgeLabel = e.type && !edgeDimmed && isConnectedToFocus && graphSim.zoom > 0.4;
         if (showEdgeLabel) {
           var zoomInv = 1 / graphSim.zoom;
           ctx.save();
@@ -2539,8 +2546,7 @@
 
       graphSim.nodes.forEach(function(n) {
         if (!state.graph.filters[n.type]) return;
-        var color = NODE_COLORS[n.type] || '#666666';
-        var isSelected = selectedId === n.id;
+        var color = n.type === 'folder' ? folderColor(n.id) : (NODE_COLORS[n.type] || '#666666');
         var isHovered = hoverNodeId === n.id;
         var matchesSearch = !searchActive || n.name.toLowerCase().includes(graphSearchTerm);
         var isFocusFaded = focusNodeId && n.id !== focusNodeId && !graphSim.edges.some(function(ed) {
