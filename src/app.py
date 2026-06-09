@@ -230,7 +230,7 @@ def serve_viewer():
             f"script-src 'nonce-{nonce}'",
             "script-src-attr 'none'",
             "style-src 'unsafe-inline'",
-            "connect-src 'self' http://localhost:* http://127.0.0.1:* ws://localhost:* ws://127.0.0.1:* wss://localhost:* wss://127.0.0.1:*",
+            "connect-src 'self' https: http://localhost:* http://127.0.0.1:* wss: ws://localhost:* ws://127.0.0.1:* wss://localhost:* wss://127.0.0.1:*",
             "img-src 'self' data:",
             "font-src 'self'",
         ])

@@ -80,8 +80,10 @@ def backup():
     # Collect files to upload
     all_files = []
     for root, dirs, files in os.walk(DATA_DIR):
-        # skip hidden dirs like .cache
-        dirs[:] = [d for d in dirs if not d.startswith('.')]
+        # Skip hidden directories, EXCEPT if they are inside the '.dolt' folder
+        is_inside_dolt = '.dolt' in root.replace('\\', '/').split('/')
+        if not is_inside_dolt:
+            dirs[:] = [d for d in dirs if not d.startswith('.') or d == '.dolt']
         for f in files:
             if f in SKIP_FILES:
                 continue
@@ -99,7 +101,7 @@ def backup():
         try:
             api.upload_file(
                 path_or_fileobj=full_path,
-                path_in_repo=rel_path,
+                path_in_repo=rel_path.replace('\\', '/'),
                 repo_id=REPO_ID,
                 repo_type="dataset",
                 token=HF_TOKEN,
