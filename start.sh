@@ -9,9 +9,9 @@ mkdir -p /home/user/.agentmemory/dolt
 # Secrets to set in HF Space settings:
 #   HF_TOKEN              — write access to the dataset repo
 #   GEMINI_API_KEY        — powers graph, embeddings, compression, crystals
-#   AGENTMEMORY_DATASET_REPO — optional override (default: Yash030/agentmemory-data)
+#   AGENTMEMORY_DATASET_REPO — optional override (default: Yash030/agentmemory-python-data)
 # =============================================================================
-export AGENTMEMORY_DATASET_REPO="${AGENTMEMORY_DATASET_REPO:-Yash030/agentmemory-data}"
+export AGENTMEMORY_DATASET_REPO="${AGENTMEMORY_DATASET_REPO:-Yash030/agentmemory-python-data}"
 
 echo "[start] Restoring data from HF Dataset..."
 python3 /app/sync.py restore

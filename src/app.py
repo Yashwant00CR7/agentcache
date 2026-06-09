@@ -1307,7 +1307,7 @@ def api_get_second_brain():
     if auth_err:
         return auth_err
         
-    brain_dir = os.getenv("SECOND_BRAIN_DIR", "D:\\Downloads\\Projects\\Other Projects\\Know about me\\second-brain")
+    brain_dir = os.getenv("SECOND_BRAIN_DIR", os.path.join(os.path.expanduser("~"), ".agentmemory", "second-brain"))
     if not os.path.exists(brain_dir):
         return jsonify({"error": "Second brain directory not found", "path": brain_dir}), 404
         
@@ -1360,7 +1360,7 @@ def api_update_second_brain():
         if not safe_name.endswith(".md"):
             return jsonify({"error": "Only markdown files are allowed"}), 400
             
-        brain_dir = os.getenv("SECOND_BRAIN_DIR", "D:\\Downloads\\Projects\\Other Projects\\Know about me\\second-brain")
+        brain_dir = os.getenv("SECOND_BRAIN_DIR", os.path.join(os.path.expanduser("~"), ".agentmemory", "second-brain"))
         if not os.path.exists(brain_dir):
             os.makedirs(brain_dir, exist_ok=True)
             

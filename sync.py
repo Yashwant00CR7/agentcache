@@ -18,7 +18,7 @@ except ImportError:
     sys.exit(0)
 
 HF_TOKEN   = os.environ.get("HF_TOKEN", "")
-REPO_ID    = os.environ.get("AGENTMEMORY_DATASET_REPO", "Yash030/agentmemory-data")
+REPO_ID    = os.environ.get("AGENTMEMORY_DATASET_REPO", "Yash030/agentmemory-python-data")
 DATA_DIR   = os.path.expanduser("~/.agentmemory")
 SKIP_FILES = {".env"}   # never upload secrets
 ALLOW_HIDDEN = {".hmac"}  # hidden files that ARE safe to backup
