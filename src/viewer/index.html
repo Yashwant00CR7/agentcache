@@ -1255,7 +1255,7 @@
 
     var state = {
       activeTab: 'dashboard',
-      dashboard: { loaded: false, health: null, sessions: [], memories: [], graphStats: null, recentAudit: [], lessons: [], crystals: [] },
+      dashboard: { loaded: false, health: null, sessions: [], memories: [], graphStats: null, recentAudit: [], lessons: [], crystals: [], semantic: [], procedural: [] },
       graph: { loaded: false, nodes: [], edges: [], stats: null, filters: {}, selectedNode: null, queryError: null, truncated: false, totalNodes: 0, totalEdges: 0 },
       memories: { loaded: false, items: [], search: '', typeFilter: '' },
       timeline: { loaded: false, observations: [], sessionId: '', minImportance: 0, page: 0, pageSize: 50 },
@@ -1520,8 +1520,8 @@
         state.dashboard.memories = (results[2] && results[2].memories) || [];
         state.dashboard.graphStats = results[3];
         state.dashboard.recentAudit = (results[4] && results[4].entries) || [];
-        state.dashboard.semantic = (results[5] && results[5].facts) || (results[5] && results[5].semantic) || [];
-        state.dashboard.procedural = (results[6] && results[6].procedures) || (results[6] && results[6].procedural) || [];
+        state.dashboard.semantic = (results[5] && results[5].items) || (results[5] && results[5].facts) || (results[5] && results[5].semantic) || [];
+        state.dashboard.procedural = (results[6] && results[6].items) || (results[6] && results[6].procedures) || (results[6] && results[6].procedural) || [];
         state.dashboard.lessons = (results[8] && results[8].lessons) || [];
         state.dashboard.crystals = (results[9] && results[9].crystals) || [];
         state.dashboard.relations = (results[7] && results[7].relations) || [];
@@ -1684,6 +1684,57 @@
 
       html += '</div>';
 
+      html += '<div class="two-col" style="margin-top:16px;">';
+
+      html += '<div class="card"><div class="card-title">Semantic Memory (Consolidated Facts)</div>';
+      var semanticList = d.semantic || [];
+      if (semanticList.length === 0) {
+        html += '<div class="empty-state"><p>No semantic memories consolidated yet. Run consolidation to synthesize episodic facts.</p></div>';
+      } else {
+        html += '<div style="display:flex; flex-direction:column; gap:8px; max-height: 300px; overflow-y: auto; padding-right: 4px;">';
+        semanticList.forEach(function(item) {
+          var confPct = Math.round((item.confidence || 0) * 100);
+          var confClass = confPct > 80 ? 'badge-green' : confPct > 50 ? 'badge-blue' : 'badge-muted';
+          html += '<div style="padding:8px 10px; border:1px solid var(--border-light); border-radius:4px; font-size:13px; background:var(--bg);">';
+          html += '<div style="color:var(--ink); font-weight:500; line-height:1.4;">' + esc(item.fact) + '</div>';
+          html += '<div style="margin-top:6px; display:flex; gap:8px; align-items:center; font-size:11px; color:var(--ink-muted); font-family:var(--font-mono);">';
+          html += '<span class="badge ' + confClass + '">' + confPct + '% confidence</span>';
+          html += '<span>accessed: ' + (item.accessCount || 1) + 'x</span>';
+          html += '</div></div>';
+        });
+        html += '</div>';
+      }
+      html += '</div>';
+
+      html += '<div class="card"><div class="card-title">Procedural Memory (Action Workflows)</div>';
+      var proceduralList = d.procedural || [];
+      if (proceduralList.length === 0) {
+        html += '<div class="empty-state"><p>No procedural memories extracted yet. Consolidated sessions with recurring patterns will generate reusable workflows.</p></div>';
+      } else {
+        html += '<div style="display:flex; flex-direction:column; gap:10px; max-height: 300px; overflow-y: auto; padding-right: 4px;">';
+        proceduralList.forEach(function(item) {
+          html += '<div style="padding:10px; border:1px solid var(--border-light); border-radius:4px; background:var(--bg);">';
+          html += '<div style="font-weight:700; color:var(--ink); font-size:14px; font-family:var(--font-display);">' + esc(item.name) + '</div>';
+          if (item.triggerCondition) {
+            html += '<div style="font-size:11px; color:var(--ink-muted); font-style:italic; margin:4px 0;">Trigger: ' + esc(item.triggerCondition) + '</div>';
+          }
+          if (item.steps && item.steps.length > 0) {
+            html += '<ol style="margin-left:16px; margin-top:6px; font-size:12px; line-height:1.5; color:var(--ink-secondary);">';
+            item.steps.forEach(function(step) {
+              html += '<li>' + esc(step) + '</li>';
+            });
+            html += '</ol>';
+          }
+          html += '<div style="margin-top:6px; font-size:10px; color:var(--ink-faint); font-family:var(--font-mono);">';
+          html += 'Frequency: ' + (item.frequency || 1) + 'x';
+          html += '</div></div>';
+        });
+        html += '</div>';
+      }
+      html += '</div>';
+
+      html += '</div>';
+
       if (fMetrics.length > 0) {
         var sorted = fMetrics.slice().sort(function(a, b) { return (b.totalCalls || 0) - (a.totalCalls || 0); });
         html += '<div class="card" style="margin-top:16px"><div class="card-title">Function Metrics (OTel)</div>';
@@ -1728,49 +1779,6 @@
       var semFacts = d.semantic || [];
       var procItems = d.procedural || [];
       var relItems = d.relations || [];
-
-      html += '<hr class="section-rule">';
-      html += '<div class="two-col">';
-
-      html += '<div class="card"><div class="card-title">Semantic Memory</div>';
-      if (semFacts.length === 0) {
-        html += '<div style="font-size:13px;color:var(--ink-faint);font-style:italic;">No semantic facts yet. Observations will be consolidated into semantic memories over time.</div>';
-      } else {
-          semFacts.slice(0, 5).forEach(function(f) {
-            var conf = typeof f.confidence === 'number' ? Math.round(f.confidence * 100) : null;
-            var str = typeof f.strength === 'number' ? Math.round(f.strength * 100) : null;
-            var barColor = (str || 0) > 70 ? 'var(--green)' : (str || 0) > 40 ? 'var(--yellow)' : 'var(--red)';
-            html += '<div class="memory-fact">';
-            html += '<span style="color:var(--ink);">' + esc(f.fact || f.content || f.title || 'Fact') + '</span>';
-            html += '<span style="display:flex;align-items:center;gap:6px;">';
-            if (str !== null) html += '<span class="strength-bar" style="width:40px;"><span class="fill" style="width:' + str + '%;background:' + barColor + '"></span></span>';
-            if (conf !== null) html += '<span style="font-size:10px;font-family:var(--font-mono);color:var(--ink-faint);">' + conf + '%</span>';
-            html += '</span></div>';
-          });
-        }
-        html += '</div>';
-
-        html += '<div class="card"><div class="card-title">Procedural Memory</div>';
-      if (procItems.length === 0) {
-        html += '<div style="font-size:13px;color:var(--ink-faint);font-style:italic;">No procedures yet. Repeated patterns will be extracted as procedures.</div>';
-      } else {
-          procItems.slice(0, 5).forEach(function(p) {
-            html += '<div class="procedure-item">';
-            html += '<div style="font-weight:600;color:var(--ink);font-family:var(--font-display);font-size:13px;">' + esc(p.name || p.title || 'Procedure') + '</div>';
-            if (p.trigger || p.triggerCondition) html += '<div style="font-size:11px;color:var(--ink-faint);font-family:var(--font-mono);margin-top:2px;">Trigger: ' + esc(p.trigger || p.triggerCondition) + '</div>';
-            if (p.frequency) html += '<div style="font-size:11px;color:var(--ink-faint);margin-top:2px;">Freq: ' + p.frequency + '</div>';
-            if (p.steps && p.steps.length > 0) {
-              html += '<ol class="procedure-steps">';
-              p.steps.slice(0, 4).forEach(function(s) { html += '<li>' + esc(typeof s === 'string' ? s : s.description || s.action || JSON.stringify(s)) + '</li>'; });
-              if (p.steps.length > 4) html += '<li style="color:var(--ink-faint);font-style:italic;">+ ' + (p.steps.length - 4) + ' more...</li>';
-              html += '</ol>';
-            }
-            html += '</div>';
-          });
-        }
-      html += '</div>';
-
-      html += '</div>';
 
       html += '<div class="card" style="margin-top:16px;"><div class="card-title">Consolidation Status</div>';
       html += '<div class="consolidation-row"><span class="cl">Semantic facts</span><span class="cv">' + semFacts.length + '</span></div>';
