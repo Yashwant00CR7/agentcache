@@ -1281,27 +1281,21 @@ def api_dolt_commits():
         
     try:
         limit = int(request.args.get("limit", "50"))
-        conn = kv._get_conn()
-        try:
-            with conn.cursor() as cursor:
-                cursor.execute(
-                    "SELECT commit_hash, committer, email, date, message FROM dolt_log ORDER BY date DESC LIMIT %s",
-                    (limit,)
-                )
-                rows = cursor.fetchall()
-                commits = []
-                for r in rows:
-                    commits.append({
-                        "sha": r["commit_hash"],
-                        "shortSha": r["commit_hash"][:7],
-                        "agent": r["committer"],
-                        "email": r["email"],
-                        "date": r["date"].isoformat() + "Z" if isinstance(r["date"], datetime.datetime) else str(r["date"]),
-                        "message": r["message"]
-                    })
-                return jsonify({"success": True, "commits": commits}), 200
-        finally:
-            conn.close()
+        rows = kv.get_audit_log(limit)
+        commits = []
+        for r in rows:
+            ts_ms = r["ts"]
+            iso = datetime.datetime.utcfromtimestamp(ts_ms / 1000).isoformat() + "Z"
+            row_id = str(r["id"])
+            commits.append({
+                "sha": row_id.zfill(40),
+                "shortSha": row_id,
+                "agent": r["agent_id"],
+                "email": f"{r['agent_id']}@agentmemory.ai",
+                "date": iso,
+                "message": r["message"]
+            })
+        return jsonify({"success": True, "commits": commits}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 

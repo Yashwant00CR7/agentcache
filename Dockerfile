@@ -9,9 +9,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     tini \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Dolt
-RUN curl -L https://github.com/dolthub/dolt/releases/latest/download/install.sh | bash
-
 # Set up HF Spaces user (uid 1000 required)
 RUN useradd -m -u 1000 user
 
