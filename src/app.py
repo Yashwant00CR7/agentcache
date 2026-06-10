@@ -482,6 +482,21 @@ def api_session_start():
     except Exception as e:
         return jsonify({"error": str(e)}), 400
 
+@app.route("/agentmemory/antigravity/sync", methods=["POST"])
+def api_antigravity_sync():
+    auth_err = check_auth()
+    if auth_err:
+        return auth_err
+    try:
+        body = request.get_json(force=True) or {}
+        mode = body.get("mode") or "current_session"
+        current_convo = body.get("currentConversationId")
+        current_folder = body.get("currentFolder")
+        res = perform_antigravity_sync(mode, current_convo, current_folder)
+        return jsonify(res), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 @app.route("/agentmemory/session/end", methods=["POST"])
 def api_session_end():
     auth_err = check_auth()
@@ -1551,6 +1566,182 @@ def enrich_search_results(kv_inst, results):
         enriched.append(item)
     return enriched
 
+def perform_antigravity_sync(mode="current_session", current_conversation_id=None, current_folder=None):
+    import os
+    import json
+    import glob
+    import re
+    
+    brain_dir = os.path.join(os.path.expanduser("~"), ".gemini", "antigravity", "brain")
+    if not os.path.exists(brain_dir):
+        return {"success": False, "syncedSessions": [], "observationsAdded": 0, "error": f"Brain directory not found at {brain_dir}"}
+
+    pattern = os.path.join(brain_dir, "*", ".system_generated", "logs", "transcript.jsonl")
+    files = glob.glob(pattern)
+    if not files:
+        return {"success": True, "syncedSessions": [], "observationsAdded": 0}
+
+    conversations = []
+    for fpath in files:
+        try:
+            mtime = os.path.getmtime(fpath)
+            convo_id = os.path.basename(os.path.dirname(os.path.dirname(os.path.dirname(fpath))))
+            conversations.append({
+                "id": convo_id,
+                "transcriptPath": fpath,
+                "mtime": mtime
+            })
+        except Exception:
+            pass
+
+    if not conversations:
+        return {"success": True, "syncedSessions": [], "observationsAdded": 0}
+
+    conversations.sort(key=lambda x: x["mtime"], reverse=True)
+
+    targets = []
+    if mode == "current_session":
+        if current_conversation_id:
+            match = next((c for c in conversations if c["id"] == current_conversation_id), None)
+            if match:
+                targets = [match]
+        else:
+            targets = [conversations[0]]
+    elif mode == "current_folder":
+        target_folder = current_folder if current_folder else ""
+        if not target_folder:
+            target_folder = os.getcwd()
+            
+        target_folder_norm = target_folder.replace("\\", "/").lower().strip()
+        
+        for convo in conversations:
+            try:
+                with open(convo["transcriptPath"], "r", encoding="utf-8") as tf:
+                    text = tf.read().lower()
+                    text_norm = text.replace("\\/", "/").replace("\\\\", "/")
+                    if target_folder_norm in text_norm:
+                        targets.append(convo)
+            except Exception:
+                pass
+    elif mode == "all":
+        targets = conversations
+    else:
+        return {"success": False, "syncedSessions": [], "observationsAdded": 0, "error": f"Invalid mode: {mode}"}
+
+    if not targets:
+        return {"success": True, "syncedSessions": [], "observationsAdded": 0}
+
+    synced_sessions = []
+    observations_added = 0
+
+    for convo in targets:
+        convo_id = convo["id"]
+        tpath = convo["transcriptPath"]
+        session_id = f"antigravity_{convo_id[:18].replace('-', '_')}"
+        
+        project_path = None
+        try:
+            with open(tpath, "r", encoding="utf-8") as tf:
+                first_line = tf.readline()
+                if first_line:
+                    step = json.loads(first_line)
+                    match = re.search(r"\[([^\]]+)\]\s*->\s*\[([^\]]+)\]", step.get("content", ""))
+                    if match:
+                        project_path = match.group(2)
+        except Exception:
+            pass
+            
+        if not project_path:
+            project_path = os.getcwd()
+
+        turns = []
+        current_prompt = None
+        current_timestamp = None
+
+        try:
+            with open(tpath, "r", encoding="utf-8") as tf:
+                for line in tf:
+                    if not line.strip():
+                        continue
+                    try:
+                        step = json.loads(line)
+                        step_type = step.get("type")
+                        if step_type == "USER_INPUT":
+                            p_text = step.get("content", "")
+                            if "<USER_REQUEST>" in p_text:
+                                parts = p_text.split("<USER_REQUEST>")
+                                if len(parts) > 1:
+                                    p_text = parts[1]
+                            if "</USER_REQUEST>" in p_text:
+                                p_text = p_text.split("</USER_REQUEST>")[0]
+                            current_prompt = p_text.strip()
+                            current_timestamp = step.get("created_at")
+                        elif step_type == "PLANNER_RESPONSE" and current_prompt:
+                            turns.append({
+                                "prompt": current_prompt,
+                                "response": step.get("content", ""),
+                                "timestamp": current_timestamp or step.get("created_at") or datetime_now_iso()
+                            })
+                            current_prompt = None
+                            current_timestamp = None
+                    except Exception:
+                        pass
+        except Exception:
+            continue
+
+        if not turns:
+            continue
+
+        existing_inputs = set()
+        obs_list = kv.list(KV.observations(session_id))
+        for obs in obs_list:
+            tool_input = obs.get("toolInput") or (obs.get("raw") or {}).get("tool_input")
+            if tool_input:
+                existing_inputs.add(tool_input.strip())
+
+        session_exists = kv.get(KV.sessions, session_id) is not None
+        if not session_exists:
+            session = {
+                "id": session_id,
+                "project": project_path,
+                "cwd": project_path,
+                "startedAt": datetime_now_iso(),
+                "status": "active",
+                "observationCount": 0,
+                "summary": f"Antigravity Pair Programming ({convo_id[:8]})",
+                "firstPrompt": f"Antigravity Pair Programming ({convo_id[:8]})",
+                "agentId": "antigravity"
+            }
+            functions.create_session(kv, session)
+
+        convo_synced = False
+        for turn in turns:
+            prompt = turn["prompt"]
+            if prompt.strip() in existing_inputs:
+                continue
+
+            payload = {
+                "sessionId": session_id,
+                "project": project_path,
+                "cwd": project_path,
+                "hookType": "post_tool_use",
+                "timestamp": turn["timestamp"],
+                "agentId": "antigravity",
+                "data": {
+                    "tool_name": "conversation",
+                    "tool_input": prompt,
+                    "tool_output": turn["response"],
+                }
+            }
+            functions.observe(kv, payload)
+            observations_added += 1
+            convo_synced = True
+
+        if convo_synced:
+            synced_sessions.append(convo_id)
+
+    return {"success": True, "syncedSessions": synced_sessions, "observationsAdded": observations_added}
+
 @app.route("/agentmemory/mcp/tools", methods=["GET"])
 def mcp_tools_list():
     auth_err = check_auth()
@@ -1794,6 +1985,19 @@ def mcp_tools_list():
                 },
                 "required": ["content", "project"]
             }
+        },
+        {
+            "name": "memory_antigravity_sync",
+            "description": "Sync Antigravity chat transcripts to agentmemory. Supports syncing the current session, all sessions, or sessions associated with the current folder.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "mode": {"type": "string", "description": "Sync mode: current_session (default), current_folder, or all"},
+                    "currentConversationId": {"type": "string", "description": "Optional conversation ID of the current active session"},
+                    "currentFolder": {"type": "string", "description": "Optional current folder path to filter by"}
+                },
+                "required": ["mode"]
+            }
         }
     ]
     return jsonify({"tools": tools}), 200
@@ -1971,6 +2175,13 @@ def mcp_tools_call():
                 "agentId": agent_id
             }
             res = functions.remember(kv, payload)
+            text_out = json.dumps(res)
+            
+        elif name == "memory_antigravity_sync":
+            mode = args.get("mode") or "current_session"
+            current_convo = args.get("currentConversationId")
+            current_folder = args.get("currentFolder")
+            res = perform_antigravity_sync(mode, current_convo, current_folder)
             text_out = json.dumps(res)
             
         else:
