@@ -1998,6 +1998,131 @@ def mcp_tools_list():
                 },
                 "required": ["mode"]
             }
+        },
+        {
+            "name": "memory_slot_list",
+            "description": "List all pinned memory slots.",
+            "inputSchema": {"type": "object", "properties": {}}
+        },
+        {
+            "name": "memory_slot_get",
+            "description": "Retrieve the content of a specific pinned memory slot.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "label": {"type": "string", "description": "The label of the pinned slot to fetch"}
+                },
+                "required": ["label"]
+            }
+        },
+        {
+            "name": "memory_slot_create",
+            "description": "Create a new pinned memory slot or overwrite an existing one.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "label": {"type": "string", "description": "The label of the pinned slot"},
+                    "content": {"type": "string", "description": "Initial content for the slot (optional)"},
+                    "scope": {"type": "string", "description": "Scope: global or session (optional, default 'global')"},
+                    "sizeLimit": {"type": "number", "description": "Character limit (optional)"},
+                    "pinned": {"type": "boolean", "description": "Whether pinned to context (optional, default true)"}
+                },
+                "required": ["label"]
+            }
+        },
+        {
+            "name": "memory_slot_append",
+            "description": "Append text content to a pinned memory slot.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "label": {"type": "string", "description": "The label of the pinned slot"},
+                    "text": {"type": "string", "description": "Text to append"}
+                },
+                "required": ["label", "text"]
+            }
+        },
+        {
+            "name": "memory_slot_replace",
+            "description": "Replace the content of a pinned memory slot.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "label": {"type": "string", "description": "The label of the pinned slot"},
+                    "content": {"type": "string", "description": "New content"}
+                },
+                "required": ["label", "content"]
+            }
+        },
+        {
+            "name": "memory_slot_delete",
+            "description": "Delete a pinned memory slot.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "label": {"type": "string", "description": "The label of the pinned slot to delete"}
+                },
+                "required": ["label"]
+            }
+        },
+        {
+            "name": "memory_action_create",
+            "description": "Create a new work item / action.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "title": {"type": "string", "description": "Title of the action"},
+                    "description": {"type": "string", "description": "Detailed description of the action (optional)"},
+                    "priority": {"type": "number", "description": "Priority score, higher is more urgent (optional, default 0)"},
+                    "status": {"type": "string", "description": "Status: pending, active, completed (optional, default 'pending')"},
+                    "tags": {
+                        "oneOf": [
+                            {"type": "string", "description": "Comma-separated tags (optional)"},
+                            {"type": "array", "items": {"type": "string"}, "description": "List of tags (optional)"}
+                        ]
+                    },
+                    "sessionId": {"type": "string", "description": "Link to a specific session ID (optional)"}
+                },
+                "required": ["title"]
+            }
+        },
+        {
+            "name": "memory_action_update",
+            "description": "Update fields of an existing action.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "actionId": {"type": "string", "description": "ID of the action to update"},
+                    "title": {"type": "string", "description": "Updated title (optional)"},
+                    "description": {"type": "string", "description": "Updated description (optional)"},
+                    "priority": {"type": "number", "description": "Updated priority (optional)"},
+                    "status": {"type": "string", "description": "Updated status: pending, active, completed, discarded (optional)"},
+                    "tags": {
+                        "oneOf": [
+                            {"type": "string", "description": "Comma-separated tags (optional)"},
+                            {"type": "array", "items": {"type": "string"}, "description": "List of tags (optional)"}
+                        ]
+                    },
+                    "sessionId": {"type": "string", "description": "Updated session ID (optional)"}
+                },
+                "required": ["actionId"]
+            }
+        },
+        {
+            "name": "memory_frontier",
+            "description": "Get pending and active actions sorted by priority.",
+            "inputSchema": {"type": "object", "properties": {}}
+        },
+        {
+            "name": "memory_crystallize",
+            "description": "Crystallize/summarize all observations in a session.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "sessionId": {"type": "string", "description": "Session ID to crystallize"}
+                },
+                "required": ["sessionId"]
+            }
         }
     ]
     return jsonify({"tools": tools}), 200
@@ -2183,6 +2308,102 @@ def mcp_tools_call():
             current_folder = args.get("currentFolder")
             res = perform_antigravity_sync(mode, current_convo, current_folder)
             text_out = json.dumps(res)
+            
+        elif name == "memory_slot_list":
+            res = functions.slot_list(kv)
+            text_out = json.dumps(res, indent=2)
+            
+        elif name == "memory_slot_get":
+            label = args.get("label")
+            if not label:
+                return jsonify({"error": "label is required"}), 400
+            res = functions.slot_get(kv, label)
+            text_out = json.dumps(res, indent=2)
+            
+        elif name == "memory_slot_create":
+            label = args.get("label")
+            if not label:
+                return jsonify({"error": "label is required"}), 400
+            res = functions.slot_create(kv, {
+                "label": label,
+                "content": args.get("content"),
+                "scope": args.get("scope") or "global",
+                "sizeLimit": args.get("sizeLimit"),
+                "pinned": args.get("pinned", True)
+            })
+            text_out = json.dumps(res, indent=2)
+            
+        elif name == "memory_slot_append":
+            label = args.get("label")
+            text = args.get("text")
+            if not label or not text:
+                return jsonify({"error": "label and text are required"}), 400
+            res = functions.slot_append(kv, label, text)
+            text_out = json.dumps(res, indent=2)
+            
+        elif name == "memory_slot_replace":
+            label = args.get("label")
+            content = args.get("content")
+            if not label or content is None:
+                return jsonify({"error": "label and content are required"}), 400
+            res = functions.slot_replace(kv, label, content)
+            text_out = json.dumps(res, indent=2)
+            
+        elif name == "memory_slot_delete":
+            label = args.get("label")
+            if not label:
+                return jsonify({"error": "label is required"}), 400
+            res = functions.slot_delete(kv, label)
+            text_out = json.dumps(res, indent=2)
+            
+        elif name == "memory_action_create":
+            action_id = functions.generate_id("act")
+            from datetime import datetime, timezone
+            now = datetime.now(timezone.utc).isoformat()
+            tags = parse_mcp_list_arg(args.get("tags"))
+            action = {
+                "id": action_id,
+                "title": args.get("title") or "",
+                "description": args.get("description"),
+                "priority": args.get("priority", 0),
+                "status": args.get("status", "pending"),
+                "tags": tags,
+                "sessionId": args.get("sessionId"),
+                "createdAt": now,
+                "updatedAt": now,
+            }
+            kv.set(KV.actions, action_id, action)
+            text_out = json.dumps({"action": action, "success": True}, indent=2)
+            
+        elif name == "memory_action_update":
+            action_id = args.get("actionId")
+            if not action_id:
+                return jsonify({"error": "actionId is required"}), 400
+            existing = kv.get(KV.actions, action_id)
+            if not existing:
+                return jsonify({"error": "action not found"}), 404
+            from datetime import datetime, timezone
+            allowed_fields = {"title", "description", "priority", "status", "tags", "sessionId"}
+            updates = {k: v for k, v in args.items() if k in allowed_fields}
+            if "tags" in args:
+                updates["tags"] = parse_mcp_list_arg(args.get("tags"))
+            existing.update(updates)
+            existing["updatedAt"] = datetime.now(timezone.utc).isoformat()
+            kv.set(KV.actions, action_id, existing)
+            text_out = json.dumps({"action": existing, "success": True}, indent=2)
+            
+        elif name == "memory_frontier":
+            items = kv.list(KV.actions)
+            frontier = [a for a in items if a.get("status") in ("pending", "active")]
+            frontier.sort(key=lambda a: (-(a.get("priority") or 0), a.get("createdAt", "")))
+            text_out = json.dumps({"frontier": frontier[:50], "total": len(frontier)}, indent=2)
+            
+        elif name == "memory_crystallize":
+            session_id = args.get("sessionId")
+            if not session_id:
+                return jsonify({"error": "sessionId is required"}), 400
+            res = functions.summarize(kv, {"sessionId": session_id})
+            text_out = json.dumps(res, indent=2)
             
         else:
             return jsonify({"error": f"unknown tool: {name}"}), 400

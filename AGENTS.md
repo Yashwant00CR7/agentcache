@@ -91,6 +91,45 @@ Auth: all endpoints check `AGENTMEMORY_SECRET` via timing-safe `hmac.compare_dig
 
 WebSocket at `/stream/mem-live/viewer` broadcasts raw + compressed observations to connected viewers.
 
+## MCP Tools
+
+The server exposes 30 MCP tools via `GET /agentmemory/mcp/tools` (schema) and `POST /agentmemory/mcp/tools` (execution).
+
+| Tool | Description | Status |
+|------|-------------|--------|
+| `memory_recall` | Search past session observations | Working |
+| `memory_save` | Save long-term memory (concepts/files as string or array) | Working |
+| `memory_sessions` | List recent sessions | Working |
+| `memory_sessions_list` | Retrieve all memory sessions | Working |
+| `memory_smart_search` | Hybrid semantic+keyword search | Working |
+| `memory_timeline` | Chronological observations | Working |
+| `memory_observations` | Get observations for session | Working |
+| `memory_profile` | User/project profile | Working |
+| `memory_lessons` | List saved lessons | Working |
+| `memory_lesson_save` | Save lesson from session | Working |
+| `memory_lesson_recall` | Search lessons by query | Working |
+| `memory_lesson_search` | Search lessons (keywords) | Working |
+| `memory_consolidate` | Summarize sessions, extract memory | Working |
+| `memory_reflect` | Reflect on session, update context | Working |
+| `memory_diagnose` | Health check subsystems | Working |
+| `memory_forget` | Delete memory/session/observations | Working |
+| `memory_export` | Export all data as JSON | Working |
+| `agent_observe` | Log agent execution observation | Working |
+| `agent_remember` | Save agent memory to long-term | Working |
+| `memory_antigravity_sync` | Sync Antigravity transcripts | Working |
+| `memory_slot_list` | List all pinned memory slots | Working |
+| `memory_slot_get` | Retrieve a specific pinned slot | Working |
+| `memory_slot_create` | Create/overwrite pinned slot | Working |
+| `memory_slot_append` | Append text content to slot | Working |
+| `memory_slot_replace` | Replace slot content | Working |
+| `memory_slot_delete` | Delete pinned memory slot | Working |
+| `memory_action_create` | Create a new work item / action | Working |
+| `memory_action_update` | Update fields of existing action | Working |
+| `memory_frontier` | Get active/pending actions | Working |
+| `memory_crystallize` | Summarize session observations | Working |
+
+**MCP stdio wrapper:** `src/mcp_stdio.py` reads `AGENTMEMORY_URL` and `AGENTMEMORY_SECRET` from environment variables dynamically.
+
 ## Consistency rules
 
 **When adding a REST endpoint:**
