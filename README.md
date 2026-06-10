@@ -106,7 +106,7 @@ curl -X POST http://localhost:3111/agentmemory/search \
 |---------|--------|-------|
 | REST API — sessions, memories, observations | ✅ | Full surface |
 | WebSocket live stream | ✅ | `/stream/mem-live/viewer` |
-| MCP tools endpoint | ✅ | 16 tools |
+| MCP tools endpoint | ✅ | 30 tools |
 | Built-in HTML viewer | ✅ | Real-time dashboard at `/viewer` |
 | BM25 keyword search | ✅ | Always on, no API key needed |
 | Hybrid BM25 + vector search | ✅ | Requires `GEMINI_API_KEY` |
@@ -171,7 +171,7 @@ Verify with: curl http://localhost:3111/agentmemory/livez
 Open the viewer at: http://localhost:3111/viewer
 ```
 
-### Available MCP Tools (16)
+### Available MCP Tools (30)
 
 | Tool | Description |
 |------|-------------|
@@ -179,18 +179,32 @@ Open the viewer at: http://localhost:3111/viewer
 | `memory_recall` | Search past observations by keyword |
 | `memory_smart_search` | Hybrid BM25 + vector semantic search |
 | `memory_sessions` | List recent sessions |
-| `memory_sessions_list` | Paginated sessions list |
+| `memory_sessions_list` | Retrieve all memory sessions |
 | `memory_timeline` | Chronological observations for a session |
 | `memory_observations` | Observations for a session |
 | `memory_profile` | Per-project concept + file profile |
 | `memory_lessons` | List active lessons with confidence scores |
 | `memory_lesson_save` | Save a lesson (duplicate saves strengthen it) |
-| `memory_lesson_search` | Search lessons semantically |
+| `memory_lesson_recall` | Search lessons by query |
+| `memory_lesson_search` | Search lessons by keywords |
 | `memory_consolidate` | Run 4-tier memory consolidation |
-| `memory_reflect` | Auto-populate slots from session observations |
+| `memory_reflect` | Reflect on session, update context |
 | `memory_diagnose` | Health check across all subsystems |
-| `memory_forget` | Delete an observation or session |
+| `memory_forget` | Delete memory, session, or observations |
 | `memory_export` | Export all memory data as JSON |
+| `agent_observe` | Log agent execution observation |
+| `agent_remember` | Save agent memory to long-term storage |
+| `memory_antigravity_sync` | Sync Antigravity transcripts to memory |
+| `memory_slot_list` | List all pinned memory slots |
+| `memory_slot_get` | Retrieve a specific pinned memory slot |
+| `memory_slot_create` | Create/overwrite a pinned memory slot |
+| `memory_slot_append` | Append text content to a pinned memory slot |
+| `memory_slot_replace` | Replace pinned memory slot content |
+| `memory_slot_delete` | Delete a pinned memory slot |
+| `memory_action_create` | Create a new work item / action |
+| `memory_action_update` | Update fields of an existing action |
+| `memory_frontier` | Get active and pending actions sorted by priority |
+| `memory_crystallize` | Crystallize/summarize observations in a session |
 
 ---
 
@@ -453,7 +467,7 @@ Query
 | Storage | Dolt SQL (git-versioned MySQL) | SQLite WAL (single file) |
 | Engine dependency | iii-engine (separate binary) | None — just Flask |
 | Embeddings | 6 providers + local `@xenova/transformers` | Gemini 768-dim |
-| MCP tools | 53 | 16 |
+| MCP tools | 53 | 30 |
 | REST endpoints | 128 | ~50 |
 | Deploy | npm, Docker, fly.io, Railway, Render | Docker, HuggingFace Spaces |
 | Cold boot | ~7s (iii engine warm-up) | <2s |
