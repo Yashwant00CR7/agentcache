@@ -265,6 +265,53 @@ def perform_antigravity_sync_local(args):
         })}]
     }
 
+def perform_antigravity_sync_all_local(args):
+    sync_res_outer = perform_antigravity_sync_local(args)
+    try:
+        sync_res = json.loads(sync_res_outer["content"][0]["text"])
+    except Exception as ex:
+        return sync_res_outer
+        
+    if not sync_res.get("success"):
+        return sync_res_outer
+        
+    synced_sessions = sync_res.get("syncedSessions") or []
+    crystallizations = {}
+    reflections = {}
+    
+    headers_dict = headers()
+    
+    for cid in synced_sessions:
+        session_id = f"antigravity_{cid[:18].replace('-', '_')}"
+        
+        try:
+            r_sum = requests.post(f"{BASE}/summarize", headers=headers_dict, json={"sessionId": session_id}, timeout=30)
+            if r_sum.status_code == 200:
+                crystallizations[session_id] = r_sum.json()
+            else:
+                crystallizations[session_id] = {"success": False, "status_code": r_sum.status_code, "error": r_sum.text}
+        except Exception as e:
+            crystallizations[session_id] = {"success": False, "error": str(e)}
+            
+        try:
+            r_ref = requests.post(f"{BASE}/slot/reflect", headers=headers_dict, json={"sessionId": session_id, "maxObservations": 50}, timeout=30)
+            if r_ref.status_code == 200:
+                reflections[session_id] = r_ref.json()
+            else:
+                reflections[session_id] = {"success": False, "status_code": r_ref.status_code, "error": r_ref.text}
+        except Exception as e:
+            reflections[session_id] = {"success": False, "error": str(e)}
+            
+    return {
+        "content": [{"type": "text", "text": json.dumps({
+            "success": True,
+            "syncedSessions": synced_sessions,
+            "observationsAdded": sync_res.get("observationsAdded", 0),
+            "crystallizations": crystallizations,
+            "reflections": reflections
+        }, indent=2)}]
+    }
+
 def handle(req):
     method = req.get("method", "")
     req_id = req.get("id")
@@ -301,6 +348,8 @@ def handle(req):
         try:
             if name == "memory_antigravity_sync":
                 result = perform_antigravity_sync_local(args)
+            elif name == "memory_antigravity_sync_all":
+                result = perform_antigravity_sync_all_local(args)
             else:
                 r = requests.post(f"{BASE}/mcp/tools",
                                   headers=headers(),

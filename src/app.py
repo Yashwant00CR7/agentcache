@@ -2000,6 +2000,19 @@ def mcp_tools_list():
             }
         },
         {
+            "name": "memory_antigravity_sync_all",
+            "description": "Sync the current Antigravity session, automatically crystallize (summarize) it, and reflect to populate pinned memory slots in a single action.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "mode": {"type": "string", "description": "Sync mode: current_session (default), current_folder, or all"},
+                    "currentConversationId": {"type": "string", "description": "Optional conversation ID of the current active session"},
+                    "currentFolder": {"type": "string", "description": "Optional current folder path to filter by"}
+                },
+                "required": ["mode"]
+            }
+        },
+        {
             "name": "memory_slot_list",
             "description": "List all pinned memory slots.",
             "inputSchema": {"type": "object", "properties": {}}
@@ -2308,6 +2321,39 @@ def mcp_tools_call():
             current_folder = args.get("currentFolder")
             res = perform_antigravity_sync(mode, current_convo, current_folder)
             text_out = json.dumps(res)
+            
+        elif name == "memory_antigravity_sync_all":
+            mode = args.get("mode") or "current_session"
+            current_convo = args.get("currentConversationId")
+            current_folder = args.get("currentFolder")
+            sync_res = perform_antigravity_sync(mode, current_convo, current_folder)
+            
+            synced_sessions = sync_res.get("syncedSessions") or []
+            crystallizations = {}
+            reflections = {}
+            
+            for cid in synced_sessions:
+                session_id = f"antigravity_{cid[:18].replace('-', '_')}"
+                
+                try:
+                    cres = functions.summarize(kv, {"sessionId": session_id})
+                    crystallizations[session_id] = cres
+                except Exception as ex:
+                    crystallizations[session_id] = {"success": False, "error": str(ex)}
+                    
+                try:
+                    rres = functions.slot_reflect(kv, session_id, 50)
+                    reflections[session_id] = rres
+                except Exception as ex:
+                    reflections[session_id] = {"success": False, "error": str(ex)}
+                    
+            text_out = json.dumps({
+                "success": sync_res.get("success", True),
+                "syncedSessions": synced_sessions,
+                "observationsAdded": sync_res.get("observationsAdded", 0),
+                "crystallizations": crystallizations,
+                "reflections": reflections
+            }, indent=2)
             
         elif name == "memory_slot_list":
             res = functions.slot_list(kv)

@@ -106,7 +106,7 @@ curl -X POST http://localhost:3111/agentmemory/search \
 |---------|--------|-------|
 | REST API — sessions, memories, observations | ✅ | Full surface |
 | WebSocket live stream | ✅ | `/stream/mem-live/viewer` |
-| MCP tools endpoint | ✅ | 30 tools |
+| MCP tools endpoint | ✅ | 31 tools |
 | Built-in HTML viewer | ✅ | Real-time dashboard at `/viewer` |
 | BM25 keyword search | ✅ | Always on, no API key needed |
 | Hybrid BM25 + vector search | ✅ | Requires `GEMINI_API_KEY` |
@@ -171,7 +171,7 @@ Verify with: curl http://localhost:3111/agentmemory/livez
 Open the viewer at: http://localhost:3111/viewer
 ```
 
-### Available MCP Tools (30)
+### Available MCP Tools (31)
 
 | Tool | Description |
 |------|-------------|
@@ -195,6 +195,7 @@ Open the viewer at: http://localhost:3111/viewer
 | `agent_observe` | Log agent execution observation |
 | `agent_remember` | Save agent memory to long-term storage |
 | `memory_antigravity_sync` | Sync Antigravity transcripts to memory |
+| `memory_antigravity_sync_all` | Master sync: transcript + crystallize + reflect |
 | `memory_slot_list` | List all pinned memory slots |
 | `memory_slot_get` | Retrieve a specific pinned memory slot |
 | `memory_slot_create` | Create/overwrite a pinned memory slot |
@@ -467,7 +468,7 @@ Query
 | Storage | Dolt SQL (git-versioned MySQL) | SQLite WAL (single file) |
 | Engine dependency | iii-engine (separate binary) | None — just Flask |
 | Embeddings | 6 providers + local `@xenova/transformers` | Gemini 768-dim |
-| MCP tools | 53 | 30 |
+| MCP tools | 53 | 31 |
 | REST endpoints | 128 | ~50 |
 | Deploy | npm, Docker, fly.io, Railway, Render | Docker, HuggingFace Spaces |
 | Cold boot | ~7s (iii engine warm-up) | <2s |

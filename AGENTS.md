@@ -93,7 +93,7 @@ WebSocket at `/stream/mem-live/viewer` broadcasts raw + compressed observations 
 
 ## MCP Tools
 
-The server exposes 30 MCP tools via `GET /agentmemory/mcp/tools` (schema) and `POST /agentmemory/mcp/tools` (execution).
+The server exposes 31 MCP tools via `GET /agentmemory/mcp/tools` (schema) and `POST /agentmemory/mcp/tools` (execution).
 
 | Tool | Description | Status |
 |------|-------------|--------|
@@ -117,6 +117,7 @@ The server exposes 30 MCP tools via `GET /agentmemory/mcp/tools` (schema) and `P
 | `agent_observe` | Log agent execution observation | Working |
 | `agent_remember` | Save agent memory to long-term | Working |
 | `memory_antigravity_sync` | Sync Antigravity transcripts | Working |
+| `memory_antigravity_sync_all` | Master sync: transcript + crystallize + reflect | Working |
 | `memory_slot_list` | List all pinned memory slots | Working |
 | `memory_slot_get` | Retrieve a specific pinned slot | Working |
 | `memory_slot_create` | Create/overwrite pinned slot | Working |
