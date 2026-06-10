@@ -2168,13 +2168,31 @@ def mcp_tools_call():
             content = args.get("content")
             concepts = parse_mcp_list_arg(args.get("concepts"))
             files = parse_mcp_list_arg(args.get("files"))
+            session_id = args.get("sessionId")
+            project = args.get("project")
             res = functions.remember(kv, {
                 "content": content,
                 "type": args.get("type") or "fact",
                 "concepts": concepts,
                 "files": files,
-                "project": args.get("project")
+                "project": project
             })
+            # If sessionId provided, also write observation so memory is linked to session
+            if session_id and project and content:
+                obs_payload = {
+                    "sessionId": session_id,
+                    "project": project,
+                    "cwd": "",
+                    "hookType": "post_tool_use",
+                    "timestamp": datetime_now_iso(),
+                    "agentId": functions.get_agent_id() or "agent",
+                    "data": {
+                        "tool_name": "memory_save",
+                        "tool_input": content[:500],
+                        "tool_output": res.get("id", ""),
+                    }
+                }
+                functions.observe(kv, obs_payload)
             text_out = json.dumps(res)
             
         elif name in ("memory_sessions", "memory_sessions_list"):
@@ -2297,13 +2315,14 @@ def mcp_tools_call():
             agent_id = args.get("agentId") or functions.get_agent_id() or "agent"
             content = args.get("content")
             project = args.get("project")
+            session_id = args.get("sessionId")
             mem_type = args.get("type") or "fact"
             concepts = parse_mcp_list_arg(args.get("concepts"))
             files = parse_mcp_list_arg(args.get("files"))
-            
+
             if not content or not project:
                 return jsonify({"error": "content and project are required"}), 400
-                
+
             payload = {
                 "content": content,
                 "type": mem_type,
@@ -2313,6 +2332,22 @@ def mcp_tools_call():
                 "agentId": agent_id
             }
             res = functions.remember(kv, payload)
+            # If sessionId provided, write observation to link memory to session
+            if session_id and content:
+                obs_payload = {
+                    "sessionId": session_id,
+                    "project": project,
+                    "cwd": "",
+                    "hookType": "post_tool_use",
+                    "timestamp": datetime_now_iso(),
+                    "agentId": agent_id,
+                    "data": {
+                        "tool_name": "agent_remember",
+                        "tool_input": content[:500],
+                        "tool_output": res.get("id", ""),
+                    }
+                }
+                functions.observe(kv, obs_payload)
             text_out = json.dumps(res)
             
         elif name == "memory_antigravity_sync":
