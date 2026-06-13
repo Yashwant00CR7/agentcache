@@ -26,73 +26,66 @@ _hybrid_search = HybridSearch(_bm25_index, _vector_index, None, None)
 _index_persistence = None
 _stream_broadcaster = None  # Callable: (payload) -> None
 
-# Default scopes matching schema.ts
+# KV scope registry — folder-based memory model
 class KV:
-    sessions = "mem:sessions"
+    # ---- Folder memory scopes (new) ----
+
+    # Global index of all (folder_path, agent_id) pairs known to the system.
+    # Key = "{safe_folder_path}:{agent_id}", value = FolderIndexEntry dict.
+    folders = "mem:folders"
+
+    @staticmethod
+    def folder_obs(folder_path: str, agent_id: str) -> str:
+        """Per-(folder, agent) observations scope.
+        Key = obs_id, value = FolderObservation dict.
+        """
+        safe_path = folder_path.replace("\\", "/").strip("/")
+        safe_agent = agent_id.strip()
+        return f"mem:folder:{safe_path}:{safe_agent}"
+
+    @staticmethod
+    def folder_meta(folder_path: str, agent_id: str) -> str:
+        """Per-(folder, agent) metadata scope.
+        Key = "meta", value = FolderMeta dict (obsCount, lastUpdated, summary).
+        """
+        safe_path = folder_path.replace("\\", "/").strip("/")
+        safe_agent = agent_id.strip()
+        return f"mem:foldermeta:{safe_path}:{safe_agent}"
+
+    # ---- Global / shared scopes (kept) ----
+
+    # Long-term memories — unchanged from previous implementation.
     memories = "mem:memories"
-    summaries = "mem:summaries"
-    config = "mem:config"
-    metrics = "mem:metrics"
-    health = "mem:health"
+
+    # BM25 index shards — unchanged.
     bm25Index = "mem:index:bm25"
-    relations = "mem:relations"
-    profiles = "mem:profiles"
-    claudeBridge = "mem:claude-bridge"
-    graphNodes = "mem:graph:nodes"
-    graphEdges = "mem:graph:edges"
-    graphSnapshot = "mem:graph:snapshot"
-    graphNameIndex = "mem:graph:name-index"
-    graphEdgeKey = "mem:graph:edge-key"
-    graphNodeDegree = "mem:graph:node-degree"
-    semantic = "mem:semantic"
-    procedural = "mem:procedural"
+
+    # Audit log — unchanged.
     audit = "mem:audit"
-    actions = "mem:actions"
-    actionEdges = "mem:action-edges"
-    leases = "mem:leases"
-    routines = "mem:routines"
-    routineRuns = "mem:routine-runs"
-    signals = "mem:signals"
-    checkpoints = "mem:checkpoints"
-    mesh = "mem:mesh"
-    sketches = "mem:sketches"
-    facets = "mem:facets"
-    sentinels = "mem:sentinels"
-    crystals = "mem:crystals"
-    lessons = "mem:lessons"
-    insights = "mem:insights"
-    graphEdgeHistory = "mem:graph:edge-history"
-    retentionScores = "mem:retention"
-    accessLog = "mem:access"
-    imageRefs = "mem:image-refs"
-    slots = "mem:slots"
-    globalSlots = "mem:slots:global"
-    commits = "mem:commits"
-    recentSearches = "mem:recent-searches"
 
-    @staticmethod
-    def observations(session_id: str) -> str:
-        return f"mem:obs:{session_id}"
+    # Graph edges — repurposed for folder graph edges.
+    relations = "mem:relations"
 
-    @staticmethod
-    def team_shared(team_id: str) -> str:
-        return f"mem:team:{team_id}:shared"
+def get_current_project(kv: StateKV) -> Optional[str]:
+    try:
+        sessions = kv.list(KV.sessions)
+        if not sessions:
+            return None
+        active_sessions = [s for s in sessions if s.get("status") == "active"]
+        if active_sessions:
+            active_sessions.sort(key=lambda s: s.get("updatedAt", ""), reverse=True)
+            return active_sessions[0].get("project")
+        sessions.sort(key=lambda s: s.get("updatedAt", ""), reverse=True)
+        return sessions[0].get("project")
+    except Exception:
+        return None
 
-    @staticmethod
-    def team_users(team_id: str, user_id: str) -> str:
-        return f"mem:team:{team_id}:users:{user_id}"
-
-    @staticmethod
-    def team_profile(team_id: str) -> str:
-        return f"mem:team:{team_id}:profile"
-
-    @staticmethod
-    def enriched_chunks(session_id: str) -> str:
-        return f"mem:enriched:{session_id}"
-
-    @staticmethod
-    def latent_embeddings(obs_id: str) -> str:
-        return f"mem:latent:{obs_id}"
+def project_slots_scope(kv: StateKV, project: Optional[str] = None) -> str:
+    if not project:
+        project = get_current_project(kv)
+    if not project:
+        return KV.slots
+    return f"mem:slots:{project}"
 
 # =====================================================================
 # Core Helpers & Utilities
@@ -114,12 +107,96 @@ def fingerprint_id(prefix: str, content: str) -> str:
     h = hashlib.sha256(content.strip().lower().encode('utf-8')).hexdigest()
     return f"{prefix}_{h[:16]}"
 
-def auto_complete_old_active_sessions(kv: StateKV, current_session_id: str) -> int:
+# ---- Folder-path normalisation (REQ-002, REQ-063, REQ-064, REQ-066) ----
+
+_MAX_PATH_LEN = 512
+
+
+def normalize_folder_path(path: str) -> str:
+    """Normalize a folder path for safe use in KV scope keys.
+
+    Steps applied in order:
+    1. Cap the raw input at 512 characters (REQ-066).
+    2. Apply ``os.path.normpath`` to collapse redundant separators and
+       resolve any ``..`` components at the OS level.
+    3. Convert all OS-native separators to forward slashes.
+    4. Strip any remaining leading or trailing slashes.
+
+    Raises:
+        ValueError: if *path* is empty (before or after normalization), or
+                    if the normalized result still contains a ``..`` segment,
+                    which would indicate an attempt at path traversal
+                    (REQ-064).
+
+    Returns:
+        A non-empty, forward-slash-separated string with no leading/trailing
+        slashes and no ``..`` segments — safe for use as a KV scope fragment.
+
+    Property (REQ-074): idempotent — applying this function twice yields
+    the same result as applying it once.
+    """
+    if not path:
+        raise ValueError("folder_path must not be empty")
+
+    # 1. Length cap before any processing.
+    path = path[:_MAX_PATH_LEN]
+
+    # 2. OS-level normalisation (resolves .., duplicate separators, etc.)
+    normalized = os.path.normpath(path)
+
+    # 3. Unify separators to forward slash.
+    normalized = normalized.replace("\\", "/")
+
+    # 4. Strip leading / trailing slashes.
+    normalized = normalized.strip("/")
+
+    # Guard: reject path traversal patterns that survive normalisation.
+    # Split on "/" and check each component; normpath should have already
+    # resolved most cases but we verify explicitly for safety.
+    parts = normalized.split("/")
+    if any(part == ".." for part in parts):
+        raise ValueError(
+            f"folder_path contains path traversal segment '..': {path!r}"
+        )
+
+    if not normalized:
+        raise ValueError("folder_path is empty after normalization")
+
+    return normalized
+
+
+def validate_agent_id(agent_id: str) -> str:
+    """Validate and sanitize an agent_id before use in KV scope keys.
+
+    Strips surrounding whitespace and caps at 512 characters (REQ-066).
+
+    Raises:
+        ValueError: if *agent_id* is empty after stripping.
+
+    Returns:
+        Sanitized agent_id string.
+    """
+    if not agent_id:
+        raise ValueError("agent_id must not be empty")
+
+    sanitized = agent_id.strip()[:_MAX_PATH_LEN]
+
+    if not sanitized:
+        raise ValueError("agent_id is empty after stripping whitespace")
+
+    return sanitized
+
+
+def auto_complete_old_active_sessions(kv: StateKV, current_session_id: str, project: Optional[str] = None, agent_id: Optional[str] = None) -> int:
     sessions = kv.list(KV.sessions)
     count = 0
     now = datetime.datetime.utcnow().isoformat() + "Z"
     for s in sessions:
         if s.get("id") != current_session_id and s.get("status") == "active":
+            if project and s.get("project") != project:
+                continue
+            if agent_id and s.get("agentId") != agent_id:
+                continue
             s["status"] = "completed"
             if "endedAt" not in s:
                 s["endedAt"] = now
@@ -406,9 +483,10 @@ class IndexPersistence:
         try:
             conn = self.kv._get_conn()
             try:
-                with conn.cursor() as cursor:
+                cursor = conn.cursor()
+                try:
                     cursor.execute(
-                        "SELECT DISTINCT scope FROM kv_store WHERE scope LIKE %s",
+                        "SELECT DISTINCT scope FROM kv_store WHERE scope LIKE ?",
                         (scope_prefix + "%",)
                     )
                     rows = cursor.fetchall()
@@ -422,11 +500,14 @@ class IndexPersistence:
                     if to_delete:
                         for i in range(0, len(to_delete), 50):
                             chunk_delete = to_delete[i:i + 50]
-                            format_strings = ','.join(['%s'] * len(chunk_delete))
+                            format_strings = ','.join(['?'] * len(chunk_delete))
                             cursor.execute(
                                 f"DELETE FROM kv_store WHERE scope IN ({format_strings})",
                                 tuple(chunk_delete)
                             )
+                            conn.commit()
+                finally:
+                    cursor.close()
             finally:
                 conn.close()
         except Exception as ex:
@@ -696,7 +777,8 @@ def observe(kv: StateKV, payload: Dict[str, Any]) -> Dict[str, Any]:
     max_obs = int(os.getenv("MAX_OBS_PER_SESSION", "500"))
     if max_obs > 0:
         existing = kv.list(KV.observations(session_id))
-        if len(existing) >= max_obs:
+        actual_obs_count = sum(1 for o in existing if not str(o.get("id", "")).endswith(":raw"))
+        if actual_obs_count >= max_obs:
             raise ValueError(f"Session observation limit reached ({max_obs})")
 
     existing_session = kv.get(KV.sessions, session_id)
@@ -716,7 +798,8 @@ def observe(kv: StateKV, payload: Dict[str, Any]) -> Dict[str, Any]:
             print(f"[image store] failed: {ex}")
 
     # Set raw observation
-    kv.set(KV.observations(session_id), obs_id, raw)
+    raw["id"] = f"{obs_id}:raw"
+    kv.set(KV.observations(session_id), raw["id"], raw)
 
     # Stream raw observation
     broadcast_stream({
@@ -740,8 +823,8 @@ def observe(kv: StateKV, payload: Dict[str, Any]) -> Dict[str, Any]:
                 updates.append({"type": "set", "path": "firstPrompt", "value": trimmed[:200]})
         kv.update(KV.sessions, session_id, updates)
     else:
-        auto_complete_old_active_sessions(kv, session_id)
         project = payload.get("project") or "unknown"
+        auto_complete_old_active_sessions(kv, session_id, project=project, agent_id=inherited_agent_id)
         cwd = payload.get("cwd") or os.getcwd()
         trimmed_prompt = None
         if isinstance(raw.get("userPrompt"), str):
@@ -763,10 +846,12 @@ def observe(kv: StateKV, payload: Dict[str, Any]) -> Dict[str, Any]:
         kv.set(KV.sessions, session_id, new_sess)
 
     # Perform synthetic compression (we default to synthetic)
-    synthetic = build_synthetic_compression(raw)
+    raw_for_synthetic = dict(raw)
+    raw_for_synthetic["id"] = obs_id
+    synthetic = build_synthetic_compression(raw_for_synthetic)
     for k in ["hookType", "raw", "toolName", "toolInput", "toolOutput", "userPrompt"]:
-        if k in raw:
-            synthetic[k] = raw[k]
+        if k in raw_for_synthetic:
+            synthetic[k] = raw_for_synthetic[k]
     kv.set(KV.observations(session_id), obs_id, synthetic)
     _bm25_index.add(synthetic)
 
@@ -792,6 +877,333 @@ def observe(kv: StateKV, payload: Dict[str, Any]) -> Dict[str, Any]:
 
     return {"observationId": obs_id}
 
+
+# =====================================================================
+# Folder-Based Observation Ingestion (folder_observe)
+# =====================================================================
+
+def folder_observe(kv: StateKV, payload: Dict[str, Any]) -> Dict[str, Any]:
+    """Ingest a new observation scoped to a (folder_path, agent_id) pair.
+
+    Required payload fields:
+        folderPath: str      — absolute path of working directory
+        agentId: str         — identity of the agent making the observation
+        text: str            — human-readable observation content
+        timestamp: str       — ISO 8601 UTC
+
+    Optional payload fields:
+        type: str            — observation type (default inferred or "other")
+        title: str           — short title (auto-generated from text[:80] if absent)
+        concepts: list[str]  — concept tags (default [])
+        files: list[str]     — referenced file paths (default [] or extracted)
+        importance: int      — 1-10 (default 5, clamped)
+
+    Returns: {"observationId": str}
+    Raises:  ValueError if required fields are missing or folder cap exceeded.
+    """
+    # 1. Validate required fields (REQ-008)
+    folder_path_raw = payload.get("folderPath")
+    agent_id_raw = payload.get("agentId")
+    text_raw = payload.get("text")
+    timestamp = payload.get("timestamp")
+
+    if not folder_path_raw:
+        raise ValueError("Invalid payload: folderPath is required")
+    if not agent_id_raw:
+        raise ValueError("Invalid payload: agentId is required")
+    if not text_raw:
+        raise ValueError("Invalid payload: text is required")
+    if not timestamp:
+        raise ValueError("Invalid payload: timestamp is required")
+
+    # 2. Normalize folder_path and validate agent_id (REQ-002, REQ-063, REQ-064, REQ-066)
+    folder_path = normalize_folder_path(folder_path_raw)
+    agent_id = validate_agent_id(agent_id_raw)
+
+    # 3. Strip private data and cap text (REQ-009, REQ-007)
+    safe_text = strip_private_data(text_raw)
+    safe_text = safe_text[:4000]
+
+    # 10. Enforce MAX_OBS_PER_FOLDER cap before writing (REQ-015)
+    max_obs = int(os.getenv("MAX_OBS_PER_FOLDER", "2000"))
+    if max_obs > 0:
+        existing_obs = kv.list(KV.folder_obs(folder_path, agent_id))
+        if len(existing_obs) >= max_obs:
+            raise ValueError(f"Folder observation limit reached ({max_obs})")
+
+    # 4. Generate obs_id (REQ-010)
+    obs_id = generate_id("fobs")
+
+    # 5. Determine optional fields
+    obs_type = payload.get("type")
+    if not obs_type:
+        # Use infer_type with no tool_name; pass "other" as hook_type
+        obs_type = infer_type(None, "other")
+
+    title = payload.get("title")
+    if not title:
+        title = safe_text[:80]
+
+    concepts = payload.get("concepts") or []
+    if not isinstance(concepts, list):
+        concepts = []
+
+    files = payload.get("files")
+    if not isinstance(files, list):
+        # Try to extract file refs from the payload itself
+        files = extract_files(payload)
+
+    raw_importance = payload.get("importance")
+    if raw_importance is None:
+        importance = 5
+    else:
+        try:
+            importance = max(1, min(10, int(raw_importance)))
+        except (TypeError, ValueError):
+            importance = 5
+
+    # 5. Build FolderObservation dict (REQ-003)
+    obs: Dict[str, Any] = {
+        "id": obs_id,
+        "folderPath": folder_path,
+        "agentId": agent_id,
+        "timestamp": timestamp,
+        "text": safe_text,
+        "type": obs_type,
+        "title": title,
+        "concepts": concepts,
+        "files": files,
+        "importance": importance,
+    }
+
+    # 6. Write observation to KV (REQ-001)
+    obs_scope = KV.folder_obs(folder_path, agent_id)
+    kv.set(obs_scope, obs_id, obs)
+
+    # 7. Upsert folder metadata (REQ-005)
+    meta_scope = KV.folder_meta(folder_path, agent_id)
+    meta = kv.get(meta_scope, "meta") or {
+        "folderPath": folder_path,
+        "agentId": agent_id,
+        "obsCount": 0,
+        "lastUpdated": timestamp,
+        "summary": None,
+    }
+    meta["obsCount"] = meta.get("obsCount", 0) + 1
+    meta["lastUpdated"] = timestamp
+    kv.set(meta_scope, "meta", meta)
+
+    # 8. Upsert global folders index entry (REQ-004, REQ-011)
+    index_key = f"{folder_path}:{agent_id}"
+    kv.set(KV.folders, index_key, {
+        "folderPath": folder_path,
+        "agentId": agent_id,
+        "lastUpdated": meta["lastUpdated"],
+        "obsCount": meta["obsCount"],
+    })
+
+    # 9. Add to BM25 index and vector index (REQ-012)
+    try:
+        _bm25_index.add(obs)
+    except Exception as ex:
+        print(f"[bm25] folder_observe add failed: {ex}")
+
+    comb_text = title + " " + safe_text
+    vector_index_add_guarded(obs_id, folder_path, comb_text, {"kind": "folder_obs", "logId": obs_id})
+
+    if _index_persistence:
+        _index_persistence.schedule_save()
+
+    # 11. Write audit log entry (REQ-014)
+    kv.commit_version(f"folder_observe: {obs_id}", agent_id)
+
+    # 12. Broadcast via WebSocket stream (REQ-013)
+    broadcast_stream({
+        "type": "folder_observation",
+        "folderPath": folder_path,
+        "agentId": agent_id,
+        "data": obs,
+    })
+
+    return {"observationId": obs_id}
+
+
+# =====================================================================
+# Folder-Based Search (folder_search)
+# =====================================================================
+
+def folder_search(
+    kv: StateKV,
+    query: str,
+    limit: int = 20,
+    folder_path: Optional[str] = None,
+    agent_id: Optional[str] = None,
+) -> List[Dict[str, Any]]:
+    """Search across all folder observations (and global memories) using BM25 + vector hybrid search.
+
+    Steps:
+    1. Run hybrid search to obtain up to ``limit * 2`` candidate obs_ids with scores.
+    2. Hydrate each candidate by looking up the observation in the KV store:
+       - Iterate ``KV.folders`` index to discover all (folder_path, agent_id) pairs.
+       - For each pair, load observations from ``KV.folder_obs`` and build an obs_id → obs map.
+    3. Apply ``folder_path`` and ``agent_id`` post-filters to folder observations.
+    4. Also include matching global memories from ``KV.memories``.
+    5. Return results sorted by score descending, capped at ``limit``.
+
+    Each result dict contains at minimum: ``folderPath``, ``agentId``, ``score``,
+    plus all fields from the underlying FolderObservation or Memory object.
+
+    Requirements: REQ-016, REQ-017, REQ-018, REQ-019
+    """
+    if not query or not query.strip():
+        return []
+
+    candidates = _hybrid_search.search(query, limit * 2)
+
+    # --- Build a comprehensive obs_id → observation mapping from all folder pairs ---
+    # First, collect all known (folder_path, agent_id) pairs from the folders index.
+    index_entries = kv.list(KV.folders)
+
+    obs_map: Dict[str, Dict[str, Any]] = {}  # obs_id → observation dict
+
+    for entry in index_entries:
+        fp = entry.get("folderPath", "")
+        aid = entry.get("agentId", "")
+        if not fp or not aid:
+            continue
+
+        # Apply early filter: skip pairs that don't match the requested filters
+        if folder_path is not None and fp != folder_path:
+            continue
+        if agent_id is not None and aid != agent_id:
+            continue
+
+        obs_scope = KV.folder_obs(fp, aid)
+        pair_obs_list = kv.list(obs_scope)
+        for obs in pair_obs_list:
+            oid = obs.get("id")
+            if oid:
+                obs_map[oid] = obs
+
+    # --- Also build a memory map from KV.memories for cross-inclusion (REQ-018) ---
+    # We include memories regardless of folder/agent filters since they are global.
+    all_memories = kv.list(KV.memories)
+    memory_map: Dict[str, Dict[str, Any]] = {}
+    for mem in all_memories:
+        mid = mem.get("id")
+        if mid:
+            memory_map[mid] = mem
+
+    # --- Hydrate candidates from the search results ---
+    results: List[Dict[str, Any]] = []
+    seen_ids: set = set()
+
+    for candidate in candidates:
+        obs_id = candidate.get("obsId") or candidate.get("id", "")
+        score = candidate.get("combinedScore") or candidate.get("score", 0.0)
+
+        if obs_id in seen_ids:
+            continue
+
+        # Try folder observation first
+        obs = obs_map.get(obs_id)
+        if obs is not None:
+            result = dict(obs)
+            result["score"] = score
+            # Ensure folderPath and agentId are present (REQ-019)
+            result.setdefault("folderPath", obs.get("folderPath", ""))
+            result.setdefault("agentId", obs.get("agentId", ""))
+            results.append(result)
+            seen_ids.add(obs_id)
+            continue
+
+        # Try global memory (REQ-018)
+        mem = memory_map.get(obs_id)
+        if mem is not None:
+            result = dict(mem)
+            result["score"] = score
+            # Global memories have no folder scope; use empty strings as sentinels
+            result.setdefault("folderPath", "")
+            result.setdefault("agentId", mem.get("agentId") or "")
+            results.append(result)
+            seen_ids.add(obs_id)
+            continue
+
+        # obs_id not found in either map — skip (stale index entry)
+
+    # Sort by score descending and cap at limit (REQ-016)
+    results.sort(key=lambda r: r.get("score", 0.0), reverse=True)
+    return results[:limit]
+
+
+def folder_timeline(
+    kv: StateKV,
+    limit: int = 100,
+    folder_path: Optional[str] = None,
+    agent_id: Optional[str] = None,
+    before: Optional[str] = None,
+    after: Optional[str] = None,
+) -> List[Dict[str, Any]]:
+    """Return a folder activity feed — observations sorted by timestamp descending.
+
+    Algorithm:
+    1. List all (folder, agent) pairs from ``KV.folders``.
+    2. Apply ``folder_path`` exact-match filter if provided.
+    3. Apply ``agent_id`` exact-match filter if provided.
+    4. For each remaining pair, load all observations from
+       ``KV.folder_obs(entry["folderPath"], entry["agentId"])``.
+    5. Apply ``before`` ISO timestamp upper-bound filter:
+       exclude obs where ``obs["timestamp"] >= before``.
+    6. Apply ``after`` ISO timestamp lower-bound filter:
+       exclude obs where ``obs["timestamp"] <= after``.
+    7. Sort all collected observations by ``timestamp`` descending.
+    8. Return the first ``limit`` entries.
+
+    Postconditions (REQ-071):
+    - ``len(result) <= limit``
+    - All results satisfy the provided filter conditions.
+    - Results are in non-increasing timestamp order.
+
+    Requirements: REQ-020, REQ-021, REQ-022
+    """
+    # Step 1 — load the global folders index
+    index_entries = kv.list(KV.folders)
+
+    # Step 2 — filter by folder_path exact match (REQ-021)
+    if folder_path is not None:
+        index_entries = [e for e in index_entries if e.get("folderPath") == folder_path]
+
+    # Step 3 — filter by agent_id exact match (REQ-021)
+    if agent_id is not None:
+        index_entries = [e for e in index_entries if e.get("agentId") == agent_id]
+
+    all_obs: List[Dict[str, Any]] = []
+
+    for entry in index_entries:
+        fp = entry.get("folderPath", "")
+        aid = entry.get("agentId", "")
+        if not fp or not aid:
+            continue
+
+        # Step 4 — load observations for this pair
+        obs_scope = KV.folder_obs(fp, aid)
+        obs_list = kv.list(obs_scope)
+
+        # Step 5 — apply before filter: exclude obs where timestamp >= before (REQ-021)
+        if before is not None:
+            obs_list = [o for o in obs_list if o.get("timestamp", "") < before]
+
+        # Step 6 — apply after filter: exclude obs where timestamp <= after (REQ-021)
+        if after is not None:
+            obs_list = [o for o in obs_list if o.get("timestamp", "") > after]
+
+        all_obs.extend(obs_list)
+
+    # Step 7 — sort by timestamp descending (REQ-071)
+    all_obs.sort(key=lambda o: o.get("timestamp", ""), reverse=True)
+
+    # Step 8 — return at most limit entries (REQ-022)
+    return all_obs[:limit]
 
 # =====================================================================
 # Memory System (Remember, Forget, Evolve)
@@ -896,14 +1308,33 @@ def remember(kv: StateKV, data: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def forget(kv: StateKV, data: Dict[str, Any]) -> Dict[str, Any]:
+    """Delete a global memory, a folder (folder_path+agent_id), or specific observations.
+
+    Dispatch rules (REQ-029, REQ-030, REQ-031, REQ-032, REQ-033):
+      1. ``memoryId`` present              → delete that global memory from KV.memories
+      2. ``folderPath + agentId`` present,
+         no ``observationIds``             → delete ALL observations for that pair,
+                                             remove BM25 entries, delete folder_meta,
+                                             remove from KV.folders index
+      3. ``folderPath + agentId +
+         observationIds`` present          → delete only the listed observations,
+                                             decrement obsCount in metadata
+
+    Legacy session-based paths are preserved for backward compatibility.
+    """
     memory_id = data.get("memoryId")
     session_id = data.get("sessionId")
+    folder_path_raw = data.get("folderPath")
+    agent_id_raw = data.get("agentId")
     obs_ids = data.get("observationIds") or []
     deleted = 0
     deleted_mem_ids = []
     deleted_obs_ids = []
     deleted_session = False
 
+    # ------------------------------------------------------------------
+    # Path 1: delete a global memory (REQ-029)
+    # ------------------------------------------------------------------
     if memory_id:
         mem = kv.get(KV.memories, memory_id)
         kv.delete(KV.memories, memory_id)
@@ -918,23 +1349,97 @@ def forget(kv: StateKV, data: Dict[str, Any]) -> Dict[str, Any]:
         deleted_mem_ids.append(memory_id)
         deleted += 1
 
+    # ------------------------------------------------------------------
+    # Path 2 & 3: folder-based deletion (REQ-030, REQ-031, REQ-032, REQ-033)
+    # ------------------------------------------------------------------
+    if folder_path_raw and agent_id_raw:
+        try:
+            fp = normalize_folder_path(folder_path_raw)
+            aid = validate_agent_id(agent_id_raw)
+        except ValueError as exc:
+            return {"success": False, "error": str(exc), "deleted": 0}
+
+        obs_scope = KV.folder_obs(fp, aid)
+        meta_scope = KV.folder_meta(fp, aid)
+        index_key = f"{fp}:{aid}"
+
+        if obs_ids:
+            # ----------------------------------------------------------
+            # Path 3: partial deletion — only the listed obs IDs (REQ-031)
+            # ----------------------------------------------------------
+            partial_deleted = 0
+            for oid in obs_ids:
+                existed = kv.delete(obs_scope, oid)
+                if existed:
+                    _bm25_index.remove(oid)
+                    if _vector_index:
+                        _vector_index.remove(oid)
+                    deleted_obs_ids.append(oid)
+                    partial_deleted += 1
+                    deleted += 1
+
+            # Decrement obsCount in metadata
+            if partial_deleted > 0:
+                meta = kv.get(meta_scope, "meta")
+                if meta and isinstance(meta, dict):
+                    current_count = meta.get("obsCount", 0)
+                    meta["obsCount"] = max(0, current_count - partial_deleted)
+                    kv.set(meta_scope, "meta", meta)
+                    # Also sync the folders index entry
+                    index_entry = kv.get(KV.folders, index_key)
+                    if index_entry and isinstance(index_entry, dict):
+                        index_entry["obsCount"] = meta["obsCount"]
+                        kv.set(KV.folders, index_key, index_entry)
+        else:
+            # ----------------------------------------------------------
+            # Path 2: full pair deletion (REQ-030, REQ-032)
+            # ----------------------------------------------------------
+            all_obs = kv.list(obs_scope)
+            for obs in all_obs:
+                obs_id = obs.get("id")
+                if obs_id:
+                    kv.delete(obs_scope, obs_id)
+                    _bm25_index.remove(obs_id)
+                    if _vector_index:
+                        _vector_index.remove(obs_id)
+                    deleted_obs_ids.append(obs_id)
+                    deleted += 1
+
+            # Delete folder metadata entry
+            kv.delete(meta_scope, "meta")
+
+            # Remove from global folders index
+            kv.delete(KV.folders, index_key)
+
+    # ------------------------------------------------------------------
+    # Legacy: session-based deletion (unchanged)
+    # ------------------------------------------------------------------
     if session_id and obs_ids:
         for oid in obs_ids:
-            obs = kv.get(KV.observations(session_id), oid)
-            kv.delete(KV.observations(session_id), oid)
-            if obs:
-                img = obs.get("imageData") or obs.get("imageRef")
-                if img:
-                    refs = kv.get(KV.imageRefs, img) or 0
-                    if refs > 0:
-                        kv.set(KV.imageRefs, img, refs - 1)
-            _bm25_index.remove(oid)
+            base_oid = oid.replace(":raw", "")
+            obs = kv.get(KV.observations(session_id), base_oid)
+            raw_obs = kv.get(KV.observations(session_id), f"{base_oid}:raw")
+
+            kv.delete(KV.observations(session_id), base_oid)
+            kv.delete(KV.observations(session_id), f"{base_oid}:raw")
+
+            for o in (obs, raw_obs):
+                if o:
+                    img = o.get("imageData") or o.get("imageRef")
+                    if img:
+                        refs = kv.get(KV.imageRefs, img) or 0
+                        if refs > 0:
+                            kv.set(KV.imageRefs, img, refs - 1)
+
+            _bm25_index.remove(base_oid)
+            _bm25_index.remove(f"{base_oid}:raw")
             if _vector_index:
-                _vector_index.remove(oid)
+                _vector_index.remove(base_oid)
+                _vector_index.remove(f"{base_oid}:raw")
             deleted_obs_ids.append(oid)
             deleted += 1
 
-    if session_id and not obs_ids and not memory_id:
+    if session_id and not obs_ids and not memory_id and not folder_path_raw:
         obs_list = kv.list(KV.observations(session_id))
         for obs in obs_list:
             kv.delete(KV.observations(session_id), obs["id"])
@@ -962,7 +1467,10 @@ def forget(kv: StateKV, data: Dict[str, Any]) -> Dict[str, Any]:
             "mem::forget",
             deleted_mem_ids + deleted_obs_ids,
             {
+                "memoryId": memory_id,
                 "sessionId": session_id,
+                "folderPath": folder_path_raw,
+                "agentId": agent_id_raw,
                 "deleted": deleted,
                 "memoriesDeleted": len(deleted_mem_ids),
                 "observationsDeleted": len(deleted_obs_ids),
@@ -970,10 +1478,9 @@ def forget(kv: StateKV, data: Dict[str, Any]) -> Dict[str, Any]:
                 "reason": "user-initiated forget"
             }
         )
-        
-        # Commit to Dolt
+
         agent_id = data.get("agentId") or get_agent_id()
-        commit_if_enabled(kv, f"Forget: memory_id={memory_id} session_id={session_id}", agent_id)
+        commit_if_enabled(kv, f"Forget: memory_id={memory_id} folder_path={folder_path_raw}", agent_id)
 
     return {"success": True, "deleted": deleted}
 
@@ -999,7 +1506,7 @@ def context(kv: StateKV, data: Dict[str, Any]) -> Dict[str, Any]:
     blocks = []
 
     # 1. Pinned Slots
-    pinned_slots = list_pinned_slots(kv)
+    pinned_slots = list_pinned_slots(kv, project)
     slot_content = render_pinned_context(pinned_slots)
     if slot_content:
         blocks.append({
@@ -1212,8 +1719,8 @@ def seed_defaults(kv: StateKV) -> None:
         slot["updatedAt"] = now
         kv.set(target, tmpl["label"], slot)
 
-def list_pinned_slots(kv: StateKV) -> List[Dict[str, Any]]:
-    p_slots = kv.list(KV.slots)
+def list_pinned_slots(kv: StateKV, project: Optional[str] = None) -> List[Dict[str, Any]]:
+    p_slots = kv.list(project_slots_scope(kv, project))
     g_slots = kv.list(KV.globalSlots)
     merged = {}
     for s in g_slots:
@@ -1234,8 +1741,8 @@ def render_pinned_context(slots: List[Dict[str, Any]]) -> str:
         lines.append("")
     return "\n".join(lines)
 
-def slot_list(kv: StateKV) -> Dict[str, Any]:
-    p_slots = kv.list(KV.slots)
+def slot_list(kv: StateKV, project: Optional[str] = None) -> Dict[str, Any]:
+    p_slots = kv.list(project_slots_scope(kv, project))
     g_slots = kv.list(KV.globalSlots)
     merged = {}
     for s in g_slots:
@@ -1245,10 +1752,11 @@ def slot_list(kv: StateKV) -> Dict[str, Any]:
     slots = sorted(list(merged.values()), key=lambda s: s["label"])
     return {"success": True, "slots": slots}
 
-def slot_get(kv: StateKV, label: str) -> Dict[str, Any]:
-    project = kv.get(KV.slots, label)
-    if project:
-        return {"success": True, "slot": project, "scope": "project"}
+def slot_get(kv: StateKV, label: str, project: Optional[str] = None) -> Dict[str, Any]:
+    p_scope = project_slots_scope(kv, project)
+    project_s = kv.get(p_scope, label)
+    if project_s:
+        return {"success": True, "slot": project_s, "scope": "project"}
     global_s = kv.get(KV.globalSlots, label)
     if global_s:
         return {"success": True, "slot": global_s, "scope": "global"}
@@ -1273,8 +1781,9 @@ def slot_create(kv: StateKV, data: Dict[str, Any]) -> Dict[str, Any]:
 
     description = data.get("description") or ""
     pinned = data.get("pinned", True)
+    project = data.get("project")
 
-    target_kv = KV.globalSlots if scope == "global" else KV.slots
+    target_kv = KV.globalSlots if scope == "global" else project_slots_scope(kv, project)
     existing = kv.get(target_kv, label)
     if existing:
         return {"success": False, "error": f"slot already exists in {scope} scope"}
@@ -1300,14 +1809,14 @@ def slot_create(kv: StateKV, data: Dict[str, Any]) -> Dict[str, Any]:
 
     return {"success": True, "slot": slot}
 
-def slot_append(kv: StateKV, label: str, text: str, agent_id: Optional[str] = None) -> Dict[str, Any]:
-    res = slot_get(kv, label)
+def slot_append(kv: StateKV, label: str, text: str, agent_id: Optional[str] = None, project: Optional[str] = None) -> Dict[str, Any]:
+    res = slot_get(kv, label, project)
     if not res.get("success"):
         return {"success": False, "error": "slot not found"}
 
     slot = res["slot"]
     scope = res["scope"]
-    target_kv = KV.globalSlots if scope == "global" else KV.slots
+    target_kv = KV.globalSlots if scope == "global" else project_slots_scope(kv, project)
 
     if slot.get("readOnly"):
         return {"success": False, "error": "slot is read-only"}
@@ -1336,14 +1845,14 @@ def slot_append(kv: StateKV, label: str, text: str, agent_id: Optional[str] = No
 
     return {"success": True, "slot": slot, "size": len(next_content)}
 
-def slot_replace(kv: StateKV, label: str, content: str, agent_id: Optional[str] = None) -> Dict[str, Any]:
-    res = slot_get(kv, label)
+def slot_replace(kv: StateKV, label: str, content: str, agent_id: Optional[str] = None, project: Optional[str] = None) -> Dict[str, Any]:
+    res = slot_get(kv, label, project)
     if not res.get("success"):
         return {"success": False, "error": "slot not found"}
 
     slot = res["slot"]
     scope = res["scope"]
-    target_kv = KV.globalSlots if scope == "global" else KV.slots
+    target_kv = KV.globalSlots if scope == "global" else project_slots_scope(kv, project)
 
     if slot.get("readOnly"):
         return {"success": False, "error": "slot is read-only"}
@@ -1369,14 +1878,14 @@ def slot_replace(kv: StateKV, label: str, content: str, agent_id: Optional[str] 
 
     return {"success": True, "slot": slot, "size": len(content)}
 
-def slot_delete(kv: StateKV, label: str, agent_id: Optional[str] = None) -> Dict[str, Any]:
-    res = slot_get(kv, label)
+def slot_delete(kv: StateKV, label: str, agent_id: Optional[str] = None, project: Optional[str] = None) -> Dict[str, Any]:
+    res = slot_get(kv, label, project)
     if not res.get("success"):
         return {"success": False, "error": "slot not found"}
 
     slot = res["slot"]
     scope = res["scope"]
-    target_kv = KV.globalSlots if scope == "global" else KV.slots
+    target_kv = KV.globalSlots if scope == "global" else project_slots_scope(kv, project)
 
     if slot.get("readOnly"):
         return {"success": False, "error": "slot is read-only"}
@@ -1391,6 +1900,9 @@ def slot_delete(kv: StateKV, label: str, agent_id: Optional[str] = None) -> Dict
 
 
 def slot_reflect(kv: StateKV, session_id: str, max_obs: int = 50) -> Dict[str, Any]:
+    session = kv.get(KV.sessions, session_id)
+    project = session.get("project") if session else None
+
     observations = kv.list(KV.observations(session_id))
     if not observations:
         return {"success": True, "applied": 0, "reason": "no observations for session"}
@@ -1417,11 +1929,11 @@ def slot_reflect(kv: StateKV, session_id: str, max_obs: int = 50) -> Dict[str, A
     now = datetime.datetime.utcnow().isoformat() + "Z"
 
     if pending_lines:
-        res = slot_get(kv, "pending_items")
+        res = slot_get(kv, "pending_items", project)
         if res.get("success"):
             slot = res["slot"]
             scope = res["scope"]
-            target_kv = scopeKv = KV.globalSlots if scope == "global" else KV.slots
+            target_kv = scopeKv = KV.globalSlots if scope == "global" else project_slots_scope(kv, project)
             already = set((slot.get("content") or "").split("\n"))
             fresh = [l for l in pending_lines if l not in already]
             if fresh:
@@ -1436,11 +1948,11 @@ def slot_reflect(kv: StateKV, session_id: str, max_obs: int = 50) -> Dict[str, A
                 applied += 1
 
     if pattern_counts:
-        res = slot_get(kv, "session_patterns")
+        res = slot_get(kv, "session_patterns", project)
         if res.get("success"):
             slot = res["slot"]
             scope = res["scope"]
-            target_kv = KV.globalSlots if scope == "global" else KV.slots
+            target_kv = KV.globalSlots if scope == "global" else project_slots_scope(kv, project)
             summary = [f"last reflection: {now}"]
             for k, v in pattern_counts.items():
                 summary.append(f"- {k}: {v} in last {len(recent)} observations")
@@ -1454,11 +1966,11 @@ def slot_reflect(kv: StateKV, session_id: str, max_obs: int = 50) -> Dict[str, A
             applied += 1
 
     if files:
-        res = slot_get(kv, "project_context")
+        res = slot_get(kv, "project_context", project)
         if res.get("success"):
             slot = res["slot"]
             scope = res["scope"]
-            target_kv = KV.globalSlots if scope == "global" else KV.slots
+            target_kv = KV.globalSlots if scope == "global" else project_slots_scope(kv, project)
             already = slot.get("content") or ""
             fresh = [f for f in files if f not in already][:20]
             if fresh:
@@ -1685,24 +2197,46 @@ def rebuild_index(kv: StateKV) -> int:
     if _vector_index:
         _vector_index.clear()
 
-    # Backfill BM25 with observations
-    sessions = kv.list(KV.sessions)
     total_indexed = 0
 
-    for sess in sessions:
-        sid = sess.get("id")
-        if not sid:
+    # ---- Path A: folder-based observations (new schema) ----
+    folder_pairs = kv.list(KV.folders)
+    for entry in folder_pairs:
+        fp = entry.get("folderPath")
+        aid = entry.get("agentId")
+        if not fp or not aid:
             continue
-        obs_list = kv.list(KV.observations(sid))
+        obs_list = kv.list(KV.folder_obs(fp, aid))
         for obs in obs_list:
-            # Only index compressed (non-raw) observations
-            if obs.get("title") and obs.get("narrative"):
-                _bm25_index.add(obs)
-                comb_text = obs["title"] + " " + obs["narrative"]
-                vector_index_add_guarded(obs["id"], sid, comb_text, {"kind": "observation", "logId": obs["id"]})
-                total_indexed += 1
+            if not obs.get("id"):
+                continue
+            _bm25_index.add(obs)
+            comb_text = (obs.get("title") or "") + " " + (obs.get("text") or "")
+            vector_index_add_guarded(obs["id"], fp, comb_text.strip(), {"kind": "folder_observation", "logId": obs["id"]})
+            total_indexed += 1
 
-    # Backfill BM25 with memories
+    # ---- Path B: session-based observations (legacy schema — kept for old data) ----
+    try:
+        sessions = kv.list(KV.sessions)
+        for sess in sessions:
+            sid = sess.get("id")
+            if not sid:
+                continue
+            obs_list = kv.list(KV.observations(sid))
+            for obs in obs_list:
+                # Only index compressed (non-raw) observations
+                if obs.get("title") and obs.get("narrative"):
+                    # Skip if already indexed via folder path (same obs id)
+                    if _bm25_index.has(obs["id"]):
+                        continue
+                    _bm25_index.add(obs)
+                    comb_text = obs["title"] + " " + obs["narrative"]
+                    vector_index_add_guarded(obs["id"], sid, comb_text, {"kind": "observation", "logId": obs["id"]})
+                    total_indexed += 1
+    except Exception as e:
+        print(f"[rebuild_index] session-based backfill skipped: {e}")
+
+    # ---- Backfill BM25 with global memories (both schemas) ----
     memories = kv.list(KV.memories)
     for mem in memories:
         if mem.get("isLatest") is False:
@@ -1746,7 +2280,7 @@ def get_session(kv: StateKV, session_id: str) -> Optional[Dict[str, Any]]:
     return s
 
 def create_session(kv: StateKV, session: Dict[str, Any]) -> Dict[str, Any]:
-    auto_complete_old_active_sessions(kv, session["id"])
+    auto_complete_old_active_sessions(kv, session["id"], project=session.get("project"), agent_id=session.get("agentId"))
     kv.set(KV.sessions, session["id"], session)
     return session
 
@@ -1900,99 +2434,118 @@ def build_project_profile(kv: StateKV, project: str) -> Dict[str, Any]:
 def export_data(kv: StateKV, data: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     if data is None:
         data = {}
-    raw_max = data.get("maxSessions")
-    max_sessions = None
-    if raw_max is not None:
-        try:
-            max_sessions = min(max(int(raw_max), 1), 1000)
-        except Exception:
-            pass
-            
-    raw_offset = data.get("offset")
-    offset = 0
-    if raw_offset is not None:
-        try:
-            offset = max(int(raw_offset), 0)
-        except Exception:
-            pass
-            
-    all_sessions = kv.list(KV.sessions)
-    all_sessions.sort(key=lambda s: s.get("startedAt", ""), reverse=True)
-    
-    if max_sessions is not None:
-        paginated_sessions = all_sessions[offset:offset + max_sessions]
-    else:
-        paginated_sessions = all_sessions
-        
-    memories = kv.list(KV.memories)
-    summaries = kv.list(KV.summaries)
-    
-    observations = {}
-    for s in paginated_sessions:
-        sid = s.get("id")
-        if sid:
-            obs = kv.list(KV.observations(sid))
-            if obs:
-                observations[sid] = obs
-                
-    profiles = []
-    unique_projects = list(set(s.get("project") for s in paginated_sessions if s.get("project")))
-    for proj in unique_projects:
-        p = kv.get(KV.profiles, proj)
-        if p:
-            profiles.append(p)
-            
-    graph_nodes = kv.list(KV.graphNodes)
-    graph_edges = kv.list(KV.graphEdges)
-    semantic_memories = kv.list(KV.semantic)
-    procedural_memories = kv.list(KV.procedural)
-    actions = kv.list(KV.actions)
-    action_edges = kv.list(KV.actionEdges)
-    sentinels = kv.list(KV.sentinels)
-    sketches = kv.list(KV.sketches)
-    crystals = kv.list(KV.crystals)
-    facets = kv.list(KV.facets)
-    lessons = kv.list(KV.lessons)
-    insights = kv.list(KV.insights)
-    routines = kv.list(KV.routines)
-    signals = kv.list(KV.signals)
-    checkpoints = kv.list(KV.checkpoints)
-    access_logs = kv.list(KV.accessLog)
-    
-    res = {
-        "version": "0.9.21",
-        "exportedAt": datetime.datetime.utcnow().isoformat() + "Z",
-        "sessions": paginated_sessions,
-        "observations": observations,
-        "memories": memories,
-        "summaries": summaries
-    }
-    if profiles: res["profiles"] = profiles
-    if graph_nodes: res["graphNodes"] = graph_nodes
-    if graph_edges: res["graphEdges"] = graph_edges
-    if semantic_memories: res["semanticMemories"] = semantic_memories
-    if procedural_memories: res["proceduralMemories"] = procedural_memories
-    if actions: res["actions"] = actions
-    if action_edges: res["actionEdges"] = action_edges
-    if sentinels: res["sentinels"] = sentinels
-    if sketches: res["sketches"] = sketches
-    if crystals: res["crystals"] = crystals
-    if facets: res["facets"] = facets
-    if lessons: res["lessons"] = lessons
-    if insights: res["insights"] = insights
-    if routines: res["routines"] = routines
-    if signals: res["signals"] = signals
-    if checkpoints: res["checkpoints"] = checkpoints
-    if access_logs: res["accessLogs"] = access_logs
-    
-    if max_sessions is not None:
-        res["pagination"] = {
-            "offset": offset,
-            "limit": max_sessions,
-            "total": len(all_sessions),
-            "hasMore": offset + max_sessions < len(all_sessions)
+
+    exported_at = datetime.datetime.utcnow().isoformat() + "Z"
+
+    # ---- v2 folder-based export (primary path) ----
+    folder_pairs = kv.list(KV.folders)
+    folders_export = []
+    for entry in folder_pairs:
+        fp = entry.get("folderPath")
+        aid = entry.get("agentId")
+        if not fp or not aid:
+            continue
+        meta = kv.get(KV.folder_meta(fp, aid), "meta") or {
+            "folderPath": fp,
+            "agentId": aid,
+            "lastUpdated": entry.get("lastUpdated", ""),
+            "obsCount": entry.get("obsCount", 0),
         }
-    return res
+        observations = kv.list(KV.folder_obs(fp, aid))
+        folders_export.append({
+            "folderPath": fp,
+            "agentId": aid,
+            "meta": meta,
+            "observations": observations,
+        })
+
+    memories = kv.list(KV.memories)
+
+    return {
+        "folders": folders_export,
+        "memories": memories,
+        "exportedAt": exported_at,
+        "version": "2.0",
+    }
+
+
+def migrate_sessions_to_folders(kv: StateKV, dry_run: bool = False) -> Dict[str, Any]:
+    """Migrate legacy session-based observations to folder-based storage.
+    Non-destructive: old mem:sessions / mem:obs:* scopes are never deleted.
+    """
+    sessions = kv.list(KV.sessions)
+    migrated_sessions = 0
+    migrated_observations = 0
+    errors = []
+
+    for session in sessions:
+        session_id = session.get('id')
+        if not session_id:
+            continue
+        try:
+            fp_raw = session.get('cwd') or session.get('project') or 'unknown'
+            aid = (session.get('agentId') or 'unknown').strip()[:_MAX_PATH_LEN]
+            try:
+                fp = normalize_folder_path(fp_raw)
+            except ValueError:
+                fp = 'unknown'
+
+            obs_list = kv.list(KV.observations(session_id))
+            session_obs_count = 0
+            for obs in obs_list:
+                obs_id = obs.get('id', '')
+                if obs_id.endswith(':raw'):
+                    continue
+                folder_obs = {
+                    'id': obs_id,
+                    'folderPath': fp,
+                    'agentId': aid,
+                    'timestamp': obs.get('timestamp', ''),
+                    'text': obs.get('narrative') or obs.get('raw') or obs.get('title') or '',
+                    'type': obs.get('type', 'other'),
+                    'title': obs.get('title', ''),
+                    'concepts': obs.get('concepts') or [],
+                    'files': obs.get('files') or [],
+                    'importance': obs.get('importance', 5),
+                }
+                if isinstance(folder_obs['text'], dict):
+                    import json as _json
+                    folder_obs['text'] = _json.dumps(folder_obs['text'])[:4000]
+                folder_obs['text'] = str(folder_obs['text'])[:4000]
+
+                if not dry_run:
+                    kv.set(KV.folder_obs(fp, aid), obs_id, folder_obs)
+                session_obs_count += 1
+                migrated_observations += 1
+
+            if not dry_run and session_obs_count > 0:
+                meta_scope = KV.folder_meta(fp, aid)
+                meta = kv.get(meta_scope, 'meta') or {
+                    'folderPath': fp, 'agentId': aid, 'obsCount': 0,
+                    'lastUpdated': session.get('updatedAt', ''), 'summary': None,
+                }
+                meta['obsCount'] = meta.get('obsCount', 0) + session_obs_count
+                meta['lastUpdated'] = session.get('updatedAt', '') or meta['lastUpdated']
+                kv.set(meta_scope, 'meta', meta)
+
+                index_key = f'{fp}:{aid}'
+                kv.set(KV.folders, index_key, {
+                    'folderPath': fp,
+                    'agentId': aid,
+                    'lastUpdated': meta['lastUpdated'],
+                    'obsCount': meta['obsCount'],
+                })
+
+            migrated_sessions += 1
+        except Exception as e:
+            errors.append({'sessionId': session_id, 'error': str(e)})
+
+    return {
+        'migrated_sessions': migrated_sessions,
+        'migrated_observations': migrated_observations,
+        'errors': errors,
+        'dry_run': dry_run,
+    }
 
 
 def set_project_profile(kv: StateKV, project: str, profile: Dict[str, Any]) -> Dict[str, Any]:
@@ -2131,17 +2684,26 @@ def auto_forget(kv: StateKV, dry_run: bool = False) -> Dict[str, Any]:
                 _vector_index.remove(mem_id)
 
         for sid, obs_id in evicted_observations:
-            obs = kv.get(KV.observations(sid), obs_id)
-            kv.delete(KV.observations(sid), obs_id)
-            if obs:
-                img = obs.get("imageData") or obs.get("imageRef")
-                if img:
-                    refs = kv.get(KV.imageRefs, img) or 0
-                    if refs > 0:
-                        kv.set(KV.imageRefs, img, refs - 1)
-            _bm25_index.remove(obs_id)
+            base_oid = obs_id.replace(":raw", "")
+            obs = kv.get(KV.observations(sid), base_oid)
+            raw_obs = kv.get(KV.observations(sid), f"{base_oid}:raw")
+            
+            kv.delete(KV.observations(sid), base_oid)
+            kv.delete(KV.observations(sid), f"{base_oid}:raw")
+            
+            for o in (obs, raw_obs):
+                if o:
+                    img = o.get("imageData") or o.get("imageRef")
+                    if img:
+                        refs = kv.get(KV.imageRefs, img) or 0
+                        if refs > 0:
+                            kv.set(KV.imageRefs, img, refs - 1)
+            
+            _bm25_index.remove(base_oid)
+            _bm25_index.remove(f"{base_oid}:raw")
             if _vector_index:
-                _vector_index.remove(obs_id)
+                _vector_index.remove(base_oid)
+                _vector_index.remove(f"{base_oid}:raw")
 
         if evicted_memories or evicted_observations:
             if _index_persistence:
@@ -2174,12 +2736,61 @@ def health_check(kv: StateKV) -> Dict[str, Any]:
         conn.close()
     except Exception:
         db_status = "disconnected"
+
+    # ---- Folder-based counts ----
+    folder_count = 0
+    agent_count = 0
+    pair_count = 0
+    observation_count = 0
+    try:
+        folder_pairs = kv.list(KV.folders)
+        pair_count = len(folder_pairs)
+        unique_folders: Set[str] = set()
+        unique_agents: Set[str] = set()
+        for entry in folder_pairs:
+            fp = entry.get("folderPath")
+            aid = entry.get("agentId")
+            if fp:
+                unique_folders.add(fp)
+            if aid:
+                unique_agents.add(aid)
+            # Use the stored obsCount in the index entry for efficiency;
+            # fall back to 0 if missing.
+            observation_count += int(entry.get("obsCount") or 0)
+        folder_count = len(unique_folders)
+        agent_count = len(unique_agents)
+    except Exception as e:
+        print(f"[health_check] folder count failed: {e}")
+
+    memory_count = 0
+    try:
+        memory_count = len(kv.list(KV.memories))
+    except Exception:
+        pass
+
+    bm25_index_size = 0
+    try:
+        bm25_index_size = _bm25_index.size
+    except Exception:
+        pass
+
+    vector_index_size = 0
+    try:
+        if _vector_index:
+            vector_index_size = _vector_index.size
+    except Exception:
+        pass
+
     return {
-        "status": "healthy" if db_status == "connected" else "degraded",
-        "service": "agentmemory",
-        "version": "0.9.8",
-        "database": "dolt",
-        "databaseStatus": db_status
+        "status": "ok" if db_status == "connected" else "degraded",
+        "folderCount": folder_count,
+        "agentCount": agent_count,
+        "pairCount": pair_count,
+        "observationCount": observation_count,
+        "memoryCount": memory_count,
+        "bm25IndexSize": bm25_index_size,
+        "vectorIndexSize": vector_index_size,
+        "dbPath": kv.db_path,
     }
 
 def strip_xml_wrappers(raw: str) -> str:
@@ -2312,10 +2923,11 @@ def summarize(kv: StateKV, data: Dict[str, Any]) -> Dict[str, Any]:
                 "concepts": get_xml_children(cleaned, "concepts", "concept"),
             })
         except Exception as e:
+            last_error = str(e)
             print(f"[summarize] Chunk {idx+1} failed: {e}")
             
     if not partial_summaries:
-        return {"success": False, "error": "No chunks summarized successfully"}
+        return {"success": False, "error": f"No chunks summarized successfully. Last error: {last_error}"}
         
     if len(partial_summaries) == 1:
         final_summary = {
@@ -2509,6 +3121,19 @@ def consolidate(kv: StateKV, project: Optional[str] = None, min_observations: in
                 if project:
                     evolved["project"] = project
                 kv.set(KV.memories, evolved["id"], evolved)
+                try:
+                    _bm25_index.add(memory_to_observation(evolved))
+                    if existing_match:
+                        _bm25_index.remove(existing_match["id"])
+                except Exception:
+                    pass
+                comb_text = evolved["title"] + " " + evolved["content"]
+                vector_index_add_guarded(evolved["id"], "memory", comb_text, {"kind": "memory", "logId": evolved["id"]})
+                if _vector_index and existing_match:
+                    try:
+                        _vector_index.remove(existing_match["id"])
+                    except Exception:
+                        pass
                 consolidated_count += 1
             else:
                 memory = {
@@ -2529,6 +3154,12 @@ def consolidate(kv: StateKV, project: Optional[str] = None, min_observations: in
                 if project:
                     memory["project"] = project
                 kv.set(KV.memories, memory["id"], memory)
+                try:
+                    _bm25_index.add(memory_to_observation(memory))
+                except Exception:
+                    pass
+                comb_text = memory["title"] + " " + memory["content"]
+                vector_index_add_guarded(memory["id"], "memory", comb_text, {"kind": "memory", "logId": memory["id"]})
                 consolidated_count += 1
                 
         except Exception as e:
@@ -2688,9 +3319,184 @@ def consolidate(kv: StateKV, project: Optional[str] = None, min_observations: in
             "patternsAnalyzed": len(patterns)
         }
     }
+    if _index_persistence and consolidated_count > 0:
+        _index_persistence.schedule_save()
     safe_audit(kv, "consolidate", "mem::consolidate-pipeline", [], res_summary)
     commit_if_enabled(kv, f"Consolidation complete: consolidated={consolidated_count}, facts={new_facts_count}, procs={new_procs_count}", "system")
     return res_summary
+
+# =====================================================================
+# Folder Graph
+# =====================================================================
+
+def folder_color(path: str) -> str:
+    """Hash a folder path string to an HSL hex color.
+
+    Replicates the JS ``folderColor(id)`` function in src/viewer/index.html
+    exactly, using the light-mode lightness range (38 + h%14).
+
+    Algorithm (matches JS):
+        h = 0
+        for each char: h = (h * 31 + ord(char)) & 0xfffffff
+        hue = (h % 360 + 360) % 360
+        sat = 55 + (h % 25)          # percent, 55-79
+        lig = 38 + (h % 14)          # percent, 38-51 (light mode)
+        convert HSL → RGB → hex
+    """
+    h = 0
+    for ch in path:
+        h = (h * 31 + ord(ch)) & 0xFFFFFFF
+
+    hue = (h % 360 + 360) % 360
+    sat_pct = 55 + (h % 25)
+    lig_pct = 38 + (h % 14)
+
+    # HSL → RGB conversion (same formula as in JS)
+    s = sat_pct / 100.0
+    l = lig_pct / 100.0
+    a = s * min(l, 1 - l)
+
+    def f(n: int) -> str:
+        k = (n + hue / 30) % 12
+        c = l - a * max(min(k - 3, 9 - k, 1), -1)
+        return format(round(255 * c), '02x')
+
+    return '#' + f(0) + f(8) + f(4)
+
+
+def folder_graph_build(kv: StateKV) -> Dict[str, Any]:
+    """Build graph data for the viewer's Graph tab.
+
+    Reads all (folder_path, agent_id) pairs from ``KV.folders``,
+    aggregates per-folder node metadata, loads observations to collect
+    text for cross-reference edge detection, then emits three edge types:
+
+    - ``same-parent``: two folders share the same ``os.path.dirname``
+    - ``cross-ref``:   folder A's combined obs text contains folder B's path
+    - ``agent-shared``: two folders share a common agentId
+
+    Returns:
+        {"nodes": [...], "edges": [...]}
+
+    Each node::
+
+        {
+            "id": folderPath,
+            "label": basename(folderPath),
+            "folderPath": folderPath,
+            "agentIds": [...],
+            "obsCount": int,
+            "color": "#rrggbb",
+        }
+
+    Each edge::
+
+        {
+            "source": folderPath,
+            "target": folderPath,
+            "type": "same-parent" | "cross-ref" | "agent-shared",
+            # agent-shared only:
+            "agentId": str,
+        }
+
+    Edges are deduplicated on (source, target, type).
+    """
+    index_entries = kv.list(KV.folders)
+
+    # --- Build folder_map and collect obs text per (folder, agent) pair ---
+    # folder_map: folderPath -> {"folderPath", "agentIds": set, "obsCount", "color"}
+    folder_map: Dict[str, Dict[str, Any]] = {}
+    # pair_obs_texts: (folder_path, agent_id) -> combined text string
+    pair_obs_texts: Dict[Tuple[str, str], str] = {}
+
+    for entry in index_entries:
+        fp = entry.get("folderPath", "")
+        aid = entry.get("agentId", "")
+        if not fp:
+            continue
+
+        if fp not in folder_map:
+            folder_map[fp] = {
+                "folderPath": fp,
+                "agentIds": set(),
+                "obsCount": 0,
+                "color": folder_color(fp),
+            }
+
+        folder_map[fp]["agentIds"].add(aid)
+        folder_map[fp]["obsCount"] += entry.get("obsCount", 0)
+
+        # Load observations to build combined text for cross-ref detection
+        obs_scope = KV.folder_obs(fp, aid)
+        obs_list = kv.list(obs_scope)
+        combined_parts = []
+        for obs in obs_list:
+            text = obs.get("text") or ""
+            title = obs.get("title") or ""
+            combined_parts.append(f"{text} {title}")
+        pair_obs_texts[(fp, aid)] = " ".join(combined_parts)
+
+    # --- Build nodes ---
+    nodes = []
+    for fp, info in folder_map.items():
+        nodes.append({
+            "id": fp,
+            "label": os.path.basename(fp) or fp,
+            "folderPath": fp,
+            "agentIds": sorted(info["agentIds"]),
+            "obsCount": info["obsCount"],
+            "color": info["color"],
+        })
+
+    # --- Build edges ---
+    edges: List[Dict[str, Any]] = []
+    # Deduplicate on (source, target, type)
+    seen_edges: Set[Tuple[str, str, str]] = set()
+
+    def add_edge(edge: Dict[str, Any]) -> None:
+        key = (edge["source"], edge["target"], edge["type"])
+        if key not in seen_edges:
+            seen_edges.add(key)
+            edges.append(edge)
+
+    folder_paths = list(folder_map.keys())
+
+    # Edge type 1 — same-parent
+    for i in range(len(folder_paths)):
+        for j in range(i + 1, len(folder_paths)):
+            a = folder_paths[i]
+            b = folder_paths[j]
+            # Use posixpath-style dirname on forward-slash paths
+            if a.rsplit("/", 1)[0] == b.rsplit("/", 1)[0] and "/" in a and "/" in b:
+                add_edge({"source": a, "target": b, "type": "same-parent"})
+            elif os.path.dirname(a) == os.path.dirname(b) and os.path.dirname(a) != "":
+                add_edge({"source": a, "target": b, "type": "same-parent"})
+
+    # Edge type 2 — cross-reference (folder A's obs text mentions folder B's path)
+    for (fp_a, _agent_a), text_a in pair_obs_texts.items():
+        for fp_b in folder_paths:
+            if fp_b != fp_a and fp_b in text_a:
+                add_edge({"source": fp_a, "target": fp_b, "type": "cross-ref"})
+
+    # Edge type 3 — agent-shared (two folders share the same agentId)
+    # Build: agentId -> [folder_paths that have this agent]
+    agent_to_folders: Dict[str, List[str]] = {}
+    for fp, info in folder_map.items():
+        for aid in info["agentIds"]:
+            agent_to_folders.setdefault(aid, []).append(fp)
+
+    for aid, fps in agent_to_folders.items():
+        for i in range(len(fps)):
+            for j in range(i + 1, len(fps)):
+                add_edge({
+                    "source": fps[i],
+                    "target": fps[j],
+                    "type": "agent-shared",
+                    "agentId": aid,
+                })
+
+    return {"nodes": nodes, "edges": edges}
+
 
 # Setup persistence helper wire-ups
 def set_index_persistence(persistence: IndexPersistence) -> None:

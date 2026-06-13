@@ -1119,7 +1119,7 @@
 </head>
 <body>
   <div class="app-header">
-    <a class="brand" href="#dashboard" data-tab-link="dashboard" aria-label="Open dashboard">
+    <a class="brand" href="#folders" data-tab-link="folders" aria-label="Open folders view">
       <h1>agentmemory</h1>
       <span class="version">v__AGENTMEMORY_VERSION__</span>
     </a>
@@ -1131,33 +1131,19 @@
   </div>
 
   <div class="tab-bar" id="tab-bar">
-    <button class="active" data-tab="dashboard" aria-current="page">Dashboard</button>
-    <button data-tab="graph">Graph</button>
+    <button class="active" data-tab="folders" aria-current="page">Folders</button>
     <button data-tab="memories">Memories</button>
+    <button data-tab="graph">Graph</button>
     <button data-tab="timeline">Timeline</button>
-    <button data-tab="sessions">Sessions</button>
-    <button data-tab="lessons">Lessons</button>
-    <button data-tab="actions">Actions</button>
-    <button data-tab="crystals">Crystals</button>
-    <button data-tab="audit">Audit</button>
-    <button data-tab="activity">Activity</button>
-    <button data-tab="profile">Profile</button>
-    <button data-tab="replay">Replay</button>
-    <button data-tab="personal">Personal</button>
   </div>
 
   <div id="flag-banners" class="flag-banners"></div>
   <div id="viewer-auth" class="viewer-auth"></div>
 
-  <div id="view-dashboard" class="view active"></div>
+  <div id="view-folders" class="view active"></div>
   <div id="view-graph" class="view"></div>
   <div id="view-memories" class="view"></div>
-  <div id="view-lessons" class="view"></div>
-  <div id="view-actions" class="view"></div>
-  <div id="view-crystals" class="view"></div>
   <div id="view-timeline" class="view"></div>
-  <div id="view-sessions" class="view"></div>
-  <div id="view-audit" class="view"></div>
   <div id="view-activity" class="view"></div>
   <div id="view-profile" class="view"></div>
   <div id="view-replay" class="view"></div>
@@ -1268,7 +1254,7 @@
       task: '&#9745;', other: '&#128196;'
     };
     var CB_STATE_COLORS = { closed: 'badge-green', open: 'badge-red', 'half-open': 'badge-yellow' };
-    var TAB_IDS = ['dashboard', 'graph', 'memories', 'timeline', 'sessions', 'lessons', 'actions', 'crystals', 'audit', 'activity', 'profile', 'replay', 'personal'];
+    var TAB_IDS = ['folders', 'memories', 'graph', 'timeline'];
     var VIEWER_TOKEN_STORAGE_KEY = 'agentmemory-viewer-token';
 
     var state = {
@@ -1452,14 +1438,14 @@
 
     function normalizeTab(tab) {
       var normalized = String(tab || '').replace(/^#/, '').toLowerCase();
-      return TAB_IDS.indexOf(normalized) >= 0 ? normalized : 'dashboard';
+      return TAB_IDS.indexOf(normalized) >= 0 ? normalized : 'folders';
     }
 
     function tabFromRoute() {
       try {
         return normalizeTab(decodeURIComponent(window.location.hash.slice(1)));
       } catch (_) {
-        return 'dashboard';
+        return 'folders';
       }
     }
 
@@ -1476,9 +1462,6 @@
     function switchTab(tab, opts) {
       opts = opts || {};
       tab = normalizeTab(tab);
-      if (state.activeTab === 'replay' && tab !== 'replay' && typeof stopReplayTimer === 'function') {
-        stopReplayTimer();
-      }
       if (!opts.skipRoute) {
         updateTabRoute(tab, !!opts.replaceRoute);
       }
@@ -1501,63 +1484,148 @@
 
     async function loadTab(tab) {
       switch(tab) {
-        case 'dashboard': if (!state.dashboard.loaded) await loadDashboard(); break;
-        case 'graph': if (!state.graph.loaded) await loadGraph(); break;
-        case 'memories': if (!state.memories.loaded) await loadMemories(); break;
-        case 'timeline': if (!state.timeline.loaded) await loadTimeline(); break;
-        case 'sessions': if (!state.sessions.loaded) await loadSessions(); break;
-        case 'lessons': if (!state.lessons.loaded) await loadLessons(); break;
-        case 'actions': if (!state.actions.loaded) await loadActions(); break;
-        case 'crystals': if (!state.crystals.loaded) await loadCrystals(); break;
-        case 'audit': if (!state.audit.loaded) await loadAudit(); break;
-        case 'activity': if (!state.activity.loaded) await loadActivity(); break;
-        case 'profile': if (!state.profile.loaded) await loadProfile(); break;
-        case 'replay': if (!state.replay.loaded) await loadReplay(); break;
-        case 'personal': if (!state.personal.loaded) await loadPersonal(); break;
+        case 'folders': await loadFolders(); break;
+        case 'graph': await loadGraph(); break;
+        case 'memories': await loadMemories(); break;
+        case 'timeline': await loadTimeline(); break;
       }
     }
 
     async function loadDashboard() {
-      var el = document.getElementById('view-dashboard');
-      el.innerHTML = '<div class="loading">Loading dashboard...</div>';
+      // Dashboard removed — redirect to folders
+      switchTab('folders');
+    }
+
+    // =====================================================================
+    // Folders Tab
+    // =====================================================================
+    async function loadFolders() {
+      var el = document.getElementById('view-folders');
+      if (!el) return;
+      el.innerHTML = '<div class="loading">Loading folders...</div>';
       try {
-        var results = await Promise.all([
-          apiGet('health'),
-          apiGet('sessions'),
-          apiGet('memories?latest=true&limit=500'),
-          apiGet('graph/stats'),
-          apiGet('audit?limit=5'),
-          apiGet('semantic'),
-          apiGet('procedural'),
-          apiGet('relations'),
-          apiGet('lessons'),
-          apiGet('crystals')
-        ]);
-        state.dashboard.health = results[0];
-        state.dashboard.sessions = (results[1] && results[1].sessions) || [];
-        state.dashboard.memories = (results[2] && results[2].memories) || [];
-        state.dashboard.graphStats = results[3];
-        state.dashboard.recentAudit = (results[4] && results[4].entries) || [];
-        state.dashboard.semantic = (results[5] && results[5].items) || (results[5] && results[5].facts) || (results[5] && results[5].semantic) || [];
-        state.dashboard.procedural = (results[6] && results[6].items) || (results[6] && results[6].procedures) || (results[6] && results[6].procedural) || [];
-        state.dashboard.lessons = (results[8] && results[8].lessons) || [];
-        state.dashboard.crystals = (results[9] && results[9].crystals) || [];
-        state.dashboard.relations = (results[7] && results[7].relations) || [];
-        state.dashboard.loaded = true;
-        renderDashboard();
-      } catch (err) {
-        var msg = (err && err.message) ? err.message : String(err);
-        console.error('[viewer] loadDashboard failed:', err);
-        el.innerHTML =
-          '<div class="loading" style="color:var(--accent);">' +
-          'Dashboard failed to load: ' + msg +
-          '<br><br><span style="font-size:12px;color:var(--ink-muted);">' +
-          'Check the browser console for the full error. If you see CSP ' +
-          'violations, please open an issue with the agentmemory version ' +
-          '(top-right of the viewer) and the violation text.' +
-          '</span></div>';
+        var result = await apiPost('folders-list', null, 'GET');
+        var folders = (result && result.folders) || [];
+        renderFolderList(folders);
+      } catch(err) {
+        el.innerHTML = '<div class="loading" style="color:var(--accent);">Failed to load folders: ' + esc(String(err)) + '</div>';
       }
     }
+
+    function renderFolderList(folders) {
+      var el = document.getElementById('view-folders');
+      if (!el) return;
+      if (folders.length === 0) {
+        el.innerHTML = '<div class="empty-state"><div class="empty-icon">&#128193;</div><p>No folder memories yet.</p><p style="font-size:13px;color:var(--ink-muted);margin-top:8px;">Use <code>agent_observe</code> with a <code>folderPath</code> to start recording.</p></div>';
+        return;
+      }
+      var html = '<div style="padding:20px 24px;">';
+      html += '<h2 style="font-family:var(--font-display);font-size:18px;font-weight:700;color:var(--ink);margin-bottom:16px;">Folder Memories</h2>';
+      html += '<table style="width:100%;border-collapse:collapse;font-family:var(--font-ui);font-size:13px;">';
+      html += '<thead><tr style="border-bottom:2px solid var(--border);">';
+      html += '<th style="text-align:left;padding:8px 12px;color:var(--ink-muted);font-weight:600;">Folder</th>';
+      html += '<th style="text-align:left;padding:8px 12px;color:var(--ink-muted);font-weight:600;">Agent</th>';
+      html += '<th style="text-align:right;padding:8px 12px;color:var(--ink-muted);font-weight:600;">Observations</th>';
+      html += '<th style="text-align:left;padding:8px 12px;color:var(--ink-muted);font-weight:600;">Last Updated</th>';
+      html += '</tr></thead><tbody>';
+      folders.forEach(function(f) {
+        var fp = f.folderPath || '';
+        var aid = f.agentId || '';
+        var obs = f.obsCount || 0;
+        var updated = f.lastUpdated ? new Date(f.lastUpdated).toLocaleString() : '—';
+        html += '<tr class="folder-row" data-folder="' + esc(fp) + '" data-agent="' + esc(aid) + '" style="border-bottom:1px solid var(--border-light);cursor:pointer;" onmouseover="this.style.background=\'var(--bg-subtle)\'" onmouseout="this.style.background=\'\'">';
+        html += '<td style="padding:10px 12px;max-width:320px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="' + esc(fp) + '"><span style="font-family:var(--font-mono);font-size:12px;">' + esc(fp) + '</span></td>';
+        html += '<td style="padding:10px 12px;"><span style="background:var(--bg-inset);padding:2px 8px;border-radius:3px;font-size:11px;font-weight:600;">' + esc(aid) + '</span></td>';
+        html += '<td style="padding:10px 12px;text-align:right;font-weight:600;color:var(--accent);">' + obs + '</td>';
+        html += '<td style="padding:10px 12px;color:var(--ink-muted);font-size:12px;">' + esc(updated) + '</td>';
+        html += '</tr>';
+      });
+      html += '</tbody></table></div>';
+      el.innerHTML = html;
+
+      el.querySelectorAll('.folder-row').forEach(function(row) {
+        row.addEventListener('click', function() {
+          loadFolderDetail(row.dataset.folder, row.dataset.agent);
+        });
+      });
+    }
+
+    async function loadFolderDetail(folderPath, agentId) {
+      var el = document.getElementById('view-folders');
+      if (!el) return;
+      el.innerHTML = '<div class="loading">Loading observations...</div>';
+      try {
+        var params = 'folderPath=' + encodeURIComponent(folderPath) + '&agentId=' + encodeURIComponent(agentId);
+        var result = await apiFetchRaw('/agentmemory/folder/observations?' + params);
+        var obs = (result && result.observations) || [];
+
+        var html = '<div style="padding:20px 24px;">';
+        html += '<div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;">';
+        html += '<button onclick="loadFolders()" style="background:none;border:1px solid var(--border-light);padding:6px 14px;cursor:pointer;font-family:var(--font-ui);font-size:12px;border-radius:3px;">&larr; Back</button>';
+        html += '<span style="font-family:var(--font-mono);font-size:13px;color:var(--ink);">' + esc(folderPath) + '</span>';
+        html += '<span style="background:var(--bg-inset);padding:2px 8px;border-radius:3px;font-size:11px;font-weight:600;">' + esc(agentId) + '</span>';
+        html += '<span style="margin-left:auto;font-size:12px;color:var(--ink-muted);">' + obs.length + ' observations</span>';
+        html += '</div>';
+
+        if (obs.length === 0) {
+          html += '<div class="empty-state"><p>No observations found.</p></div>';
+        } else {
+          obs.forEach(function(o) {
+            var ts = o.timestamp ? new Date(o.timestamp).toLocaleString() : '';
+            var typeColor = {'file_edit':'var(--blue)','command_run':'var(--orange)','search':'var(--green)','error':'var(--red)','conversation':'var(--purple)'}[o.type] || 'var(--ink-muted)';
+            html += '<div style="border:1px solid var(--border-light);border-radius:4px;padding:14px 16px;margin-bottom:10px;background:var(--bg);">';
+            html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">';
+            html += '<span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:' + typeColor + ';background:var(--bg-subtle);padding:2px 7px;border-radius:3px;">' + esc(o.type || 'other') + '</span>';
+            html += '<span style="font-size:11px;color:var(--ink-muted);font-family:var(--font-mono);">' + esc(ts) + '</span>';
+            html += '</div>';
+            if (o.title) html += '<div style="font-weight:600;font-size:14px;color:var(--ink);margin-bottom:4px;">' + esc(o.title) + '</div>';
+            if (o.text) html += '<div style="font-size:13px;color:var(--ink-secondary);line-height:1.5;white-space:pre-wrap;">' + esc(o.text.length > 300 ? o.text.slice(0,300)+'…' : o.text) + '</div>';
+            html += '</div>';
+          });
+        }
+
+        html += '<div style="margin-top:20px;padding-top:16px;border-top:1px solid var(--border-light);">';
+        html += '<button onclick="deleteFolderMemory(\'' + esc(folderPath).replace(/'/g,"\\'") + '\',\'' + esc(agentId).replace(/'/g,"\\'") + '\')" style="background:var(--accent);color:white;border:none;padding:8px 18px;cursor:pointer;font-family:var(--font-ui);font-size:13px;border-radius:3px;">Delete folder memory</button>';
+        html += '</div></div>';
+        el.innerHTML = html;
+      } catch(err) {
+        el.innerHTML = '<div style="padding:20px;"><button onclick="loadFolders()" style="background:none;border:1px solid var(--border-light);padding:6px 14px;cursor:pointer;">&larr; Back</button><div style="margin-top:16px;color:var(--accent);">Error: ' + esc(String(err)) + '</div></div>';
+      }
+    }
+
+    async function deleteFolderMemory(folderPath, agentId) {
+      if (!confirm('Delete all observations for ' + folderPath + ' / ' + agentId + '?')) return;
+      try {
+        await apiFetchRaw('/agentmemory/forget', { method: 'POST', body: JSON.stringify({ folderPath: folderPath, agentId: agentId }) });
+        loadFolders();
+      } catch(err) {
+        alert('Delete failed: ' + String(err));
+      }
+    }
+
+    async function apiFetchRaw(path, opts) {
+      opts = opts || {};
+      var headers = Object.assign({ 'Content-Type': 'application/json' }, opts.headers || {});
+      if (state.token) headers['Authorization'] = 'Bearer ' + state.token;
+      var url = (path.startsWith('/') ? '' : '/agentmemory/') + path;
+      var res = await fetch(url, Object.assign({}, opts, { headers: headers }));
+      if (!res.ok) throw new Error(res.status + ' ' + res.statusText);
+      return res.json();
+    }
+
+    async function apiPost(endpoint, body, method) {
+      method = method || 'POST';
+      var headers = { 'Content-Type': 'application/json' };
+      if (state.token) headers['Authorization'] = 'Bearer ' + state.token;
+      var url = '/agentmemory/' + endpoint;
+      var opts = { method: method, headers: headers };
+      if (body !== null && body !== undefined) opts.body = JSON.stringify(body);
+      var res = await fetch(url, opts);
+      if (!res.ok) throw new Error(res.status + ' ' + res.statusText);
+      return res.json();
+    }
+
+
 
     function renderDashboard() {
       var el = document.getElementById('view-dashboard');
@@ -1851,146 +1919,45 @@
       var el = document.getElementById('view-graph');
       el.innerHTML = '<div class="graph-container"><div class="graph-canvas-wrap"><canvas id="graph-canvas"></canvas><div class="graph-controls"><button title="Zoom In" data-action="zoom-graph" data-dir="1">+</button><button title="Zoom Out" data-action="zoom-graph" data-dir="-1">&minus;</button><div class="ctrl-divider"></div><button title="Recenter" data-action="recenter-graph">⌖</button></div><div class="graph-tooltip" id="graph-tooltip"></div></div><div class="graph-sidebar" id="graph-sidebar"></div></div>';
 
-      var results = await Promise.all([
-        apiGet('sessions'),
-        apiGet('memories?latest=true&limit=2000'),
-        apiGet('graph/stats')
-      ]);
-
-      var sessions = (results[0] && results[0].sessions) || [];
-      var memories = (results[1] && results[1].memories) || [];
-      var stats = results[2] || {};
-
       state.graph.queryError = null;
+      var graphData;
+      try {
+        graphData = await apiFetchRaw('/agentmemory/graph');
+      } catch(err) {
+        state.graph.queryError = String(err);
+        graphData = { nodes: [], edges: [] };
+      }
 
-      // Extract unique folders (projects)
-      var folderMap = {};
-      sessions.forEach(function(s) {
-        var path = s.project ? String(s.project).trim() : '';
-        if (!path) return;
-        if (!path.includes('/') && !path.includes('\\')) return;
-        if (!folderMap[path]) {
-          folderMap[path] = {
-            id: path,
-            name: path.split(/[\\/]/).pop() || path,
-            fullPath: path,
-            type: 'folder',
-            sessions: [],
-            memories: [],
-            concepts: new Set(),
-            firstPrompts: [],
-            summaries: []
-          };
-        }
-        folderMap[path].sessions.push(s);
-        if (s.firstPrompt) folderMap[path].firstPrompts.push(s.firstPrompt);
-        if (s.summary) folderMap[path].summaries.push(s.summary);
-      });
-
-      memories.forEach(function(m) {
-        var path = m.project ? String(m.project).trim() : '';
-        if (!path) return;
-        if (!path.includes('/') && !path.includes('\\')) return;
-        if (!folderMap[path]) {
-          // If the folder is not in sessions, create it
-          folderMap[path] = {
-            id: path,
-            name: path.split(/[\\/]/).pop() || path,
-            fullPath: path,
-            type: 'folder',
-            sessions: [],
-            memories: [],
-            concepts: new Set(),
-            firstPrompts: [],
-            summaries: []
-          };
-        }
-        folderMap[path].memories.push(m);
-        if (m.concepts && Array.isArray(m.concepts)) {
-          m.concepts.forEach(function(c) {
-            folderMap[path].concepts.add(c.toLowerCase());
-          });
-        }
-      });
-
-      var folders = Object.values(folderMap);
-      
-      // Compute detailed properties/descriptions
-      folders.forEach(function(f) {
-        var desc = '';
-        if (f.summaries.length > 0) {
-          desc += '<strong>Summaries:</strong><br>' + f.summaries.slice(0, 3).map(function(s) { return '&bull; ' + esc(s); }).join('<br>') + '<br><br>';
-        } else if (f.firstPrompts.length > 0) {
-          desc += '<strong>Prompts:</strong><br>' + f.firstPrompts.slice(0, 3).map(function(p) { return '&bull; ' + esc(p); }).join('<br>') + '<br><br>';
-        }
-        
-        var conceptsArr = Array.from(f.concepts);
-        if (conceptsArr.length > 0) {
-          desc += '<strong>Concepts:</strong><br>' + conceptsArr.slice(0, 10).map(function(c) { return '<span class="tag">' + esc(c) + '</span>'; }).join(' ') + '<br><br>';
-        }
-        
-        if (f.memories.length > 0) {
-          desc += '<strong>Memories:</strong><br>' + f.memories.slice(0, 5).map(function(m) { return '&bull; ' + esc(m.title); }).join('<br>');
-        }
-        
-        f.properties = {
-          description: desc || 'No description available for this folder.',
-          fullPath: f.fullPath,
-          sessionCount: f.sessions.length,
-          memoryCount: f.memories.length
+      // Map server nodes to viewer format
+      var folders = (graphData.nodes || []).map(function(n) {
+        return {
+          id: n.folderPath || n.id,
+          name: n.label || (n.folderPath || n.id).split(/[\\/]/).pop() || n.id,
+          fullPath: n.folderPath || n.id,
+          type: 'folder',
+          agentIds: n.agentIds || [],
+          obsCount: n.obsCount || 0,
+          color: n.color || folderColor(n.folderPath || n.id),
+          properties: {
+            description: 'Agents: ' + (n.agentIds || []).join(', ') + '<br>Observations: ' + (n.obsCount || 0),
+            fullPath: n.folderPath || n.id,
+            obsCount: n.obsCount || 0
+          }
         };
       });
 
-      // Compute edges (connections between folders)
-      var edges = [];
-      for (var i = 0; i < folders.length; i++) {
-        for (var j = i + 1; j < folders.length; j++) {
-          var f1 = folders[i];
-          var f2 = folders[j];
-          
-          var sharedConcepts = [];
-          f1.concepts.forEach(function(c) {
-            if (f2.concepts.has(c)) {
-              sharedConcepts.push(c);
-            }
-          });
-          
-          var path1 = f1.fullPath.split(/[\\/]/).filter(Boolean);
-          var path2 = f2.fullPath.split(/[\\/]/).filter(Boolean);
-          var commonSubdirs = 0;
-          for (var k = 0; k < Math.min(path1.length, path2.length); k++) {
-            if (path1[k].toLowerCase() === path2[k].toLowerCase()) {
-              var p = path1[k].toLowerCase();
-              if (p !== 'c:' && p !== 'd:' && p !== 'downloads' && p !== 'projects' && p !== 'other projects') {
-                commonSubdirs++;
-              }
-            } else {
-              break;
-            }
-          }
-          
-          var connectionType = [];
-          var weight = 0;
-          if (sharedConcepts.length > 0) {
-            connectionType.push('Shared concepts: ' + sharedConcepts.slice(0, 2).join(', '));
-            weight += sharedConcepts.length * 0.8;
-          }
-          if (commonSubdirs > 0) {
-            connectionType.push('Common parent path');
-            weight += commonSubdirs * 1.5;
-          }
-          
-          if (weight > 0) {
-            edges.push({
-              id: f1.fullPath + '->' + f2.fullPath,
-              sourceNodeId: f1.fullPath,
-              targetNodeId: f2.fullPath,
-              type: connectionType.join(' & '),
-              weight: Math.min(5, weight)
-            });
-          }
-        }
-      }
+      // Map server edges to viewer format
+      var edges = (graphData.edges || []).map(function(e) {
+        return {
+          id: e.source + '->' + e.target + ':' + e.type,
+          sourceNodeId: e.source,
+          targetNodeId: e.target,
+          type: e.type || 'connection',
+          agentId: e.agentId,
+          weight: e.type === 'cross-ref' ? 2 : 1
+        };
+      });
+
 
       state.graph.nodes = folders;
       state.graph.edges = edges;
@@ -2810,7 +2777,7 @@
 
     async function confirmDeleteMemory(id) {
       closeModal();
-      await apiDelete('governance/memories', { memoryIds: [id], reason: 'Deleted via viewer' });
+      await apiPost('forget', { memoryId: id });
       state.memories.loaded = false;
       loadMemories();
     }
@@ -2819,63 +2786,132 @@
       document.getElementById('modal-overlay').classList.remove('open');
     }
 
-    async function loadTimeline() {
+    // =====================================================================
+    // Timeline Tab — folder activity feed
+    // =====================================================================
+    var tlFolderFilter = '';
+    var tlAgentFilter = '';
+
+    async function loadTimeline(folderPath, agentId) {
       var el = document.getElementById('view-timeline');
+      if (!el) return;
       el.innerHTML = '<div class="loading">Loading timeline...</div>';
-      var sessResult = await apiGet('sessions');
-      var sessions = (sessResult && sessResult.sessions) || [];
-      state.timeline.loaded = true;
-
-      if (sessions.length > 0 && !state.timeline.sessionId) {
-        var sorted = sessions.slice().sort(function(a, b) { return (b.startedAt || '').localeCompare(a.startedAt || ''); });
-        var firstSelectable = sorted.find(function(s) { return sessionId(s); });
-        state.timeline.sessionId = firstSelectable ? sessionId(firstSelectable) : '';
+      try {
+        var body = { limit: 100 };
+        if (folderPath) body.folderPath = folderPath;
+        if (agentId) body.agentId = agentId;
+        var result = await apiFetchRaw('/agentmemory/timeline', {
+          method: 'POST',
+          body: JSON.stringify(body)
+        });
+        var obs = (result && result.observations) || [];
+        renderTimeline(obs);
+      } catch(err) {
+        el.innerHTML = '<div class="loading" style="color:var(--accent);">Failed to load timeline: ' + esc(String(err)) + '</div>';
       }
-
-      renderTimelineToolbar(sessions);
-      if (state.timeline.sessionId) await loadObservations();
     }
 
-    function renderTimelineToolbar(sessions) {
+    function renderTimeline(obs) {
       var el = document.getElementById('view-timeline');
-      var html = '<div class="toolbar">';
-      html += '<select id="tl-session"><option value="">Select session</option>';
-      sessions.sort(function(a, b) { return (b.startedAt || '').localeCompare(a.startedAt || ''); }).forEach(function(s) {
-        var id = sessionId(s);
-        var disabled = id ? '' : ' disabled';
-        html += '<option value="' + esc(id) + '"' + (id && state.timeline.sessionId === id ? ' selected' : '') + disabled + '>' + esc(sessionLabel(s)) + '</option>';
+      if (!el) return;
+
+      // Collect unique agents for dropdown
+      var agents = [];
+      var agentSeen = {};
+      obs.forEach(function(o) {
+        if (o.agentId && !agentSeen[o.agentId]) {
+          agentSeen[o.agentId] = true;
+          agents.push(o.agentId);
+        }
+      });
+
+      var html = '<div style="padding:16px 24px;">';
+      // Filter bar
+      html += '<div style="display:flex;gap:12px;align-items:center;margin-bottom:16px;flex-wrap:wrap;">';
+      html += '<input id="tl-folder-filter" type="text" placeholder="Filter by folder path..." value="' + esc(tlFolderFilter) + '" style="flex:1;min-width:200px;padding:7px 12px;border:1px solid var(--border-light);background:var(--bg);color:var(--ink);font-family:var(--font-mono);font-size:12px;">';
+      html += '<select id="tl-agent-filter" style="padding:7px 12px;border:1px solid var(--border-light);background:var(--bg);color:var(--ink);font-family:var(--font-ui);font-size:12px;">';
+      html += '<option value="">All agents</option>';
+      agents.forEach(function(a) {
+        html += '<option value="' + esc(a) + '"' + (tlAgentFilter === a ? ' selected' : '') + '>' + esc(a) + '</option>';
       });
       html += '</select>';
-      html += '<select id="tl-importance"><option value="0">All importance</option>';
-      for (var i = 1; i <= 9; i++) {
-        html += '<option value="' + i + '"' + (state.timeline.minImportance === i ? ' selected' : '') + '>&ge; ' + i + '</option>';
+      html += '<span style="font-size:12px;color:var(--ink-muted);">' + obs.length + ' observations</span>';
+      html += '</div>';
+
+      // Cards
+      html += '<div id="tl-cards">';
+      if (obs.length === 0) {
+        html += '<div class="empty-state"><div class="empty-icon">&#128337;</div><p>No observations found.</p></div>';
+      } else {
+        obs.forEach(function(o) {
+          html += renderTimelineCard(o);
+        });
       }
-      html += '</select></div>';
-      html += '<div id="tl-content"></div>';
+      html += '</div></div>';
       el.innerHTML = html;
 
-      document.getElementById('tl-session').addEventListener('change', function() {
-        state.timeline.sessionId = this.value;
-        state.timeline.page = 0;
-        loadObservations();
-      });
-      document.getElementById('tl-importance').addEventListener('change', function() {
-        state.timeline.minImportance = parseInt(this.value);
-        renderObservations();
-      });
+      // Wire up filters
+      var folderInput = document.getElementById('tl-folder-filter');
+      var agentSelect = document.getElementById('tl-agent-filter');
+      if (folderInput) {
+        folderInput.addEventListener('input', function() {
+          tlFolderFilter = this.value;
+          loadTimeline(tlFolderFilter || undefined, tlAgentFilter || undefined);
+        });
+      }
+      if (agentSelect) {
+        agentSelect.addEventListener('change', function() {
+          tlAgentFilter = this.value;
+          loadTimeline(tlFolderFilter || undefined, tlAgentFilter || undefined);
+        });
+      }
     }
 
-    async function loadObservations() {
-      var content = document.getElementById('tl-content');
-      if (!content) return;
-      if (!state.timeline.sessionId) {
-        content.innerHTML = '<div class="empty-state"><div class="empty-icon">&#128337;</div><p>Select a session to view observations</p></div>';
-        return;
+    function renderTimelineCard(o) {
+      var ts = o.timestamp ? new Date(o.timestamp).toLocaleString() : '';
+      var typeColors = {
+        'file_edit': 'var(--blue)', 'file_write': 'var(--blue)', 'file_read': 'var(--cyan)',
+        'command_run': 'var(--orange)', 'search': 'var(--green)',
+        'error': 'var(--red)', 'conversation': 'var(--purple)', 'subagent': 'var(--yellow)'
+      };
+      var typeColor = typeColors[o.type] || 'var(--ink-muted)';
+      var fp = o.folderPath || '';
+      var fpShort = fp.split(/[\\/]/).slice(-2).join('/');
+      var html = '<div style="border:1px solid var(--border-light);border-radius:4px;padding:12px 16px;margin-bottom:8px;background:var(--bg);">';
+      html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap;">';
+      html += '<span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:' + typeColor + ';background:var(--bg-subtle);padding:2px 7px;border-radius:3px;">' + esc(o.type || 'other') + '</span>';
+      html += '<span style="font-size:10px;font-weight:600;background:var(--bg-inset);padding:2px 7px;border-radius:3px;">' + esc(o.agentId || '') + '</span>';
+      html += '<span style="font-size:11px;color:var(--ink-muted);font-family:var(--font-mono);" title="' + esc(fp) + '">' + esc(fpShort) + '</span>';
+      html += '<span style="margin-left:auto;font-size:11px;color:var(--ink-faint);font-family:var(--font-mono);">' + esc(ts) + '</span>';
+      html += '</div>';
+      if (o.title) html += '<div style="font-weight:600;font-size:13px;color:var(--ink);margin-bottom:3px;">' + esc(o.title) + '</div>';
+      if (o.text) {
+        var excerpt = o.text.length > 200 ? o.text.slice(0, 200) + '…' : o.text;
+        html += '<div style="font-size:12px;color:var(--ink-secondary);line-height:1.5;">' + esc(excerpt) + '</div>';
       }
-      content.innerHTML = '<div class="loading">Loading observations...</div>';
-      var result = await apiGet('observations?sessionId=' + encodeURIComponent(state.timeline.sessionId));
-      state.timeline.observations = (result && result.observations) || [];
-      renderObservations();
+      html += '</div>';
+      return html;
+    }
+
+    function prependTimelineCard(obs) {
+      var cards = document.getElementById('tl-cards');
+      if (!cards) return;
+      var div = document.createElement('div');
+      div.innerHTML = renderTimelineCard(obs);
+      cards.insertBefore(div.firstChild, cards.firstChild);
+    }
+
+    function updateFolderBadge(folderPath, agentId) {
+      var rows = document.querySelectorAll('.folder-row');
+      rows.forEach(function(row) {
+        if (row.dataset.folder === folderPath && row.dataset.agent === agentId) {
+          var countCell = row.querySelector('td:nth-child(3)');
+          if (countCell) {
+            var cur = parseInt(countCell.textContent) || 0;
+            countCell.textContent = cur + 1;
+          }
+        }
+      });
     }
 
     var tlTypeFilter = '';
@@ -4128,7 +4164,19 @@
           if (state.ws !== ws) return;
           try {
             var msg = JSON.parse(e.data);
-            if (msg.type === 'stream' && msg.event) {
+            if (msg.type === 'folder_observation') {
+              // New folder-based broadcast
+              if (state.activeTab === 'timeline') {
+                prependTimelineCard(msg.data || {});
+              }
+              if (state.activeTab === 'folders') {
+                updateFolderBadge(msg.folderPath, msg.agentId);
+              }
+            } else if (msg.type === 'raw_observation' || msg.type === 'compressed_observation') {
+              if (msg.data && msg.data.observation) {
+                routeWsMessage({ observation: msg.data.observation });
+              }
+            } else if (msg.type === 'stream' && msg.event) {
               handleStreamEvent(msg);
             } else if (msg.event_type && msg.data) {
               handleStreamEvent({ event: { type: 'create', data: msg.data, event_type: msg.event_type } });

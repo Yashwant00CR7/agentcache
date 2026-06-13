@@ -125,27 +125,8 @@ def init_app():
                 print(f"[scheduler] auto_forget loop error: {e}")
             time.sleep(3600)
 
-    def run_consolidation_loop():
-        time.sleep(15)
-        while True:
-            try:
-                print("[scheduler] Running lesson_decay_sweep...")
-                decay_res = functions.lesson_decay_sweep(kv)
-                print(f"[scheduler] lesson_decay_sweep completed: {decay_res}")
-                
-                if functions.is_consolidation_enabled():
-                    print("[scheduler] Running consolidation...")
-                    cons_res = functions.consolidate(kv)
-                    print(f"[scheduler] consolidation completed: {cons_res}")
-            except Exception as e:
-                print(f"[scheduler] consolidation/decay loop error: {e}")
-            time.sleep(86400)
-
     t_forget = threading.Thread(target=run_auto_forget_loop, daemon=True)
     t_forget.start()
-    
-    t_consolidate = threading.Thread(target=run_consolidation_loop, daemon=True)
-    t_consolidate.start()
 
 # =====================================================================
 # Auth Middleware
@@ -339,44 +320,36 @@ def api_agent_observe():
     auth_err = check_auth()
     if auth_err:
         return auth_err
-        
+
     try:
         body = request.get_json(force=True) or {}
+        folder_path = body.get("folderPath")
         agent_id = body.get("agentId")
-        session_id = body.get("sessionId")
-        project = body.get("project")
-        cwd = body.get("cwd") or ""
         text = body.get("text") or body.get("content") or ""
-        obs_type = body.get("type") or "other"
-        title = body.get("title") or f"agent_{obs_type}"
-        image_data = body.get("imageData")
-        
-        if not session_id or not project:
-            return jsonify({"error": "sessionId and project are required"}), 400
-            
-        timestamp = datetime_now_iso()
-        
-        data_payload = {
-            "tool_name": title,
-            "tool_input": text,
-            "tool_output": text,
-        }
-        if image_data:
-            data_payload["imageBase64"] = image_data
-            
+
+        if not folder_path or not agent_id or not text:
+            return jsonify({"error": "folderPath, agentId, and text are required"}), 400
+
+        # sessionId accepted but ignored (folder-based model)
+        # timestamp defaults to now UTC
+        timestamp = body.get("timestamp") or datetime_now_iso()
+
         payload = {
-            "sessionId": session_id,
-            "project": project,
-            "cwd": cwd,
-            "hookType": "post_tool_use",
+            "folderPath": folder_path,
+            "agentId": agent_id,
+            "text": text,
             "timestamp": timestamp,
-            "data": data_payload
+            "type": body.get("type"),
+            "title": body.get("title"),
+            "concepts": body.get("concepts"),
+            "files": body.get("files"),
+            "importance": body.get("importance"),
         }
-        if agent_id:
-            payload["agentId"] = agent_id
-            
-        res = functions.observe(kv, payload)
+
+        res = functions.folder_observe(kv, payload)
         return jsonify(res), 201
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
     except Exception as e:
         return jsonify({"error": str(e)}), 400
 
@@ -399,17 +372,17 @@ def api_search():
     auth_err = check_auth()
     if auth_err:
         return auth_err
-        
+
     try:
         body = request.get_json(force=True) or {}
         query = body.get("query")
         if not query or not query.strip():
             return jsonify({"error": "query is required"}), 400
         limit = body.get("limit") or 10
-        
-        # smart search / hybrid search query
-        res = functions._hybrid_search.search(query, limit)
-        res = enrich_search_results(kv, res)
+        folder_path = body.get("folderPath")
+        agent_id = body.get("agentId")
+
+        res = functions.folder_search(kv, query, limit, folder_path=folder_path, agent_id=agent_id)
         return jsonify(res), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 400
@@ -432,165 +405,27 @@ def api_export():
 
 @app.route("/agentmemory/replay/sessions", methods=["GET"])
 def api_replay_sessions():
-    auth_err = check_auth()
-    if auth_err:
-        return auth_err
-        
-    sessions = functions.list_sessions(kv)
-    return jsonify({"success": True, "sessions": sessions}), 200
+    return jsonify({"error": "Gone — session replay removed in folder-based memory model"}), 410
 
 @app.route("/agentmemory/session/start", methods=["POST"])
 def api_session_start():
-    auth_err = check_auth()
-    if auth_err:
-        return auth_err
-        
-    try:
-        body = request.get_json(force=True) or {}
-        session_id = body.get("sessionId")
-        project = body.get("project")
-        cwd = body.get("cwd")
-        if not session_id or not project or not cwd:
-            return jsonify({"error": "sessionId, project, and cwd are required"}), 400
-            
-        title = body.get("title")
-        agent_id = body.get("agentId") or functions.get_agent_id()
-        
-        session = {
-            "id": session_id,
-            "project": project,
-            "cwd": cwd,
-            "startedAt": datetime_now_iso(),
-            "status": "active",
-            "observationCount": 0
-        }
-        if title:
-            session["summary"] = title[:200]
-            session["firstPrompt"] = title[:200]
-        if agent_id:
-            session["agentId"] = agent_id
-            
-        functions.create_session(kv, session)
-        
-        # Compile initial context
-        ctx = functions.context(kv, {"sessionId": session_id, "project": project})
-        
-        # Commit to Dolt
-        functions.commit_if_enabled(kv, f"Start session {session_id[:8]}", agent_id)
-        
-        return jsonify({"session": session, "context": ctx.get("context", "")}), 200
-    except Exception as e:
-        return jsonify({"error": str(e)}), 400
+    return jsonify({"error": "This endpoint has been removed", "status": "gone"}), 410
 
 @app.route("/agentmemory/antigravity/sync", methods=["POST"])
 def api_antigravity_sync():
-    auth_err = check_auth()
-    if auth_err:
-        return auth_err
-    try:
-        body = request.get_json(force=True) or {}
-        mode = body.get("mode") or "current_session"
-        current_convo = body.get("currentConversationId")
-        current_folder = body.get("currentFolder")
-        res = perform_antigravity_sync(mode, current_convo, current_folder)
-        return jsonify(res), 200
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+    return jsonify({"error": "This endpoint has been removed", "status": "gone"}), 410
 
 @app.route("/agentmemory/session/end", methods=["POST"])
 def api_session_end():
-    auth_err = check_auth()
-    if auth_err:
-        return auth_err
-        
-    try:
-        body = request.get_json(force=True) or {}
-        session_id = body.get("sessionId")
-        if not session_id:
-            return jsonify({"error": "sessionId is required"}), 400
-            
-        functions.end_session(kv, session_id)
-        
-        # Commit to Dolt
-        sess = functions.get_session(kv, session_id) or {}
-        agent_id = sess.get("agentId")
-        functions.commit_if_enabled(kv, f"End session {session_id[:8]}", agent_id)
-        
-        return jsonify({"success": True}), 200
-    except Exception as e:
-        return jsonify({"error": str(e)}), 400
+    return jsonify({"error": "This endpoint has been removed", "status": "gone"}), 410
 
 @app.route("/agentmemory/session/commit", methods=["POST"])
 def api_session_commit():
-    auth_err = check_auth()
-    if auth_err:
-        return auth_err
-        
-    try:
-        body = request.get_json(force=True) or {}
-        sha = body.get("sha")
-        if not sha:
-            return jsonify({"error": "sha is required"}), 400
-            
-        session_id = body.get("sessionId")
-        branch = body.get("branch")
-        repo = body.get("repo")
-        message = body.get("message")
-        author = body.get("author")
-        authored_at = body.get("authoredAt")
-        files = body.get("files")
-        
-        existing = kv.get(KV.commits, sha) or {}
-        session_ids = set(existing.get("sessionIds", []))
-        if session_id:
-            session_ids.add(session_id)
-            
-        link = {
-            "sha": sha,
-            "shortSha": sha[:7],
-            "branch": branch or existing.get("branch"),
-            "repo": repo or existing.get("repo"),
-            "message": message or existing.get("message"),
-            "author": author or existing.get("author"),
-            "authoredAt": authored_at or existing.get("authoredAt"),
-            "files": files or existing.get("files"),
-            "sessionIds": list(session_ids),
-            "linkedAt": existing.get("linkedAt") or datetime_now_iso()
-        }
-        kv.set(KV.commits, sha, link)
-        
-        if session_id:
-            sess = functions.get_session(kv, session_id)
-            if sess:
-                commit_shas = set(sess.get("commitShas", []))
-                commit_shas.add(sha)
-                sess["commitShas"] = list(commit_shas)
-                functions.create_session(kv, sess)
-                
-        return jsonify({"commit": link}), 200
-    except Exception as e:
-        return jsonify({"error": str(e)}), 400
+    return jsonify({"error": "This endpoint has been removed", "status": "gone"}), 410
 
 @app.route("/agentmemory/session/by-commit", methods=["GET"])
 def api_session_by_commit():
-    auth_err = check_auth()
-    if auth_err:
-        return auth_err
-        
-    sha = request.args.get("sha")
-    if not sha:
-        return jsonify({"error": "sha query param required"}), 400
-        
-    link = kv.get(KV.commits, sha)
-    if not link:
-        return jsonify({"error": "no sessions linked to this commit"}), 404
-        
-    sessions = []
-    for sid in link.get("sessionIds", []):
-        sess = functions.get_session(kv, sid)
-        if sess:
-            sessions.append(sess)
-    return jsonify({"commit": link, "sessions": sessions}), 200
+    return jsonify({"error": "This endpoint has been removed", "status": "gone"}), 410
 
 @app.route("/agentmemory/commits", methods=["GET"])
 def api_commits():
@@ -614,20 +449,7 @@ def api_commits():
 
 @app.route("/agentmemory/sessions", methods=["GET"])
 def api_sessions():
-    auth_err = check_auth()
-    if auth_err:
-        return auth_err
-        
-    sessions = functions.list_sessions(kv)
-    agent_id = request.args.get("agentId")
-    if agent_id and agent_id != "*":
-        sessions = [s for s in sessions if s.get("agentId") == agent_id]
-    elif functions.is_agent_scope_isolated():
-        env_aid = functions.get_agent_id()
-        if env_aid:
-            sessions = [s for s in sessions if s.get("agentId") == env_aid]
-            
-    return jsonify({"sessions": sessions}), 200
+    return jsonify({"error": "This endpoint has been removed", "status": "gone"}), 410
 
 @app.route("/agentmemory/observations", methods=["GET"])
 def api_observations():
@@ -717,175 +539,128 @@ def api_forget():
     except Exception as e:
         return jsonify({"error": str(e)}), 400
 
+@app.route("/agentmemory/folders", methods=["GET"])
+def api_folders():
+    auth_err = check_auth()
+    if auth_err:
+        return auth_err
+    folders = sorted(
+        kv.list(functions.KV.folders),
+        key=lambda x: x.get("lastUpdated", ""),
+        reverse=True
+    )
+    return jsonify({"folders": folders}), 200
+
+
+@app.route("/agentmemory/folder/observations", methods=["GET"])
+def api_folder_observations():
+    auth_err = check_auth()
+    if auth_err:
+        return auth_err
+    fp = request.args.get("folderPath")
+    aid = request.args.get("agentId")
+    if not fp or not aid:
+        return jsonify({"error": "folderPath and agentId are required"}), 400
+    observations = sorted(
+        kv.list(functions.KV.folder_obs(fp, aid)),
+        key=lambda x: x.get("timestamp", ""),
+        reverse=True
+    )
+    return jsonify({"observations": observations, "folderPath": fp, "agentId": aid}), 200
+
+
+@app.route("/agentmemory/timeline", methods=["POST"])
+def api_timeline():
+    auth_err = check_auth()
+    if auth_err:
+        return auth_err
+    try:
+        body = request.get_json(force=True) or {}
+        folder_path = body.get("folderPath")
+        agent_id = body.get("agentId")
+        limit = body.get("limit") or 100
+        before = body.get("before")
+        after = body.get("after")
+        result = functions.folder_timeline(kv, limit, folder_path, agent_id, before, after)
+        return jsonify({"observations": result}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+
+
+@app.route("/agentmemory/graph", methods=["GET"])
+def api_graph():
+    auth_err = check_auth()
+    if auth_err:
+        return auth_err
+    result = functions.folder_graph_build(kv)
+    return jsonify(result), 200
+
+
+@app.route("/agentmemory/migrate", methods=["POST"])
+def api_migrate():
+    auth_err = check_auth()
+    if auth_err:
+        return auth_err
+    try:
+        body = request.get_json(force=True) or {}
+        dry_run = bool(body.get("dry_run", False))
+        result = functions.migrate_sessions_to_folders(kv, dry_run)
+        return jsonify(result), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+
+
 # =====================================================================
-# Lessons Learned Endpoints
+# Lessons Learned Endpoints (stubbed — 410 Gone)
 # =====================================================================
 
 @app.route("/agentmemory/lessons", methods=["GET"])
 def api_lessons_list():
-    auth_err = check_auth()
-    if auth_err:
-        return auth_err
-        
-    project = request.args.get("project")
-    source = request.args.get("source")
-    min_conf = float(request.args.get("minConfidence", "0"))
-    limit = int(request.args.get("limit", "50"))
-    
-    res = functions.lesson_list(kv, {
-        "project": project,
-        "source": source,
-        "minConfidence": min_conf,
-        "limit": limit
-    })
-    return jsonify(res), 200
+    return jsonify({"error": "Gone — lessons have been removed in the folder-based memory model"}), 410
 
 @app.route("/agentmemory/lessons", methods=["POST"])
 def api_lessons_save():
-    auth_err = check_auth()
-    if auth_err:
-        return auth_err
-        
-    try:
-        body = request.get_json(force=True) or {}
-        res = functions.lesson_save(kv, body)
-        return jsonify(res), 201 if res.get("action") == "created" else 200
-    except Exception as e:
-        return jsonify({"error": str(e)}), 400
+    return jsonify({"error": "Gone — lessons have been removed in the folder-based memory model"}), 410
 
 @app.route("/agentmemory/lessons/search", methods=["POST"])
 def api_lessons_search():
-    auth_err = check_auth()
-    if auth_err:
-        return auth_err
-        
-    try:
-        body = request.get_json(force=True) or {}
-        res = functions.lesson_recall(kv, body)
-        return jsonify(res), 200
-    except Exception as e:
-        return jsonify({"error": str(e)}), 400
+    return jsonify({"error": "Gone — lessons have been removed in the folder-based memory model"}), 410
 
 @app.route("/agentmemory/lessons/strengthen", methods=["POST"])
 def api_lessons_strengthen():
-    auth_err = check_auth()
-    if auth_err:
-        return auth_err
-        
-    try:
-        body = request.get_json(force=True) or {}
-        lesson_id = body.get("lessonId")
-        if not lesson_id:
-            return jsonify({"error": "lessonId is required"}), 400
-        res = functions.lesson_strengthen(kv, lesson_id)
-        return jsonify(res), 200
-    except Exception as e:
-        return jsonify({"error": str(e)}), 400
+    return jsonify({"error": "Gone — lessons have been removed in the folder-based memory model"}), 410
 
 # =====================================================================
-# Memory Slots Endpoints
+# Memory Slots Endpoints (stubbed — 410 Gone)
 # =====================================================================
 
 @app.route("/agentmemory/slots", methods=["GET"])
 def api_slots_list():
-    auth_err = check_auth()
-    if auth_err:
-        return auth_err
-        
-    return jsonify(functions.slot_list(kv)), 200
+    return jsonify({"error": "Gone — slots have been removed in the folder-based memory model"}), 410
 
 @app.route("/agentmemory/slot", methods=["GET"])
 def api_slots_get():
-    auth_err = check_auth()
-    if auth_err:
-        return auth_err
-        
-    label = request.args.get("label")
-    if not label:
-        return jsonify({"error": "label required"}), 400
-    res = functions.slot_get(kv, label)
-    status = 200 if res.get("success") else 404
-    return jsonify(res), status
+    return jsonify({"error": "Gone — slots have been removed in the folder-based memory model"}), 410
 
 @app.route("/agentmemory/slot", methods=["POST"])
 def api_slots_create():
-    auth_err = check_auth()
-    if auth_err:
-        return auth_err
-        
-    try:
-        body = request.get_json(force=True) or {}
-        res = functions.slot_create(kv, body)
-        status = 201 if res.get("success") else 400
-        return jsonify(res), status
-    except Exception as e:
-        return jsonify({"error": str(e)}), 400
+    return jsonify({"error": "Gone — slots have been removed in the folder-based memory model"}), 410
 
 @app.route("/agentmemory/slot/append", methods=["POST"])
 def api_slots_append():
-    auth_err = check_auth()
-    if auth_err:
-        return auth_err
-        
-    try:
-        body = request.get_json(force=True) or {}
-        label = body.get("label")
-        text = body.get("text")
-        if not label or not text:
-            return jsonify({"error": "label and text required"}), 400
-        res = functions.slot_append(kv, label, text)
-        status = 200 if res.get("success") else 400
-        return jsonify(res), status
-    except Exception as e:
-        return jsonify({"error": str(e)}), 400
+    return jsonify({"error": "Gone — slots have been removed in the folder-based memory model"}), 410
 
 @app.route("/agentmemory/slot/replace", methods=["POST"])
 def api_slots_replace():
-    auth_err = check_auth()
-    if auth_err:
-        return auth_err
-        
-    try:
-        body = request.get_json(force=True) or {}
-        label = body.get("label")
-        content = body.get("content")
-        if not label or content is None:
-            return jsonify({"error": "label and content required"}), 400
-        res = functions.slot_replace(kv, label, content)
-        status = 200 if res.get("success") else 400
-        return jsonify(res), status
-    except Exception as e:
-        return jsonify({"error": str(e)}), 400
+    return jsonify({"error": "Gone — slots have been removed in the folder-based memory model"}), 410
 
 @app.route("/agentmemory/slot", methods=["DELETE"])
 def api_slots_delete():
-    auth_err = check_auth()
-    if auth_err:
-        return auth_err
-        
-    label = request.args.get("label")
-    if not label:
-        return jsonify({"error": "label query param required"}), 400
-    res = functions.slot_delete(kv, label)
-    status = 200 if res.get("success") else 404
-    return jsonify(res), status
+    return jsonify({"error": "Gone — slots have been removed in the folder-based memory model"}), 410
 
 @app.route("/agentmemory/slot/reflect", methods=["POST"])
 def api_slots_reflect():
-    auth_err = check_auth()
-    if auth_err:
-        return auth_err
-        
-    try:
-        body = request.get_json(force=True) or {}
-        session_id = body.get("sessionId")
-        if not session_id:
-            return jsonify({"error": "sessionId required"}), 400
-        max_obs = body.get("maxObservations") or 50
-        res = functions.slot_reflect(kv, session_id, max_obs)
-        return jsonify(res), 200
-    except Exception as e:
-        return jsonify({"error": str(e)}), 400
+    return jsonify({"error": "Gone — slots have been removed in the folder-based memory model"}), 410
 
 # =====================================================================
 # Audit, Relations, Evolve, Timeline, Profile
@@ -938,17 +713,9 @@ def api_evolve():
         return jsonify({"error": str(e)}), 400
 
 @app.route("/agentmemory/timeline", methods=["POST"])
-def api_timeline():
-    auth_err = check_auth()
-    if auth_err:
-        return auth_err
-        
-    try:
-        body = request.get_json(force=True) or {}
-        res = functions.timeline(kv, body)
-        return jsonify(res), 200
-    except Exception as e:
-        return jsonify({"error": str(e)}), 400
+def api_timeline_legacy():
+    # Duplicate route removed — now handled by the folder-based api_timeline above.
+    return jsonify({"error": "This endpoint has been removed", "status": "gone"}), 410
 
 @app.route("/agentmemory/profile", methods=["GET"])
 def api_profile():
@@ -991,9 +758,83 @@ def api_graph_stats():
     auth_err = check_auth()
     if auth_err:
         return auth_err
-    nodes = kv.list(KV.graphNodes)
-    edges = kv.list(KV.graphEdges)
-    return jsonify({"nodes": len(nodes), "edges": len(edges), "success": True}), 200
+        
+    # Dynamically compute graph folder nodes and connection edges
+    sessions = functions.list_sessions(kv)
+    memories = kv.list(KV.memories)
+    
+    folders = set()
+    concepts_by_folder = {}
+    
+    for s in sessions:
+        project = s.get("project", "").strip()
+        if project:
+            folders.add(project)
+            
+    for m in memories:
+        project = m.get("project", "").strip()
+        if project:
+            folders.add(project)
+            concepts = m.get("concepts", [])
+            if concepts:
+                if project not in concepts_by_folder:
+                    concepts_by_folder[project] = set()
+                for c in concepts:
+                    if isinstance(c, str):
+                        concepts_by_folder[project].add(c.lower())
+                        
+    node_count = len(folders)
+    edge_count = 0
+    folder_list = list(folders)
+    
+    for i in range(len(folder_list)):
+        for j in range(i + 1, len(folder_list)):
+            f1 = folder_list[i]
+            f2 = folder_list[j]
+            
+            c1 = concepts_by_folder.get(f1, set())
+            c2 = concepts_by_folder.get(f2, set())
+            shared = c1.intersection(c2)
+            
+            p1 = [p for p in f1.replace("\\", "/").split("/") if p]
+            p2 = [p for p in f2.replace("\\", "/").split("/") if p]
+            common_subdirs = 0
+            for k in range(min(len(p1), len(p2))):
+                if p1[k].lower() == p2[k].lower():
+                    p_low = p1[k].lower()
+                    if p_low not in ("c:", "d:", "downloads", "projects", "other projects"):
+                        common_subdirs += 1
+                else:
+                    break
+                    
+            if len(shared) > 0 or common_subdirs > 0:
+                edge_count += 1
+                
+    return jsonify({"nodes": node_count, "edges": edge_count, "success": True}), 200
+
+@app.route("/agentmemory/graph/query", methods=["POST"])
+def api_graph_query():
+    auth_err = check_auth()
+    if auth_err:
+        return auth_err
+    try:
+        body = request.get_json(force=True) or {}
+        start_node_id = body.get("startNodeId")
+        return jsonify({"nodes": [], "edges": [], "success": True}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+
+@app.route("/agentmemory/graph/build", methods=["POST"])
+def api_graph_build():
+    auth_err = check_auth()
+    if auth_err:
+        return auth_err
+    try:
+        if functions.is_consolidation_enabled():
+            functions.consolidate(kv)
+        return jsonify({"success": True}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
 
 @app.route("/agentmemory/semantic", methods=["GET"])
 def api_semantic_list():
@@ -1629,9 +1470,10 @@ def perform_antigravity_sync(mode="current_session", current_conversation_id=Non
         return {"success": False, "syncedSessions": [], "observationsAdded": 0, "error": f"Invalid mode: {mode}"}
 
     if not targets:
-        return {"success": True, "syncedSessions": [], "observationsAdded": 0}
+        return {"success": True, "syncedSessions": [], "processedSessions": [], "observationsAdded": 0}
 
     synced_sessions = []
+    processed_sessions = []
     observations_added = 0
 
     for convo in targets:
@@ -1737,10 +1579,11 @@ def perform_antigravity_sync(mode="current_session", current_conversation_id=Non
             observations_added += 1
             convo_synced = True
 
+        processed_sessions.append(convo_id)
         if convo_synced:
             synced_sessions.append(convo_id)
 
-    return {"success": True, "syncedSessions": synced_sessions, "observationsAdded": observations_added}
+    return {"success": True, "syncedSessions": synced_sessions, "processedSessions": processed_sessions, "observationsAdded": observations_added}
 
 @app.route("/agentmemory/mcp/tools", methods=["GET"])
 def mcp_tools_list():
@@ -1751,12 +1594,28 @@ def mcp_tools_list():
     tools = [
         {
             "name": "memory_recall",
-            "description": "Search past session observations for relevant context. Use when you need to recall what happened in previous sessions.",
+            "description": "Search past folder observations and global memories. Use when you need to recall what happened in a folder.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
                     "query": {"type": "string", "description": "Search query keywords"},
-                    "limit": {"type": "number", "description": "Max results to return (default 10)"}
+                    "limit": {"type": "number", "description": "Max results to return (default 10)"},
+                    "folderPath": {"type": "string", "description": "Filter to a specific folder path (optional)"},
+                    "agentId": {"type": "string", "description": "Filter to a specific agent ID (optional)"}
+                },
+                "required": ["query"]
+            }
+        },
+        {
+            "name": "memory_smart_search",
+            "description": "Hybrid semantic+keyword search across folder observations and global memories.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "Search query"},
+                    "limit": {"type": "number", "description": "Max results (default 10)"},
+                    "folderPath": {"type": "string", "description": "Filter to a specific folder path (optional)"},
+                    "agentId": {"type": "string", "description": "Filter to a specific agent ID (optional)"}
                 },
                 "required": ["query"]
             }
@@ -1787,145 +1646,23 @@ def mcp_tools_list():
             }
         },
         {
-            "name": "memory_sessions",
-            "description": "List recent sessions with their status and observation counts.",
-            "inputSchema": {"type": "object", "properties": {}}
-        },
-        {
-            "name": "memory_sessions_list",
-            "description": "Retrieve list of all memory sessions.",
-            "inputSchema": {"type": "object", "properties": {}}
-        },
-        {
-            "name": "memory_smart_search",
-            "description": "Hybrid semantic+keyword search with progressive disclosure.",
-            "inputSchema": {
-                "type": "object",
-                "properties": {
-                    "query": {"type": "string", "description": "Search query"},
-                    "limit": {"type": "number", "description": "Max results (default 10)"}
-                },
-                "required": ["query"]
-            }
-        },
-        {
-            "name": "memory_timeline",
-            "description": "Chronological observations around an anchor point.",
-            "inputSchema": {
-                "type": "object",
-                "properties": {
-                    "anchor": {"type": "string", "description": "Anchor point date or keyword"},
-                    "project": {"type": "string", "description": "Filter by project path"},
-                    "sessionId": {"type": "string", "description": "Filter by session ID"}
-                },
-                "required": ["anchor"]
-            }
-        },
-        {
-            "name": "memory_observations",
-            "description": "Retrieve all observations for a given session ID.",
-            "inputSchema": {
-                "type": "object",
-                "properties": {
-                    "sessionId": {"type": "string", "description": "Session ID to fetch observations for"}
-                },
-                "required": ["sessionId"]
-            }
-        },
-        {
-            "name": "memory_profile",
-            "description": "User/project profile with top concepts and file patterns.",
-            "inputSchema": {
-                "type": "object",
-                "properties": {
-                    "project": {"type": "string", "description": "Project path"}
-                },
-                "required": ["project"]
-            }
-        },
-        {
-            "name": "memory_lessons",
-            "description": "List all saved lessons, optionally filtered by project.",
-            "inputSchema": {
-                "type": "object",
-                "properties": {
-                    "project": {"type": "string", "description": "Filter by project (optional)"},
-                    "minConfidence": {"type": "number", "description": "Filter by minimum confidence (optional, default 0.0)"},
-                    "limit": {"type": "number", "description": "Max results to return (optional, default 50)"}
-                }
-            }
-        },
-        {
-            "name": "memory_lesson_save",
-            "description": "Save a lesson learned from this session.",
-            "inputSchema": {
-                "type": "object",
-                "properties": {
-                    "content": {"type": "string", "description": "The lesson learned"},
-                    "context": {"type": "string", "description": "When/where this lesson applies"},
-                    "project": {"type": "string", "description": "Project this lesson is about"}
-                },
-                "required": ["content"]
-            }
-        },
-        {
-            "name": "memory_lesson_recall",
-            "description": "Search lessons by query. Returns lessons sorted by confidence and recency.",
-            "inputSchema": {
-                "type": "object",
-                "properties": {
-                    "query": {"type": "string", "description": "Search query"},
-                    "project": {"type": "string", "description": "Filter by project"}
-                },
-                "required": ["query"]
-            }
-        },
-        {
-            "name": "memory_lesson_search",
-            "description": "Search lessons learned by query.",
-            "inputSchema": {
-                "type": "object",
-                "properties": {
-                    "query": {"type": "string", "description": "Search query keywords"},
-                    "project": {"type": "string", "description": "Filter by project path (optional)"}
-                },
-                "required": ["query"]
-            }
-        },
-        {
-            "name": "memory_consolidate",
-            "description": "Trigger the consolidation pipeline to summarize sessions and extract semantic/procedural memory.",
-            "inputSchema": {"type": "object", "properties": {}}
-        },
-        {
-            "name": "memory_reflect",
-            "description": "Trigger reflection for a session, updating pending items, project context, and session patterns.",
-            "inputSchema": {
-                "type": "object",
-                "properties": {
-                    "sessionId": {"type": "string", "description": "Session ID to reflect upon"},
-                    "maxObservations": {"type": "number", "description": "Max observations to scan (optional, default 50)"}
-                },
-                "required": ["sessionId"]
-            }
-        },
-        {
             "name": "memory_diagnose",
-            "description": "Run diagnostic health checks across all memory subsystems.",
+            "description": "Health check — returns folder, agent, observation and memory counts.",
             "inputSchema": {"type": "object", "properties": {}}
         },
         {
             "name": "memory_forget",
-            "description": "Delete a memory, a session, or specific observations within a session.",
+            "description": "Delete a global memory or all observations for a (folderPath, agentId) pair.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
                     "memoryId": {"type": "string", "description": "Memory ID to delete"},
-                    "sessionId": {"type": "string", "description": "Session ID to delete"},
+                    "folderPath": {"type": "string", "description": "Folder path to delete observations from"},
+                    "agentId": {"type": "string", "description": "Agent ID to delete observations for"},
                     "observationIds": {
                         "oneOf": [
                             {"type": "string", "description": "Comma-separated observation IDs to delete"},
-                            {"type": "array", "items": {"type": "string"}, "description": "List of observation IDs to delete"}
+                            {"type": "array", "items": {"type": "string"}}
                         ]
                     }
                 }
@@ -1933,208 +1670,84 @@ def mcp_tools_list():
         },
         {
             "name": "memory_export",
-            "description": "Export all memory data including sessions, memories, lessons, observations, and slots as JSON.",
-            "inputSchema": {
-                "type": "object",
-                "properties": {
-                    "maxSessions": {"type": "number", "description": "Max sessions to export (optional)"},
-                    "offset": {"type": "number", "description": "Pagination offset for sessions (optional)"}
-                }
-            }
+            "description": "Export all folder observations and global memories as JSON (v2 format).",
+            "inputSchema": {"type": "object", "properties": {}}
         },
         {
             "name": "agent_observe",
-            "description": "Log a direct observation, thought, command execution, or action from the agent's active execution.",
+            "description": "Log an observation scoped to a folder path and agent ID.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
-                    "agentId": {"type": "string", "description": "ID/Name of the agent logging this (e.g. 'antigravity', optional)"},
-                    "sessionId": {"type": "string", "description": "Active session ID"},
-                    "project": {"type": "string", "description": "Canonical project path/identifier"},
-                    "text": {"type": "string", "description": "The observation log, thought, or content"},
-                    "content": {"type": "string", "description": "The observation log, thought, or content (alternative to text)"},
-                    "type": {"type": "string", "description": "Observation type: thought, command, tool, error, result, conversation, other"},
-                    "title": {"type": "string", "description": "A short summary title for the observation"},
-                    "cwd": {"type": "string", "description": "Current working directory"}
+                    "folderPath": {"type": "string", "description": "Absolute path of the working directory"},
+                    "agentId": {"type": "string", "description": "Identity of the agent (e.g. 'kiro', 'claude')"},
+                    "text": {"type": "string", "description": "Observation content"},
+                    "timestamp": {"type": "string", "description": "ISO 8601 UTC timestamp (defaults to now)"},
+                    "type": {"type": "string", "description": "Observation type"},
+                    "title": {"type": "string", "description": "Short title"},
+                    "concepts": {"type": "array", "items": {"type": "string"}},
+                    "files": {"type": "array", "items": {"type": "string"}},
+                    "importance": {"type": "integer", "description": "1-10"},
+                    "sessionId": {"type": "string", "description": "Deprecated — ignored"}
                 },
-                "required": ["sessionId", "project"]
+                "required": ["folderPath", "agentId", "text"]
             }
         },
         {
             "name": "agent_remember",
-            "description": "Explicitly save a key insight, fact, user preference, or architecture decision to long-term memory.",
+            "description": "Explicitly save a key insight, fact, or architecture decision to long-term memory.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
-                    "agentId": {"type": "string", "description": "ID/Name of the agent (e.g. 'antigravity', optional)"},
+                    "agentId": {"type": "string", "description": "ID/Name of the agent (optional)"},
                     "content": {"type": "string", "description": "The memory content/insight"},
                     "project": {"type": "string", "description": "Canonical project path/identifier"},
                     "type": {"type": "string", "description": "Memory type: fact, preference, bug, workflow, architecture"},
                     "concepts": {
                         "oneOf": [
                             {"type": "string", "description": "Comma-separated key concepts"},
-                            {"type": "array", "items": {"type": "string"}, "description": "List of key concepts"}
+                            {"type": "array", "items": {"type": "string"}}
                         ]
                     },
                     "files": {
                         "oneOf": [
                             {"type": "string", "description": "Comma-separated relevant file paths"},
-                            {"type": "array", "items": {"type": "string"}, "description": "List of relevant file paths"}
+                            {"type": "array", "items": {"type": "string"}}
                         ]
                     }
                 },
-                "required": ["content", "project"]
+                "required": ["content"]
             }
         },
         {
-            "name": "memory_antigravity_sync",
-            "description": "Sync Antigravity chat transcripts to agentmemory. Supports syncing the current session, all sessions, or sessions associated with the current folder.",
-            "inputSchema": {
-                "type": "object",
-                "properties": {
-                    "mode": {"type": "string", "description": "Sync mode: current_session (default), current_folder, or all"},
-                    "currentConversationId": {"type": "string", "description": "Optional conversation ID of the current active session"},
-                    "currentFolder": {"type": "string", "description": "Optional current folder path to filter by"}
-                },
-                "required": ["mode"]
-            }
-        },
-        {
-            "name": "memory_antigravity_sync_all",
-            "description": "Sync the current Antigravity session, automatically crystallize (summarize) it, and reflect to populate pinned memory slots in a single action.",
-            "inputSchema": {
-                "type": "object",
-                "properties": {
-                    "mode": {"type": "string", "description": "Sync mode: current_session (default), current_folder, or all"},
-                    "currentConversationId": {"type": "string", "description": "Optional conversation ID of the current active session"},
-                    "currentFolder": {"type": "string", "description": "Optional current folder path to filter by"}
-                },
-                "required": ["mode"]
-            }
-        },
-        {
-            "name": "memory_slot_list",
-            "description": "List all pinned memory slots.",
+            "name": "memory_folders",
+            "description": "List all (folder, agent) pairs that have memory observations.",
             "inputSchema": {"type": "object", "properties": {}}
         },
         {
-            "name": "memory_slot_get",
-            "description": "Retrieve the content of a specific pinned memory slot.",
+            "name": "memory_folder_observations",
+            "description": "Get all observations for a specific (folderPath, agentId) pair.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
-                    "label": {"type": "string", "description": "The label of the pinned slot to fetch"}
+                    "folderPath": {"type": "string", "description": "Folder path"},
+                    "agentId": {"type": "string", "description": "Agent ID"}
                 },
-                "required": ["label"]
+                "required": ["folderPath", "agentId"]
             }
         },
         {
-            "name": "memory_slot_create",
-            "description": "Create a new pinned memory slot or overwrite an existing one.",
+            "name": "memory_timeline",
+            "description": "Get folder activity feed — observations sorted by time, filterable by folder/agent.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
-                    "label": {"type": "string", "description": "The label of the pinned slot"},
-                    "content": {"type": "string", "description": "Initial content for the slot (optional)"},
-                    "scope": {"type": "string", "description": "Scope: global or session (optional, default 'global')"},
-                    "sizeLimit": {"type": "number", "description": "Character limit (optional)"},
-                    "pinned": {"type": "boolean", "description": "Whether pinned to context (optional, default true)"}
-                },
-                "required": ["label"]
-            }
-        },
-        {
-            "name": "memory_slot_append",
-            "description": "Append text content to a pinned memory slot.",
-            "inputSchema": {
-                "type": "object",
-                "properties": {
-                    "label": {"type": "string", "description": "The label of the pinned slot"},
-                    "text": {"type": "string", "description": "Text to append"}
-                },
-                "required": ["label", "text"]
-            }
-        },
-        {
-            "name": "memory_slot_replace",
-            "description": "Replace the content of a pinned memory slot.",
-            "inputSchema": {
-                "type": "object",
-                "properties": {
-                    "label": {"type": "string", "description": "The label of the pinned slot"},
-                    "content": {"type": "string", "description": "New content"}
-                },
-                "required": ["label", "content"]
-            }
-        },
-        {
-            "name": "memory_slot_delete",
-            "description": "Delete a pinned memory slot.",
-            "inputSchema": {
-                "type": "object",
-                "properties": {
-                    "label": {"type": "string", "description": "The label of the pinned slot to delete"}
-                },
-                "required": ["label"]
-            }
-        },
-        {
-            "name": "memory_action_create",
-            "description": "Create a new work item / action.",
-            "inputSchema": {
-                "type": "object",
-                "properties": {
-                    "title": {"type": "string", "description": "Title of the action"},
-                    "description": {"type": "string", "description": "Detailed description of the action (optional)"},
-                    "priority": {"type": "number", "description": "Priority score, higher is more urgent (optional, default 0)"},
-                    "status": {"type": "string", "description": "Status: pending, active, completed (optional, default 'pending')"},
-                    "tags": {
-                        "oneOf": [
-                            {"type": "string", "description": "Comma-separated tags (optional)"},
-                            {"type": "array", "items": {"type": "string"}, "description": "List of tags (optional)"}
-                        ]
-                    },
-                    "sessionId": {"type": "string", "description": "Link to a specific session ID (optional)"}
-                },
-                "required": ["title"]
-            }
-        },
-        {
-            "name": "memory_action_update",
-            "description": "Update fields of an existing action.",
-            "inputSchema": {
-                "type": "object",
-                "properties": {
-                    "actionId": {"type": "string", "description": "ID of the action to update"},
-                    "title": {"type": "string", "description": "Updated title (optional)"},
-                    "description": {"type": "string", "description": "Updated description (optional)"},
-                    "priority": {"type": "number", "description": "Updated priority (optional)"},
-                    "status": {"type": "string", "description": "Updated status: pending, active, completed, discarded (optional)"},
-                    "tags": {
-                        "oneOf": [
-                            {"type": "string", "description": "Comma-separated tags (optional)"},
-                            {"type": "array", "items": {"type": "string"}, "description": "List of tags (optional)"}
-                        ]
-                    },
-                    "sessionId": {"type": "string", "description": "Updated session ID (optional)"}
-                },
-                "required": ["actionId"]
-            }
-        },
-        {
-            "name": "memory_frontier",
-            "description": "Get pending and active actions sorted by priority.",
-            "inputSchema": {"type": "object", "properties": {}}
-        },
-        {
-            "name": "memory_crystallize",
-            "description": "Crystallize/summarize all observations in a session.",
-            "inputSchema": {
-                "type": "object",
-                "properties": {
-                    "sessionId": {"type": "string", "description": "Session ID to crystallize"}
-                },
-                "required": ["sessionId"]
+                    "folderPath": {"type": "string", "description": "Filter by folder path (optional)"},
+                    "agentId": {"type": "string", "description": "Filter by agent ID (optional)"},
+                    "limit": {"type": "integer", "description": "Max results (default 100)"},
+                    "before": {"type": "string", "description": "ISO timestamp upper bound (optional)"},
+                    "after": {"type": "string", "description": "ISO timestamp lower bound (optional)"}
+                }
             }
         }
     ]
@@ -2160,15 +1773,15 @@ def mcp_tools_call():
         if name == "memory_recall":
             q = args.get("query")
             limit = int(args.get("limit") or 10)
-            res = functions._hybrid_search.search(q, limit)
-            res = enrich_search_results(kv, res)
+            folder_path = args.get("folderPath")
+            agent_id = args.get("agentId")
+            res = functions.folder_search(kv, q, limit, folder_path=folder_path, agent_id=agent_id)
             text_out = json.dumps(res, indent=2)
             
         elif name == "memory_save":
             content = args.get("content")
             concepts = parse_mcp_list_arg(args.get("concepts"))
             files = parse_mcp_list_arg(args.get("files"))
-            session_id = args.get("sessionId")
             project = args.get("project")
             res = functions.remember(kv, {
                 "content": content,
@@ -2177,88 +1790,14 @@ def mcp_tools_call():
                 "files": files,
                 "project": project
             })
-            # If sessionId provided, also write observation so memory is linked to session
-            if session_id and project and content:
-                obs_payload = {
-                    "sessionId": session_id,
-                    "project": project,
-                    "cwd": "",
-                    "hookType": "post_tool_use",
-                    "timestamp": datetime_now_iso(),
-                    "agentId": functions.get_agent_id() or "agent",
-                    "data": {
-                        "tool_name": "memory_save",
-                        "tool_input": content[:500],
-                        "tool_output": res.get("id", ""),
-                    }
-                }
-                functions.observe(kv, obs_payload)
             text_out = json.dumps(res)
-            
-        elif name in ("memory_sessions", "memory_sessions_list"):
-            sessions = functions.list_sessions(kv)
-            text_out = json.dumps({"sessions": sessions}, indent=2)
             
         elif name == "memory_smart_search":
             q = args.get("query")
             limit = int(args.get("limit") or 10)
-            res = functions._hybrid_search.search(q, limit)
-            res = enrich_search_results(kv, res)
-            text_out = json.dumps(res, indent=2)
-            
-        elif name == "memory_timeline":
-            res = functions.timeline(kv, {
-                "anchor": args.get("anchor"),
-                "project": args.get("project"),
-                "sessionId": args.get("sessionId")
-            })
-            text_out = json.dumps(res, indent=2)
-            
-        elif name == "memory_observations":
-            session_id = args.get("sessionId")
-            if not session_id:
-                return jsonify({"error": "sessionId is required"}), 400
-            obs = kv.list(KV.observations(session_id))
-            obs.sort(key=lambda o: o.get("timestamp", ""))
-            text_out = json.dumps({"observations": obs}, indent=2)
-
-        elif name == "memory_profile":
-            res = functions.build_project_profile(kv, args.get("project"))
-            text_out = json.dumps(res, indent=2)
-            
-        elif name == "memory_lessons":
-            res = functions.lesson_list(kv, {
-                "project": args.get("project"),
-                "minConfidence": args.get("minConfidence"),
-                "limit": args.get("limit")
-            })
-            text_out = json.dumps(res, indent=2)
-
-        elif name == "memory_lesson_save":
-            res = functions.lesson_save(kv, {
-                "content": args.get("content"),
-                "context": args.get("context"),
-                "project": args.get("project")
-            })
-            text_out = json.dumps(res)
-            
-        elif name in ("memory_lesson_recall", "memory_lesson_search"):
-            res = functions.lesson_recall(kv, {
-                "query": args.get("query"),
-                "project": args.get("project")
-            })
-            text_out = json.dumps(res, indent=2)
-            
-        elif name == "memory_consolidate":
-            res = functions.consolidate(kv)
-            text_out = json.dumps(res, indent=2)
-            
-        elif name == "memory_reflect":
-            session_id = args.get("sessionId")
-            max_obs = int(args.get("maxObservations") or 50)
-            if not session_id:
-                return jsonify({"error": "sessionId is required"}), 400
-            res = functions.slot_reflect(kv, session_id, max_obs)
+            folder_path = args.get("folderPath")
+            agent_id = args.get("agentId")
+            res = functions.folder_search(kv, q, limit, folder_path=folder_path, agent_id=agent_id)
             text_out = json.dumps(res, indent=2)
 
         elif name == "memory_diagnose":
@@ -2269,221 +1808,69 @@ def mcp_tools_call():
             obs_ids = parse_mcp_list_arg(args.get("observationIds"))
             res = functions.forget(kv, {
                 "memoryId": args.get("memoryId"),
-                "sessionId": args.get("sessionId"),
+                "folderPath": args.get("folderPath"),
+                "agentId": args.get("agentId"),
                 "observationIds": obs_ids
             })
             text_out = json.dumps(res, indent=2)
 
         elif name == "memory_export":
-            max_sess = args.get("maxSessions")
-            offset = args.get("offset")
-            payload = {}
-            if max_sess is not None: payload["maxSessions"] = max_sess
-            if offset is not None: payload["offset"] = offset
-            res = functions.export_data(kv, payload)
+            res = functions.export_data(kv, {})
             text_out = json.dumps(res, indent=2)
 
         elif name == "agent_observe":
-            agent_id = args.get("agentId") or functions.get_agent_id() or "agent"
-            session_id = args.get("sessionId")
-            project = args.get("project")
-            text = args.get("text") or args.get("content")
-            obs_type = args.get("type") or "other"
-            title = args.get("title") or f"agent_{obs_type}"
-            cwd = args.get("cwd") or ""
-            
-            if not session_id or not project or not text:
-                return jsonify({"error": "sessionId, project, and text (or content) are required"}), 400
-                
+            folder_path = args.get("folderPath")
+            agent_id = args.get("agentId")
+            text = args.get("text") or args.get("content") or ""
+            if not folder_path or not agent_id or not text:
+                return jsonify({"error": "folderPath, agentId, and text are required"}), 400
+            timestamp = args.get("timestamp") or datetime_now_iso()
             payload = {
-                "sessionId": session_id,
-                "project": project,
-                "cwd": cwd,
-                "hookType": "post_tool_use",
-                "timestamp": datetime_now_iso(),
-                "agentId": agent_id,
-                "data": {
-                    "tool_name": title,
-                    "tool_input": text,
-                    "tool_output": text,
-                }
+                "folderPath": folder_path, "agentId": agent_id, "text": text,
+                "timestamp": timestamp, "type": args.get("type"), "title": args.get("title"),
+                "concepts": args.get("concepts"), "files": args.get("files"),
+                "importance": args.get("importance"),
             }
-            res = functions.observe(kv, payload)
+            res = functions.folder_observe(kv, payload)
             text_out = json.dumps(res)
 
         elif name == "agent_remember":
             agent_id = args.get("agentId") or functions.get_agent_id() or "agent"
             content = args.get("content")
             project = args.get("project")
-            session_id = args.get("sessionId")
             mem_type = args.get("type") or "fact"
             concepts = parse_mcp_list_arg(args.get("concepts"))
             files = parse_mcp_list_arg(args.get("files"))
-
-            if not content or not project:
-                return jsonify({"error": "content and project are required"}), 400
-
+            if not content:
+                return jsonify({"error": "content is required"}), 400
             payload = {
-                "content": content,
-                "type": mem_type,
-                "concepts": concepts,
-                "files": files,
-                "project": project,
-                "agentId": agent_id
+                "content": content, "type": mem_type, "concepts": concepts,
+                "files": files, "project": project, "agentId": agent_id
             }
             res = functions.remember(kv, payload)
-            # If sessionId provided, write observation to link memory to session
-            if session_id and content:
-                obs_payload = {
-                    "sessionId": session_id,
-                    "project": project,
-                    "cwd": "",
-                    "hookType": "post_tool_use",
-                    "timestamp": datetime_now_iso(),
-                    "agentId": agent_id,
-                    "data": {
-                        "tool_name": "agent_remember",
-                        "tool_input": content[:500],
-                        "tool_output": res.get("id", ""),
-                    }
-                }
-                functions.observe(kv, obs_payload)
             text_out = json.dumps(res)
-            
-        elif name == "memory_antigravity_sync":
-            mode = args.get("mode") or "current_session"
-            current_convo = args.get("currentConversationId")
-            current_folder = args.get("currentFolder")
-            res = perform_antigravity_sync(mode, current_convo, current_folder)
-            text_out = json.dumps(res)
-            
-        elif name == "memory_antigravity_sync_all":
-            mode = args.get("mode") or "current_session"
-            current_convo = args.get("currentConversationId")
-            current_folder = args.get("currentFolder")
-            sync_res = perform_antigravity_sync(mode, current_convo, current_folder)
-            
-            synced_sessions = sync_res.get("syncedSessions") or []
-            crystallizations = {}
-            reflections = {}
-            
-            for cid in synced_sessions:
-                session_id = f"antigravity_{cid[:18].replace('-', '_')}"
-                
-                try:
-                    cres = functions.summarize(kv, {"sessionId": session_id})
-                    crystallizations[session_id] = cres
-                except Exception as ex:
-                    crystallizations[session_id] = {"success": False, "error": str(ex)}
-                    
-                try:
-                    rres = functions.slot_reflect(kv, session_id, 50)
-                    reflections[session_id] = rres
-                except Exception as ex:
-                    reflections[session_id] = {"success": False, "error": str(ex)}
-                    
-            text_out = json.dumps({
-                "success": sync_res.get("success", True),
-                "syncedSessions": synced_sessions,
-                "observationsAdded": sync_res.get("observationsAdded", 0),
-                "crystallizations": crystallizations,
-                "reflections": reflections
-            }, indent=2)
-            
-        elif name == "memory_slot_list":
-            res = functions.slot_list(kv)
-            text_out = json.dumps(res, indent=2)
-            
-        elif name == "memory_slot_get":
-            label = args.get("label")
-            if not label:
-                return jsonify({"error": "label is required"}), 400
-            res = functions.slot_get(kv, label)
-            text_out = json.dumps(res, indent=2)
-            
-        elif name == "memory_slot_create":
-            label = args.get("label")
-            if not label:
-                return jsonify({"error": "label is required"}), 400
-            res = functions.slot_create(kv, {
-                "label": label,
-                "content": args.get("content"),
-                "scope": args.get("scope") or "global",
-                "sizeLimit": args.get("sizeLimit"),
-                "pinned": args.get("pinned", True)
-            })
-            text_out = json.dumps(res, indent=2)
-            
-        elif name == "memory_slot_append":
-            label = args.get("label")
-            text = args.get("text")
-            if not label or not text:
-                return jsonify({"error": "label and text are required"}), 400
-            res = functions.slot_append(kv, label, text)
-            text_out = json.dumps(res, indent=2)
-            
-        elif name == "memory_slot_replace":
-            label = args.get("label")
-            content = args.get("content")
-            if not label or content is None:
-                return jsonify({"error": "label and content are required"}), 400
-            res = functions.slot_replace(kv, label, content)
-            text_out = json.dumps(res, indent=2)
-            
-        elif name == "memory_slot_delete":
-            label = args.get("label")
-            if not label:
-                return jsonify({"error": "label is required"}), 400
-            res = functions.slot_delete(kv, label)
-            text_out = json.dumps(res, indent=2)
-            
-        elif name == "memory_action_create":
-            action_id = functions.generate_id("act")
-            from datetime import datetime, timezone
-            now = datetime.now(timezone.utc).isoformat()
-            tags = parse_mcp_list_arg(args.get("tags"))
-            action = {
-                "id": action_id,
-                "title": args.get("title") or "",
-                "description": args.get("description"),
-                "priority": args.get("priority", 0),
-                "status": args.get("status", "pending"),
-                "tags": tags,
-                "sessionId": args.get("sessionId"),
-                "createdAt": now,
-                "updatedAt": now,
-            }
-            kv.set(KV.actions, action_id, action)
-            text_out = json.dumps({"action": action, "success": True}, indent=2)
-            
-        elif name == "memory_action_update":
-            action_id = args.get("actionId")
-            if not action_id:
-                return jsonify({"error": "actionId is required"}), 400
-            existing = kv.get(KV.actions, action_id)
-            if not existing:
-                return jsonify({"error": "action not found"}), 404
-            from datetime import datetime, timezone
-            allowed_fields = {"title", "description", "priority", "status", "tags", "sessionId"}
-            updates = {k: v for k, v in args.items() if k in allowed_fields}
-            if "tags" in args:
-                updates["tags"] = parse_mcp_list_arg(args.get("tags"))
-            existing.update(updates)
-            existing["updatedAt"] = datetime.now(timezone.utc).isoformat()
-            kv.set(KV.actions, action_id, existing)
-            text_out = json.dumps({"action": existing, "success": True}, indent=2)
-            
-        elif name == "memory_frontier":
-            items = kv.list(KV.actions)
-            frontier = [a for a in items if a.get("status") in ("pending", "active")]
-            frontier.sort(key=lambda a: (-(a.get("priority") or 0), a.get("createdAt", "")))
-            text_out = json.dumps({"frontier": frontier[:50], "total": len(frontier)}, indent=2)
-            
-        elif name == "memory_crystallize":
-            session_id = args.get("sessionId")
-            if not session_id:
-                return jsonify({"error": "sessionId is required"}), 400
-            res = functions.summarize(kv, {"sessionId": session_id})
+
+        elif name == "memory_folders":
+            pairs = sorted(kv.list(functions.KV.folders), key=lambda x: x.get("lastUpdated", ""), reverse=True)
+            text_out = json.dumps(pairs, indent=2)
+
+        elif name == "memory_folder_observations":
+            fp = args.get("folderPath", "")
+            aid = args.get("agentId", "")
+            if not fp or not aid:
+                return jsonify({"error": "folderPath and agentId are required"}), 400
+            obs = sorted(kv.list(functions.KV.folder_obs(fp, aid)), key=lambda x: x.get("timestamp", ""), reverse=True)
+            text_out = json.dumps(obs, indent=2)
+
+        elif name == "memory_timeline":
+            res = functions.folder_timeline(
+                kv,
+                limit=int(args.get("limit", 100)),
+                folder_path=args.get("folderPath"),
+                agent_id=args.get("agentId"),
+                before=args.get("before"),
+                after=args.get("after"),
+            )
             text_out = json.dumps(res, indent=2)
             
         else:
