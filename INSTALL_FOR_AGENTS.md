@@ -105,7 +105,85 @@ After wiring, the agent should list agentmemory's tools. With the server running
 
 If you see 0 tools or an error, check that `python src/app.py` is running and `AGENTMEMORY_URL` points at it.
 
-## 6. Open the viewer (optional)
+## 6. Setting up agent hooks
+
+Agent hooks post observations to agentmemory automatically on every tool use, command, or edit — no manual calls required. Hook scripts live in the [`hooks/`](hooks/) directory.
+
+### Claude Code (`hooks/claude-code-hook.sh`)
+
+Add a `PostToolUse` hook to `.claude/settings.json`. The hook script reads `AGENTMEMORY_URL` and `AGENTMEMORY_SECRET` from your shell environment, so no secrets are embedded in the config file.
+
+```json
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash /path/to/hooks/claude-code-hook.sh"
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+Set the required environment variables before starting Claude Code:
+
+```bash
+export AGENTMEMORY_URL=http://127.0.0.1:3111
+export AGENTMEMORY_SECRET=your-secret-here   # omit if no auth set
+```
+
+The script picks up `$PWD` as `folderPath` and `$CLAUDE_AGENT_ID` (falling back to `"claude-code"`) as `agentId`.
+
+### Cursor (`hooks/cursor-hook.js`)
+
+Require the hook from your `.cursorrules` file (or any JS entry point Cursor runs) and call `logObservation()` with the tool name and input:
+
+```js
+const { logObservation } = require('/path/to/hooks/cursor-hook.js');
+
+// Call inside your Cursor hook handler, e.g. after every tool invocation:
+logObservation(`Tool: ${toolName}\nInput: ${JSON.stringify(toolInput)}`);
+```
+
+The module reads `AGENTMEMORY_URL`, `AGENTMEMORY_SECRET`, and `AGENTMEMORY_AGENT_ID` from `process.env`. Set them in your shell profile or in Cursor's environment settings.
+
+### PowerShell terminal (`hooks/powershell-hook.ps1`)
+
+Add a single dot-source line to your PowerShell `$PROFILE` to activate automatic command logging:
+
+```powershell
+. C:\path\to\hooks\powershell-hook.ps1
+```
+
+Set the required variables in `$PROFILE` before the dot-source line:
+
+```powershell
+$env:AGENTMEMORY_URL      = "http://127.0.0.1:3111"
+$env:AGENTMEMORY_SECRET   = "your-secret-here"   # omit if no auth set
+$env:AGENTMEMORY_AGENT_ID = "powershell"
+```
+
+The hook installs a PSReadLine `CommandValidationHandler` that fires a background job on every command you run. If PSReadLine is not available, call `Send-AgentMemoryObservation -Text "..."` manually.
+
+### `.env` file format
+
+All hooks and the server itself read credentials from `~/.agentmemory/.env`. Create this file if it doesn't exist:
+
+```
+III_REST_PORT=3111
+AGENTMEMORY_SECRET=your-secret-here
+GEMINI_API_KEY=your-gemini-key-here
+```
+
+The server loads this file on startup. Hook scripts read the same variables from your shell environment (export them from your profile after sourcing `~/.agentmemory/.env`, or use `direnv` / `dotenv` tooling).
+
+## 7. Open the viewer (optional)
 
 ```bash
 open http://localhost:3111/viewer

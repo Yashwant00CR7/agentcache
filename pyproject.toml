@@ -1,0 +1,42 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.backends.legacy:build"
+
+[project]
+name = "agentmemory"
+version = "0.9.8"
+description = "A Python REST + WebSocket + MCP memory server for AI agents, backed by SQLite"
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.10"
+dependencies = [
+    "flask>=3.0.0",
+    "flask-sock>=0.7.0",
+    "requests>=2.31.0",
+    "python-dateutil>=2.8.2",
+    "huggingface_hub>=0.20.0",
+    "websockets>=12.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "hypothesis>=6.100.0",
+]
+local-embeddings = [
+    "sentence-transformers>=2.7.0",
+]
+
+[project.scripts]
+agentmemory = "src.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["src*"]
+
+[tool.setuptools.package-data]
+"src.viewer" = ["*.html", "*.svg", "*.js", "*.css"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]

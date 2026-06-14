@@ -40,31 +40,20 @@ concurrency:
 
 jobs:
   test:
-    runs-on: ${{ matrix.os }}
+    runs-on: ubuntu-latest
     strategy:
-      # Don't bail the whole matrix on one cell's failure — we want to
-      # see whether the same failure reproduces across OSes (e.g.
-      # whether a flake is platform-specific or universal).
-      fail-fast: false
       matrix:
-        # Windows held back: test/obsidian-export.test.ts has hardcoded
-        # POSIX paths (`/tmp/...`) that fail on D:\ drive runners.
-        # src/functions/obsidian-export.ts needs os.tmpdir() + path.join
-        # rework before Windows can be added back. Tracked as follow-up.
-        os: [ubuntu-latest, macos-latest]
-        node-version: [20, 22]
+        python-version: ["3.10", "3.11", "3.12"]
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
-          persist-credentials: false
-      - uses: actions/setup-node@v6
-        with:
-          node-version: ${{ matrix.node-version }}
-      # Two-step install: generate a lockfile in-runner with
-      # --package-lock-only, then install from it with `npm ci`.
-      # Lockfiles are gitignored at the repo level.
-      - run: npm install --package-lock-only --legacy-peer-deps --no-audit --no-fund
-      - run: npm ci --legacy-peer-deps --no-audit --no-fund
-      - run: npm run build
-      - run: npm run skills:check
-      - run: npm test
+          python-version: ${{ matrix.python-version }}
+      - name: Install dependencies
+        run: pip install -e ".[dev]"
+      - name: Run tests
+        run: pytest tests/ -v --tb=short
+      - name: Build package
+        run: |
+          pip install build
+          python -m build

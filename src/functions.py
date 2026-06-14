@@ -5,6 +5,7 @@ import uuid
 import json
 import hashlib
 import datetime
+import threading
 from typing import Dict, Any, List, Optional, Tuple, Set
 from db import StateKV
 from search import (
@@ -65,6 +66,31 @@ class KV:
 
     # Graph edges — repurposed for folder graph edges.
     relations = "mem:relations"
+
+    # ---- Legacy scopes (read-only; kept for migration and backward compat) ----
+
+    # Legacy session store — read by migrate_sessions_to_folders() and legacy observe().
+    sessions = "mem:sessions"
+
+    @staticmethod
+    def observations(session_id: str) -> str:
+        """Legacy per-session observations scope.
+        Key = obs_id, value = raw/synthetic observation dict.
+        Read by migrate_sessions_to_folders() and legacy observe().
+        """
+        return f"mem:obs:{session_id}"
+
+    # Lessons — confidence-scored learning entries.
+    lessons = "mem:lessons"
+
+    # Legacy summary / profile / slot / image-ref scopes retained for legacy code paths.
+    summaries = "mem:summaries"
+    profiles = "mem:profiles"
+    slots = "mem:slots"
+    imageRefs = "mem:image-refs"
+
+    # Global (cross-project) pinned slots.
+    globalSlots = "mem:global-slots"
 
 def get_current_project(kv: StateKV) -> Optional[str]:
     try:
@@ -141,7 +167,17 @@ def normalize_folder_path(path: str) -> str:
     # 1. Length cap before any processing.
     path = path[:_MAX_PATH_LEN]
 
-    # 2. OS-level normalisation (resolves .., duplicate separators, etc.)
+    # Pre-normalisation traversal check: reject any path that contains a ".."
+    # component in the raw input before normpath has a chance to resolve it.
+    # This catches inputs like "/home/user/../../etc/passwd" which normpath
+    # would silently resolve to "etc/passwd" (REQ-064).
+    raw_parts = path.replace("\\", "/").split("/")
+    if any(part == ".." for part in raw_parts):
+        raise ValueError(
+            f"folder_path contains path traversal segment '..': {path!r}"
+        )
+
+    # 2. OS-level normalisation (resolves duplicate separators, etc.)
     normalized = os.path.normpath(path)
 
     # 3. Unify separators to forward slash.
@@ -150,9 +186,7 @@ def normalize_folder_path(path: str) -> str:
     # 4. Strip leading / trailing slashes.
     normalized = normalized.strip("/")
 
-    # Guard: reject path traversal patterns that survive normalisation.
-    # Split on "/" and check each component; normpath should have already
-    # resolved most cases but we verify explicitly for safety.
+    # Guard: also reject any ".." that somehow survives normalisation.
     parts = normalized.split("/")
     if any(part == ".." for part in parts):
         raise ValueError(
@@ -423,29 +457,74 @@ def touch_image(file_path: str) -> None:
 # =====================================================================
 
 class IndexPersistence:
+    """Persist BM25 and vector indexes to the KV store with a debounce queue.
+
+    A4.1: schedule_save() uses a threading.Timer that resets on each call and
+    fires the actual save() after DEBOUNCE_SECONDS of inactivity.  This prevents
+    a persistence write on every single observation under high throughput.
+
+    A4.2: save() skips writing an index that has not been dirtied since the last
+    save (relies on SearchIndex._dirty / VectorIndex._dirty flags).
+    """
+
+    DEBOUNCE_SECONDS: float = 5.0
+
     def __init__(self, kv: StateKV, bm25: SearchIndex, vector: Optional[VectorIndex]):
         self.kv = kv
         self.bm25 = bm25
         self.vector = vector
+        self._timer: Optional[threading.Timer] = None
+        self._timer_lock = threading.Lock()
 
     def schedule_save(self) -> None:
+        """Schedule a debounced save — resets the 5-second timer on each call."""
+        with self._timer_lock:
+            if self._timer is not None:
+                self._timer.cancel()
+            self._timer = threading.Timer(self.DEBOUNCE_SECONDS, self._fire_save)
+            self._timer.daemon = True
+            self._timer.start()
+
+    def _fire_save(self) -> None:
+        """Called by the timer after DEBOUNCE_SECONDS of inactivity."""
+        with self._timer_lock:
+            self._timer = None
+        self.save()
+
+    def flush(self) -> None:
+        """Cancel any pending debounce timer and save immediately (used on shutdown)."""
+        with self._timer_lock:
+            if self._timer is not None:
+                self._timer.cancel()
+                self._timer = None
         self.save()
 
     def save(self) -> None:
         try:
-            self.save_sharded_index(
-                json.dumps(self.bm25.serialize_data()),
-                "data:manifest",
-                "data",
-                "mem:index:bm25:bm25:"
-            )
-            if self.vector:
+            # A4.2: skip save if neither index is dirty
+            bm25_dirty = getattr(self.bm25, "_dirty", True)
+            vector_dirty = self.vector and getattr(self.vector, "_dirty", True)
+
+            if bm25_dirty:
+                self.save_sharded_index(
+                    json.dumps(self.bm25.serialize_data()),
+                    "data:manifest",
+                    "data",
+                    "mem:index:bm25:bm25:"
+                )
+                self.bm25._dirty = False  # A4.2 — reset after save
+
+            if self.vector and vector_dirty:
                 self.save_sharded_index(
                     json.dumps(self.vector.serialize_data()),
                     "vectors:manifest",
                     "vectors",
                     "mem:index:bm25:vectors:"
                 )
+                self.vector._dirty = False  # A4.2 — reset after save
+
+            if not bm25_dirty and not vector_dirty:
+                print("[index persistence] indexes not dirty — skipping save")
         except Exception as e:
             print(f"[index persistence] failed to save index: {e}")
 
@@ -482,34 +561,31 @@ class IndexPersistence:
         # Cleanup ALL obsolete shards starting with scope_prefix that are NOT in the current shards
         try:
             conn = self.kv._get_conn()
+            cursor = conn.cursor()
             try:
-                cursor = conn.cursor()
-                try:
-                    cursor.execute(
-                        "SELECT DISTINCT scope FROM kv_store WHERE scope LIKE ?",
-                        (scope_prefix + "%",)
-                    )
-                    rows = cursor.fetchall()
-                    current_scopes = {s["scope"] for s in shards}
-                    to_delete = []
-                    for row in rows:
-                        scope_name = row["scope"]
-                        if scope_name not in current_scopes:
-                            to_delete.append(scope_name)
-                    
-                    if to_delete:
-                        for i in range(0, len(to_delete), 50):
-                            chunk_delete = to_delete[i:i + 50]
-                            format_strings = ','.join(['?'] * len(chunk_delete))
-                            cursor.execute(
-                                f"DELETE FROM kv_store WHERE scope IN ({format_strings})",
-                                tuple(chunk_delete)
-                            )
-                            conn.commit()
-                finally:
-                    cursor.close()
+                cursor.execute(
+                    "SELECT DISTINCT scope FROM kv_store WHERE scope LIKE ?",
+                    (scope_prefix + "%",)
+                )
+                rows = cursor.fetchall()
+                current_scopes = {s["scope"] for s in shards}
+                to_delete = []
+                for row in rows:
+                    scope_name = row["scope"]
+                    if scope_name not in current_scopes:
+                        to_delete.append(scope_name)
+                
+                if to_delete:
+                    for i in range(0, len(to_delete), 50):
+                        chunk_delete = to_delete[i:i + 50]
+                        format_strings = ','.join(['?'] * len(chunk_delete))
+                        cursor.execute(
+                            f"DELETE FROM kv_store WHERE scope IN ({format_strings})",
+                            tuple(chunk_delete)
+                        )
+                        conn.commit()
             finally:
-                conn.close()
+                cursor.close()
         except Exception as ex:
             print(f"[index persistence] error cleaning up obsolete shards: {ex}")
 
@@ -2732,8 +2808,7 @@ def auto_forget(kv: StateKV, dry_run: bool = False) -> Dict[str, Any]:
 def health_check(kv: StateKV) -> Dict[str, Any]:
     db_status = "connected"
     try:
-        conn = kv._get_conn()
-        conn.close()
+        kv._get_conn()  # connection stays open per-thread (A3.1)
     except Exception:
         db_status = "disconnected"
 
@@ -2754,8 +2829,6 @@ def health_check(kv: StateKV) -> Dict[str, Any]:
                 unique_folders.add(fp)
             if aid:
                 unique_agents.add(aid)
-            # Use the stored obsCount in the index entry for efficiency;
-            # fall back to 0 if missing.
             observation_count += int(entry.get("obsCount") or 0)
         folder_count = len(unique_folders)
         agent_count = len(unique_agents)
@@ -2781,6 +2854,29 @@ def health_check(kv: StateKV) -> Dict[str, Any]:
     except Exception:
         pass
 
+    # C4.2: Read sync state written by sync.py
+    sync_status = "never"
+    last_sync_at = None
+    db_size_bytes = 0
+    wal_size_bytes = 0
+    try:
+        sync_state_path = os.path.join(os.path.expanduser("~"), ".agentmemory", ".sync_state")
+        if os.path.exists(sync_state_path):
+            with open(sync_state_path, "r", encoding="utf-8") as _sf:
+                _sync = json.loads(_sf.read())
+            sync_status = _sync.get("sync_status", "never")
+            last_sync_at = _sync.get("last_sync_at")
+    except Exception:
+        pass
+
+    # A3.3: DB file sizes
+    try:
+        db_stats = kv.stats()
+        db_size_bytes = db_stats.get("db_size_bytes", 0)
+        wal_size_bytes = db_stats.get("wal_size_bytes", 0)
+    except Exception:
+        pass
+
     return {
         "status": "ok" if db_status == "connected" else "degraded",
         "folderCount": folder_count,
@@ -2791,6 +2887,10 @@ def health_check(kv: StateKV) -> Dict[str, Any]:
         "bm25IndexSize": bm25_index_size,
         "vectorIndexSize": vector_index_size,
         "dbPath": kv.db_path,
+        "dbSizeBytes": db_size_bytes,
+        "walSizeBytes": wal_size_bytes,
+        "syncStatus": sync_status,
+        "lastSyncAt": last_sync_at,
     }
 
 def strip_xml_wrappers(raw: str) -> str:
@@ -3330,7 +3430,7 @@ def consolidate(kv: StateKV, project: Optional[str] = None, min_observations: in
 # =====================================================================
 
 def folder_color(path: str) -> str:
-    """Hash a folder path string to an HSL hex color.
+    """Hash a folder path string to an HSL color string.
 
     Replicates the JS ``folderColor(id)`` function in src/viewer/index.html
     exactly, using the light-mode lightness range (38 + h%14).
@@ -3341,7 +3441,9 @@ def folder_color(path: str) -> str:
         hue = (h % 360 + 360) % 360
         sat = 55 + (h % 25)          # percent, 55-79
         lig = 38 + (h % 14)          # percent, 38-51 (light mode)
-        convert HSL → RGB → hex
+
+    Returns:
+        A CSS ``hsl(hue, sat%, lig%)`` string.
     """
     h = 0
     for ch in path:
@@ -3351,17 +3453,7 @@ def folder_color(path: str) -> str:
     sat_pct = 55 + (h % 25)
     lig_pct = 38 + (h % 14)
 
-    # HSL → RGB conversion (same formula as in JS)
-    s = sat_pct / 100.0
-    l = lig_pct / 100.0
-    a = s * min(l, 1 - l)
-
-    def f(n: int) -> str:
-        k = (n + hue / 30) % 12
-        c = l - a * max(min(k - 3, 9 - k, 1), -1)
-        return format(round(255 * c), '02x')
-
-    return '#' + f(0) + f(8) + f(4)
+    return f"hsl({hue}, {sat_pct}%, {lig_pct}%)"
 
 
 def folder_graph_build(kv: StateKV) -> Dict[str, Any]:
@@ -3450,11 +3542,12 @@ def folder_graph_build(kv: StateKV) -> Dict[str, Any]:
 
     # --- Build edges ---
     edges: List[Dict[str, Any]] = []
-    # Deduplicate on (source, target, type)
-    seen_edges: Set[Tuple[str, str, str]] = set()
+    # Deduplicate on (frozenset(source, target), type) so that (A,B) and (B,A)
+    # are treated as the same edge (REQ-028).
+    seen_edges: Set[Tuple[Any, str]] = set()
 
     def add_edge(edge: Dict[str, Any]) -> None:
-        key = (edge["source"], edge["target"], edge["type"])
+        key = (frozenset([edge["source"], edge["target"]]), edge["type"])
         if key not in seen_edges:
             seen_edges.add(key)
             edges.append(edge)

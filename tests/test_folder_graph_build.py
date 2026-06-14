@@ -8,7 +8,7 @@ import pytest
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 from db import StateKV
-from functions import KV, folder_graph_build, folderColor
+from functions import KV, folder_graph_build, folder_color as folderColor
 
 
 # ---------------------------------------------------------------------------

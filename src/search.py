@@ -273,6 +273,7 @@ class SearchIndex:
         self.doc_term_counts: Dict[str, Dict[str, int]] = {}
         self.total_doc_length = 0
         self.sorted_terms: Optional[List[str]] = None
+        self._dirty: bool = False  # A4.2
 
         self.k1 = 1.2
         self.b = 0.75
@@ -304,6 +305,7 @@ class SearchIndex:
             self.inverted_index[term].add(obs_id)
 
         self.sorted_terms = None
+        self._dirty = True  # A4.2
 
     def has(self, id: str) -> bool:
         return id in self.entries
@@ -326,6 +328,7 @@ class SearchIndex:
         self.total_doc_length = max(0, self.total_doc_length - entry["termCount"])
         self.entries.pop(id, None)
         self.sorted_terms = None
+        self._dirty = True  # A4.2
 
     def search(self, query: str, limit: int = 20) -> List[Dict[str, Any]]:
         raw_terms = self.tokenize(query.lower())
@@ -429,6 +432,7 @@ class SearchIndex:
         for id_, counts in data.get("docTerms", []):
             self.doc_term_counts[id_] = dict(counts)
         self.total_doc_length = int(data.get("totalDocLength", 0))
+        self._dirty = False  # A4.2 — freshly loaded, not dirty
 
     def serialize_data(self) -> Dict[str, Any]:
         entries = list(self.entries.items())
@@ -514,12 +518,16 @@ def cosine_similarity(a: List[float], b: List[float]) -> float:
 class VectorIndex:
     def __init__(self):
         self.vectors: Dict[str, Dict[str, Any]] = {}
+        self._dirty: bool = False  # A4.2
 
     def add(self, obs_id: str, session_id: str, embedding: List[float]) -> None:
         self.vectors[obs_id] = {"embedding": embedding, "sessionId": session_id}
+        self._dirty = True  # A4.2
 
     def remove(self, obs_id: str) -> None:
-        self.vectors.pop(obs_id, None)
+        if obs_id in self.vectors:
+            self.vectors.pop(obs_id, None)
+            self._dirty = True  # A4.2
 
     def search(self, query: List[float], limit: int = 20) -> List[Dict[str, Any]]:
         results = []
@@ -739,3 +747,94 @@ class HybridSearch:
 
         combined.sort(key=lambda x: x["combinedScore"], reverse=True)
         return combined[:limit]
+
+
+# =====================================================================
+# OpenAI Embedding Client (D5.1)
+# =====================================================================
+
+class OpenAIEmbeddingProvider:
+    """OpenAI text-embedding-3-small provider (1536 dims).
+
+    Uses urllib.request only — no new dependencies.
+    Reads API key from OPENAI_API_KEY env var.
+    """
+
+    def __init__(self, api_key: str):
+        self.name = "openai"
+        self.dimensions = 1536
+        self.api_key = api_key
+        self.model = "text-embedding-3-small"
+        self.api_url = "https://api.openai.com/v1/embeddings"
+
+    def embed(self, text: str) -> List[float]:
+        return self.embed_batch([text])[0]
+
+    def embed_batch(self, texts: List[str]) -> List[List[float]]:
+        results: List[List[float]] = []
+        # OpenAI supports up to 2048 inputs per request; batch in chunks of 100
+        batch_limit = 100
+        for i in range(0, len(texts), batch_limit):
+            chunk = texts[i : i + batch_limit]
+            payload = json.dumps({"model": self.model, "input": chunk}).encode("utf-8")
+            req = urllib.request.Request(
+                self.api_url,
+                data=payload,
+                headers={
+                    "Content-Type": "application/json",
+                    "Authorization": f"Bearer {self.api_key}",
+                },
+                method="POST",
+            )
+            try:
+                with urllib.request.urlopen(req, timeout=30.0) as response:
+                    resp_data = json.loads(response.read().decode("utf-8"))
+                # Sort by index to preserve order
+                embeddings_sorted = sorted(resp_data.get("data", []), key=lambda e: e["index"])
+                for emb in embeddings_sorted:
+                    results.append(self._l2_normalize(emb["embedding"]))
+            except Exception as e:
+                raise RuntimeError(f"OpenAI embedding batch call failed: {e}")
+        return results
+
+    def _l2_normalize(self, vec: List[float]) -> List[float]:
+        sum_sq = sum(x * x for x in vec)
+        norm = math.sqrt(sum_sq)
+        if norm == 0:
+            return vec
+        return [x / norm for x in vec]
+
+
+# =====================================================================
+# SentenceTransformer Local Provider (D5.2)
+# =====================================================================
+
+class SentenceTransformerProvider:
+    """Local sentence-transformers provider (optional install).
+
+    Default model: all-MiniLM-L6-v2 (384 dims).
+    Override via AGENTMEMORY_LOCAL_EMBEDDING_MODEL env var.
+
+    Install: pip install sentence-transformers
+    """
+
+    def __init__(self, model_name: Optional[str] = None):
+        model_name = model_name or "all-MiniLM-L6-v2"
+        self.name = "sentence-transformers"
+        try:
+            from sentence_transformers import SentenceTransformer  # type: ignore
+            self._model = SentenceTransformer(model_name)
+            self.dimensions = self._model.get_sentence_embedding_dimension()
+            print(f"[search] SentenceTransformerProvider loaded: {model_name} ({self.dimensions} dims)")
+        except ImportError:
+            raise ImportError(
+                "sentence-transformers is not installed. "
+                "Run: pip install sentence-transformers  or  pip install agentmemory[local-embeddings]"
+            )
+
+    def embed(self, text: str) -> List[float]:
+        return self.embed_batch([text])[0]
+
+    def embed_batch(self, texts: List[str]) -> List[List[float]]:
+        embeddings = self._model.encode(texts, show_progress_bar=False, normalize_embeddings=True)
+        return [emb.tolist() for emb in embeddings]
