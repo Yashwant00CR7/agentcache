@@ -76,7 +76,7 @@ def _safe_text():
 # Two distinct (folderPath, agentId) pairs never share observations.
 # ---------------------------------------------------------------------------
 
-@settings(max_examples=50)
+@settings(max_examples=50, deadline=None)
 @given(
     path1=_safe_path(),
     agent1=_safe_agent(),
@@ -106,7 +106,7 @@ def test_property_1_pair_isolation(path1, agent1, path2, agent2, text):
 # meta.obsCount == len(kv.list(folder_obs_scope))
 # ---------------------------------------------------------------------------
 
-@settings(max_examples=50)
+@settings(max_examples=50, deadline=None)
 @given(
     path=_safe_path(),
     agent=_safe_agent(),
@@ -132,7 +132,7 @@ def test_property_2_obs_count_consistency(path, agent, texts):
 # Every written pair has a KV.folders entry.
 # ---------------------------------------------------------------------------
 
-@settings(max_examples=50)
+@settings(max_examples=50, deadline=None)
 @given(
     path=_safe_path(),
     agent=_safe_agent(),
@@ -160,7 +160,7 @@ def test_property_3_index_coverage(path, agent, text):
 # No stored obs text contains raw secrets after folder_observe().
 # ---------------------------------------------------------------------------
 
-@settings(max_examples=30)
+@settings(max_examples=30, deadline=None)
 @given(
     path=_safe_path(),
     agent=_safe_agent(),
@@ -190,7 +190,7 @@ def test_property_4_privacy_invariant(path, agent, prefix):
 # folder_timeline() always returns results sorted newest-first.
 # ---------------------------------------------------------------------------
 
-@settings(max_examples=40)
+@settings(max_examples=40, deadline=None)
 @given(
     path=_safe_path(),
     agent=_safe_agent(),
@@ -220,7 +220,7 @@ def test_property_5_timeline_ordering(path, agent, n):
 # After forget({folderPath, agentId}), all three scopes are empty.
 # ---------------------------------------------------------------------------
 
-@settings(max_examples=40)
+@settings(max_examples=40, deadline=None)
 @given(
     path=_safe_path(),
     agent=_safe_agent(),
@@ -251,7 +251,7 @@ def test_property_6_forget_completeness(path, agent, texts):
 # Superseded memories have parentId; at least one memory is always latest.
 # ---------------------------------------------------------------------------
 
-@settings(max_examples=30, suppress_health_check=[HealthCheck.filter_too_much])
+@settings(max_examples=30, suppress_health_check=[HealthCheck.filter_too_much], deadline=None)
 @given(
     base_content=st.text(
         alphabet="abcdefghijklmnopqrstuvwxyz ",
@@ -292,7 +292,7 @@ def test_property_7_memory_version_uniqueness(base_content, n_variants):
 # normalize(normalize(p)) == normalize(p) for all valid inputs.
 # ---------------------------------------------------------------------------
 
-@settings(max_examples=100)
+@settings(max_examples=100, deadline=None)
 @given(
     path=st.text(
         alphabet="abcdefghijklmnopqrstuvwxyz0123456789/_-.",

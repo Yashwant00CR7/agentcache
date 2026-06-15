@@ -60,3 +60,7 @@ export III_REST_PORT=7860
 # Start Flask application in the foreground
 echo "[start] Starting Flask application on port 7860..."
 python3 src/app.py
+
+# Perform a final backup on shutdown
+echo "[start] Flask application exited. Performing final backup..."
+python3 /app/sync.py backup

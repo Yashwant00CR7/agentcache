@@ -57,7 +57,8 @@ def api_observe():
         body = request.get_json(force=True) or {}
 
         # Compat shim: accept both folder-based and legacy session-based payloads.
-        # Old clients send sessionId/project/cwd; new clients send folderPath/agentId.
+        # Old clients send sessionId/project/cwd + data{tool_input/output}
+        # New clients send folderPath/agentId/text
         folder_path = (
             body.get("folderPath")
             or body.get("cwd")
@@ -72,7 +73,22 @@ def api_observe():
             or os.getenv("AGENT_ID")
             or "agent"
         )
+
+        # Build text from whichever field the client used
         text = body.get("text") or body.get("content") or ""
+        if not text:
+            # Legacy clients put content in a nested 'data' dict
+            data = body.get("data")
+            if isinstance(data, dict):
+                parts = [str(v) for k, v in data.items()
+                         if v and k in ("tool_input", "tool_output", "prompt",
+                                        "response", "tool_name", "content")]
+                text = " | ".join(parts) if parts else str(data)
+            elif isinstance(data, str):
+                text = data
+        if not text:
+            # Last resort: use hookType as a minimal marker so we don't 400
+            text = body.get("hookType") or "observation"
 
         payload = {
             "folderPath": folder_path,
@@ -89,9 +105,9 @@ def api_observe():
         return jsonify(res), 201
     except Exception as e:
         import traceback
-        print(f"[observe] 400 — keys={list(body.keys())} {type(e).__name__}: {e}")
-        print(traceback.format_exc())
-        return jsonify({"error": str(e), "detail": type(e).__name__}), 400
+        tb = traceback.format_exc()
+        print(f"[observe] 400 — keys={list(body.keys())} {type(e).__name__}: {e}\n{tb}")
+        return jsonify({"error": str(e), "detail": type(e).__name__, "keys": list(body.keys()), "tb": tb}), 400
 
 
 # ---------------------------------------------------------------------------
@@ -155,6 +171,10 @@ def api_folders():
         key=lambda x: x.get("lastUpdated", ""),
         reverse=True,
     )
+    if functions.is_agent_scope_isolated():
+        aid = functions.get_agent_id()
+        if aid:
+            folders = [f for f in folders if f.get("agentId") == aid]
     return jsonify({"folders": folders}), 200
 
 
@@ -171,6 +191,10 @@ def api_folder_observations():
     aid = request.args.get("agentId")
     if not fp or not aid:
         return jsonify({"error": "folderPath and agentId are required"}), 400
+    if functions.is_agent_scope_isolated():
+        current_aid = functions.get_agent_id()
+        if current_aid and aid != current_aid:
+            return jsonify({"error": "Unauthorized: Agent scope is isolated to another agent"}), 403
     observations = sorted(
         _get_kv().list(KV.folder_obs(fp, aid)),
         key=lambda x: x.get("timestamp", ""),

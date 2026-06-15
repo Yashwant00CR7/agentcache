@@ -59,55 +59,9 @@ def api_graph_stats():
         return auth_err
 
     kv = _get_kv()
-    sessions = functions.list_sessions(kv)
-    memories = kv.list(KV.memories)
-
-    folders = set()
-    concepts_by_folder = {}
-
-    for s in sessions:
-        project = s.get("project", "").strip()
-        if project:
-            folders.add(project)
-
-    for m in memories:
-        project = m.get("project", "").strip()
-        if project:
-            folders.add(project)
-            concepts = m.get("concepts", [])
-            if concepts:
-                if project not in concepts_by_folder:
-                    concepts_by_folder[project] = set()
-                for c in concepts:
-                    if isinstance(c, str):
-                        concepts_by_folder[project].add(c.lower())
-
-    node_count = len(folders)
-    edge_count = 0
-    folder_list = list(folders)
-
-    for i in range(len(folder_list)):
-        for j in range(i + 1, len(folder_list)):
-            f1 = folder_list[i]
-            f2 = folder_list[j]
-
-            c1 = concepts_by_folder.get(f1, set())
-            c2 = concepts_by_folder.get(f2, set())
-            shared = c1.intersection(c2)
-
-            p1 = [p for p in f1.replace("\\", "/").split("/") if p]
-            p2 = [p for p in f2.replace("\\", "/").split("/") if p]
-            common_subdirs = 0
-            for k in range(min(len(p1), len(p2))):
-                if p1[k].lower() == p2[k].lower():
-                    p_low = p1[k].lower()
-                    if p_low not in ("c:", "d:", "downloads", "projects", "other projects"):
-                        common_subdirs += 1
-                else:
-                    break
-
-            if len(shared) > 0 or common_subdirs > 0:
-                edge_count += 1
+    g = functions.folder_graph_build(kv)
+    node_count = len(g.get("nodes", []))
+    edge_count = len(g.get("edges", []))
 
     return jsonify({"nodes": node_count, "edges": edge_count, "success": True}), 200
 

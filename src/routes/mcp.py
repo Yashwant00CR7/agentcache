@@ -247,6 +247,12 @@ def mcp_tools_call():
             limit = int(args.get("limit") or 10)
             folder_path = args.get("folderPath")
             agent_id = args.get("agentId")
+            if functions.is_agent_scope_isolated():
+                current_aid = functions.get_agent_id()
+                if current_aid:
+                    if agent_id and agent_id != current_aid:
+                        return jsonify({"error": "Unauthorized: Agent scope is isolated"}), 403
+                    agent_id = current_aid
             res = functions.folder_search(kv, q, limit, folder_path=folder_path, agent_id=agent_id)
             text_out = json.dumps(res, indent=2)
 
@@ -269,6 +275,12 @@ def mcp_tools_call():
             limit = int(args.get("limit") or 10)
             folder_path = args.get("folderPath")
             agent_id = args.get("agentId")
+            if functions.is_agent_scope_isolated():
+                current_aid = functions.get_agent_id()
+                if current_aid:
+                    if agent_id and agent_id != current_aid:
+                        return jsonify({"error": "Unauthorized: Agent scope is isolated"}), 403
+                    agent_id = current_aid
             res = functions.folder_search(kv, q, limit, folder_path=folder_path, agent_id=agent_id)
             text_out = json.dumps(res, indent=2)
 
@@ -313,6 +325,13 @@ def mcp_tools_call():
                     or "agent"
                 )
 
+            if functions.is_agent_scope_isolated():
+                current_aid = functions.get_agent_id()
+                if current_aid:
+                    if agent_id and agent_id != current_aid:
+                        return jsonify({"error": "Unauthorized: Agent scope is isolated"}), 403
+                    agent_id = current_aid
+
             if not text:
                 return jsonify({"error": "text (or content) is required"}), 400
 
@@ -338,6 +357,14 @@ def mcp_tools_call():
             mem_type = args.get("type") or "fact"
             concepts = _parse_mcp_list_arg(args.get("concepts"))
             files = _parse_mcp_list_arg(args.get("files"))
+
+            if functions.is_agent_scope_isolated():
+                current_aid = functions.get_agent_id()
+                if current_aid:
+                    if agent_id and agent_id != current_aid:
+                        return jsonify({"error": "Unauthorized: Agent scope is isolated"}), 403
+                    agent_id = current_aid
+
             if not content:
                 return jsonify({"error": "content is required"}), 400
             payload = {
@@ -357,6 +384,10 @@ def mcp_tools_call():
                 key=lambda x: x.get("lastUpdated", ""),
                 reverse=True,
             )
+            if functions.is_agent_scope_isolated():
+                aid = functions.get_agent_id()
+                if aid:
+                    pairs = [p for p in pairs if p.get("agentId") == aid]
             text_out = json.dumps(pairs, indent=2)
 
         elif name == "memory_folder_observations":
@@ -364,6 +395,10 @@ def mcp_tools_call():
             aid = args.get("agentId", "")
             if not fp or not aid:
                 return jsonify({"error": "folderPath and agentId are required"}), 400
+            if functions.is_agent_scope_isolated():
+                current_aid = functions.get_agent_id()
+                if current_aid and aid != current_aid:
+                    return jsonify({"error": "Unauthorized: Agent scope is isolated"}), 403
             obs = sorted(
                 kv.list(KV.folder_obs(fp, aid)),
                 key=lambda x: x.get("timestamp", ""),
@@ -372,11 +407,18 @@ def mcp_tools_call():
             text_out = json.dumps(obs, indent=2)
 
         elif name == "memory_timeline":
+            request_aid = args.get("agentId")
+            if functions.is_agent_scope_isolated():
+                current_aid = functions.get_agent_id()
+                if current_aid:
+                    if request_aid and request_aid != current_aid:
+                        return jsonify({"error": "Unauthorized: Agent scope is isolated"}), 403
+                    request_aid = current_aid
             res = functions.folder_timeline(
                 kv,
                 limit=int(args.get("limit", 100)),
                 folder_path=args.get("folderPath"),
-                agent_id=args.get("agentId"),
+                agent_id=request_aid,
                 before=args.get("before"),
                 after=args.get("after"),
             )

@@ -92,6 +92,8 @@ def create_app() -> Flask:
 
     # 4. Flask app + blueprints
     flask_app = Flask(__name__)
+    from werkzeug.middleware.proxy_fix import ProxyFix
+    flask_app.wsgi_app = ProxyFix(flask_app.wsgi_app, x_proto=1, x_host=1, x_port=1, x_prefix=1)
     from routes import register_blueprints
     register_blueprints(flask_app)
 

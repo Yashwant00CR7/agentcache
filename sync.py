@@ -156,10 +156,27 @@ def _list_repo_prefix(api, prefix):
         return []
 
 
+def _checkpoint_db():
+    """Checkpoint the SQLite WAL file before backing up to ensure all data is in the main DB file."""
+    try:
+        if os.path.exists(DB_PATH):
+            conn = sqlite3.connect(DB_PATH, check_same_thread=False, timeout=10)
+            try:
+                conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+                print("[sync] DB checkpoint complete (WAL merged)")
+            finally:
+                conn.close()
+    except Exception as e:
+        print(f"[sync] DB checkpoint failed: {e}")
+
+
 def backup():
     if not HF_TOKEN:
         return
     api = get_api()
+
+    # Checkpoint WAL changes to main DB file before backup
+    _checkpoint_db()
 
     targets = _collect_sync_targets()
     if not targets:
@@ -225,7 +242,6 @@ def backup():
     finally:
         shutil.rmtree(staging, ignore_errors=True)
 
-
 if __name__ == "__main__":
     cmd = sys.argv[1] if len(sys.argv) > 1 else "backup"
     if cmd == "restore":
@@ -235,9 +251,3 @@ if __name__ == "__main__":
     else:
         print(f"[sync] unknown command: {cmd}")
         sys.exit(1)
-
-
-HF_TOKEN = os.environ.get("HF_TOKEN", "")
-REPO_ID  = os.environ.get("AGENTMEMORY_DATASET_REPO", "Yash030/agentmemory-python-data")
-DATA_DIR = os.path.expanduser("~/.agentmemory")
-DB_PATH  = os.path.join(DATA_DIR, "agentmemory.db")

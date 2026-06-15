@@ -3494,6 +3494,10 @@ def folder_graph_build(kv: StateKV) -> Dict[str, Any]:
     Edges are deduplicated on (source, target, type).
     """
     index_entries = kv.list(KV.folders)
+    if is_agent_scope_isolated():
+        aid = get_agent_id()
+        if aid:
+            index_entries = [e for e in index_entries if e.get("agentId") == aid]
 
     # --- Build folder_map and collect obs text per (folder, agent) pair ---
     # folder_map: folderPath -> {"folderPath", "agentIds": set, "obsCount", "color"}
