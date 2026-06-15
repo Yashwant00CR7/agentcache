@@ -61,6 +61,22 @@ def api_observe():
         agent_id = body.get("agentId")
         text = body.get("text") or body.get("content") or ""
 
+        # Compat shim: old clients send sessionId/project/cwd — map to folder model.
+        if not folder_path:
+            folder_path = (
+                body.get("cwd")
+                or body.get("project")
+                or os.getenv("AGENTMEMORY_CWD")
+                or "/unknown"
+            )
+        if not agent_id:
+            agent_id = (
+                body.get("sessionId")
+                or functions.get_agent_id()
+                or os.getenv("AGENT_ID")
+                or "agent"
+            )
+
         if folder_path and agent_id:
             # New folder-based model — delegate to folder_observe
             payload = {

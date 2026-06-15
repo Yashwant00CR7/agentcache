@@ -294,8 +294,28 @@ def mcp_tools_call():
             folder_path = args.get("folderPath")
             agent_id = args.get("agentId")
             text = args.get("text") or args.get("content") or ""
-            if not folder_path or not agent_id or not text:
-                return jsonify({"error": "folderPath, agentId, and text are required"}), 400
+
+            # Compat shim: old plugin scripts send sessionId/project/cwd instead of
+            # folderPath/agentId. Map them across so legacy callers keep working.
+            if not folder_path:
+                # Use cwd first, then project, then a sensible default
+                folder_path = (
+                    args.get("cwd")
+                    or args.get("project")
+                    or os.getenv("AGENTMEMORY_CWD")
+                    or "/unknown"
+                )
+            if not agent_id:
+                agent_id = (
+                    args.get("sessionId")
+                    or functions.get_agent_id()
+                    or os.getenv("AGENT_ID")
+                    or "agent"
+                )
+
+            if not text:
+                return jsonify({"error": "text (or content) is required"}), 400
+
             timestamp = args.get("timestamp") or _datetime_now_iso()
             payload = {
                 "folderPath": folder_path,
