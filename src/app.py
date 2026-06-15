@@ -6,10 +6,15 @@ Run directly:  python src/app.py
 """
 
 import os
+import sys
 import json
 import hmac
 from flask import Flask, request, make_response, send_from_directory
 from flask_sock import Sock
+
+# Prevent double-import of app when run directly as __main__
+if __name__ == "__main__":
+    sys.modules["app"] = sys.modules["__main__"]
 
 
 def _load_env() -> None:
