@@ -1,0 +1,237 @@
+- generic [ref=e2]:
+  - banner [ref=e4]:
+    - generic [ref=e5]:
+      - generic [ref=e6]:
+        - link "Hugging Face's logo Hugging Face" [ref=e7] [cursor=pointer]:
+          - /url: /
+          - img "Hugging Face's logo" [ref=e8]
+          - generic [ref=e9]: Hugging Face
+        - generic [ref=e10]:
+          - textbox "Search models, datasets, users..." [ref=e11]
+          - img [ref=e12]
+      - navigation "Main" [ref=e14]:
+        - list [ref=e15]:
+          - listitem [ref=e16]:
+            - link "Models" [ref=e17] [cursor=pointer]:
+              - /url: /models
+              - img [ref=e18]
+              - text: Models
+          - listitem [ref=e22]:
+            - link "Datasets" [ref=e23] [cursor=pointer]:
+              - /url: /datasets
+              - img [ref=e24]
+              - text: Datasets
+          - listitem [ref=e29]:
+            - link "Spaces" [ref=e30] [cursor=pointer]:
+              - /url: /spaces
+              - img [ref=e31]
+              - text: Spaces
+          - listitem [ref=e35]:
+            - link "Docs" [ref=e36] [cursor=pointer]:
+              - /url: /docs
+              - img [ref=e37]
+              - text: Docs
+          - listitem [ref=e41]:
+            - link "Pricing" [ref=e42] [cursor=pointer]:
+              - /url: /pricing
+          - listitem [ref=e43]:
+            - generic [ref=e44]:
+              - button [ref=e45] [cursor=pointer]:
+                - img [ref=e46]
+              - navigation [ref=e51]:
+                - list [ref=e52]:
+                  - listitem [ref=e53]:
+                    - generic [ref=e54]: Website
+                    - list [ref=e55]:
+                      - listitem [ref=e56]:
+                        - link "Tasks" [ref=e57] [cursor=pointer]:
+                          - /url: /tasks
+                          - img [ref=e58]
+                          - generic: Tasks
+                      - listitem [ref=e61]:
+                        - link "HuggingChat" [ref=e62] [cursor=pointer]:
+                          - /url: /chat
+                          - img [ref=e63]
+                          - generic: HuggingChat
+                      - listitem [ref=e66]:
+                        - link "Collections" [ref=e67] [cursor=pointer]:
+                          - /url: /collections
+                          - img [ref=e68]
+                          - generic: Collections
+                      - listitem [ref=e72]:
+                        - link "Languages" [ref=e73] [cursor=pointer]:
+                          - /url: /languages
+                          - img [ref=e74]
+                          - generic: Languages
+                      - listitem [ref=e76]:
+                        - link "Organizations" [ref=e77] [cursor=pointer]:
+                          - /url: /organizations
+                          - img [ref=e78]
+                          - generic: Organizations
+                  - listitem [ref=e83]:
+                    - generic [ref=e84]: Community
+                    - list [ref=e85]:
+                      - listitem [ref=e86]:
+                        - link "Blog" [ref=e87] [cursor=pointer]:
+                          - /url: /blog
+                          - img [ref=e88]
+                          - generic: Blog
+                      - listitem [ref=e90]:
+                        - link "Posts" [ref=e91] [cursor=pointer]:
+                          - /url: /posts
+                          - img [ref=e92]
+                          - generic: Posts
+                      - listitem [ref=e94]:
+                        - link "Daily Papers" [ref=e95] [cursor=pointer]:
+                          - /url: /papers
+                          - img [ref=e96]
+                          - generic: Daily Papers
+                      - listitem [ref=e99]:
+                        - link "Learn" [ref=e100] [cursor=pointer]:
+                          - /url: /learn
+                          - img [ref=e101]
+                          - generic: Learn
+                      - listitem [ref=e107]:
+                        - link "Discord" [ref=e108] [cursor=pointer]:
+                          - /url: /join/discord
+                          - img [ref=e109]
+                          - generic: Discord
+                      - listitem [ref=e111]:
+                        - link "Forum" [ref=e112] [cursor=pointer]:
+                          - /url: https://discuss.huggingface.co/
+                          - img [ref=e113]
+                          - generic: Forum
+                      - listitem [ref=e115]:
+                        - link "GitHub" [ref=e116] [cursor=pointer]:
+                          - /url: https://github.com/huggingface
+                          - img [ref=e117]
+                          - generic: GitHub
+                  - listitem [ref=e119]:
+                    - generic [ref=e120]: Solutions
+                    - list [ref=e121]:
+                      - listitem [ref=e122]:
+                        - link "Team & Enterprise" [ref=e123] [cursor=pointer]:
+                          - /url: /enterprise
+                          - img [ref=e124]
+                          - generic: Team & Enterprise
+                      - listitem [ref=e126]:
+                        - link "Hugging Face PRO" [ref=e127] [cursor=pointer]:
+                          - /url: /pro
+                          - img [ref=e128]
+                          - generic: Hugging Face PRO
+                      - listitem [ref=e130]:
+                        - link "Enterprise Support" [ref=e131] [cursor=pointer]:
+                          - /url: /support
+                          - img [ref=e132]
+                          - generic: Enterprise Support
+                      - listitem [ref=e135]:
+                        - link "Inference Providers" [ref=e136] [cursor=pointer]:
+                          - /url: /inference/models
+                          - img [ref=e137]
+                          - generic: Inference Providers
+                      - listitem [ref=e140]:
+                        - link "Inference Endpoints" [ref=e141] [cursor=pointer]:
+                          - /url: /inference-endpoints
+                          - img [ref=e142]
+                          - generic: Inference Endpoints
+                      - listitem [ref=e145]:
+                        - link "Storage Buckets" [ref=e146] [cursor=pointer]:
+                          - /url: /storage
+                          - img [ref=e147]
+                          - generic: Storage Buckets
+          - listitem [ref=e151]:
+            - separator [ref=e152]
+          - listitem [ref=e153]:
+            - link "Log In" [ref=e154] [cursor=pointer]:
+              - /url: /login
+          - listitem [ref=e155]:
+            - link "Sign Up" [ref=e156] [cursor=pointer]:
+              - /url: /join
+  - main [ref=e157]:
+    - generic [ref=e160]:
+      - heading "404" [level=1] [ref=e161]
+      - paragraph [ref=e162]: Sorry, we can't find the page you are looking for.
+  - contentinfo [ref=e163]:
+    - generic [ref=e165]:
+      - button "System theme" [ref=e169] [cursor=pointer]:
+        - img [ref=e170]
+        - text: System theme
+      - generic [ref=e175]:
+        - generic [ref=e176]: Website
+        - list [ref=e177]:
+          - listitem [ref=e178]:
+            - link "Models" [ref=e179] [cursor=pointer]:
+              - /url: /models
+          - listitem [ref=e180]:
+            - link "Datasets" [ref=e181] [cursor=pointer]:
+              - /url: /datasets
+          - listitem [ref=e182]:
+            - link "Spaces" [ref=e183] [cursor=pointer]:
+              - /url: /spaces
+          - listitem [ref=e184]:
+            - link "Changelog" [ref=e185] [cursor=pointer]:
+              - /url: /changelog
+              - generic [ref=e186]: Changelog
+          - listitem [ref=e187]:
+            - link "Inference Endpoints" [ref=e188] [cursor=pointer]:
+              - /url: https://endpoints.huggingface.co
+          - listitem [ref=e189]:
+            - link "HuggingChat" [ref=e190] [cursor=pointer]:
+              - /url: /chat
+      - generic [ref=e191]:
+        - generic [ref=e192]: Company
+        - list [ref=e193]:
+          - listitem [ref=e194]:
+            - link "About" [ref=e195] [cursor=pointer]:
+              - /url: /huggingface
+          - listitem [ref=e196]:
+            - link "Brand assets" [ref=e197] [cursor=pointer]:
+              - /url: /brand
+          - listitem [ref=e198]:
+            - link "Terms of service" [ref=e199] [cursor=pointer]:
+              - /url: /terms-of-service
+          - listitem [ref=e200]:
+            - link "Privacy" [ref=e201] [cursor=pointer]:
+              - /url: /privacy
+          - listitem [ref=e202]:
+            - link "Careers" [ref=e203] [cursor=pointer]:
+              - /url: https://apply.workable.com/huggingface/
+          - listitem [ref=e204]:
+            - link "Press" [ref=e205] [cursor=pointer]:
+              - /url: mailto:press@huggingface.co
+      - generic [ref=e206]:
+        - generic [ref=e207]: Resources
+        - list [ref=e208]:
+          - listitem [ref=e209]:
+            - link "Learn" [ref=e210] [cursor=pointer]:
+              - /url: /learn
+          - listitem [ref=e211]:
+            - link "Documentation" [ref=e212] [cursor=pointer]:
+              - /url: /docs
+          - listitem [ref=e213]:
+            - link "Blog" [ref=e214] [cursor=pointer]:
+              - /url: /blog
+          - listitem [ref=e215]:
+            - link "Forum" [ref=e216] [cursor=pointer]:
+              - /url: https://discuss.huggingface.co
+          - listitem [ref=e217]:
+            - link "Service Status" [ref=e218] [cursor=pointer]:
+              - /url: https://status.huggingface.co/
+          - listitem [ref=e219]:
+            - link "Speed test" [ref=e220] [cursor=pointer]:
+              - /url: https://fast.hf.co
+      - generic [ref=e221]:
+        - generic [ref=e222]: Social
+        - list [ref=e223]:
+          - listitem [ref=e224]:
+            - link "GitHub" [ref=e225] [cursor=pointer]:
+              - /url: https://github.com/huggingface
+          - listitem [ref=e226]:
+            - link "Twitter" [ref=e227] [cursor=pointer]:
+              - /url: https://twitter.com/huggingface
+          - listitem [ref=e228]:
+            - link "LinkedIn" [ref=e229] [cursor=pointer]:
+              - /url: https://www.linkedin.com/company/huggingface/
+          - listitem [ref=e230]:
+            - link "Discord" [ref=e231] [cursor=pointer]:
+              - /url: /join/discord

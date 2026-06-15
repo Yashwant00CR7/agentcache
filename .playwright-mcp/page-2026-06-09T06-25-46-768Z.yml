@@ -1,0 +1,36 @@
+- generic [ref=e2]:
+  - banner [ref=e4]:
+    - generic [ref=e6]:
+      - heading "Spaces Hugging Face's logo Yash030 / agentmemory-python like 0 Running" [level=1] [ref=e7]:
+        - generic [ref=e8]:
+          - link "Spaces" [ref=e9] [cursor=pointer]:
+            - /url: /spaces
+          - link "Hugging Face's logo" [ref=e10] [cursor=pointer]:
+            - /url: /
+            - img "Hugging Face's logo" [ref=e11]
+        - separator [ref=e12]
+        - generic [ref=e13]:
+          - link [ref=e17] [cursor=pointer]:
+            - /url: /Yash030
+          - link "Yash030" [ref=e21] [cursor=pointer]:
+            - /url: /Yash030
+          - generic [ref=e22]: /
+        - generic [ref=e23]:
+          - link "agentmemory-python" [ref=e24] [cursor=pointer]:
+            - /url: /spaces/Yash030/agentmemory-python
+          - button "Copy space name to clipboard" [ref=e25] [cursor=pointer]:
+            - img [ref=e26]
+        - generic [ref=e30]:
+          - button "like" [ref=e33] [cursor=pointer]:
+            - img [ref=e34]
+            - generic [ref=e36]: like
+          - button "0" [ref=e37] [cursor=pointer]
+        - generic [ref=e41] [cursor=pointer]: Running
+        - button [ref=e45] [cursor=pointer]:
+          - img [ref=e46]
+          - img [ref=e50]
+      - button [ref=e53] [cursor=pointer]:
+        - img [ref=e54]
+  - main [ref=e56]:
+    - iframe [ref=e58]:
+      

@@ -1,0 +1,20 @@
+# Agent Memory Rules
+
+This workspace is integrated with long-term semantic memory via `agentmemory-python`.
+You must act as your own memory manager by calling the memory MCP tools at critical boundaries.
+
+## Rules & Workflow
+
+1. **Initial Search (Prefetch Context)**:
+   At the start of every session or new task, immediately call `memory_smart_search` with terms related to the current objective. This retrieves past architecture patterns, preferences, bug fixes, or lessons.
+   - Example: `memory_smart_search(query="jwt token rotation logic")`
+
+2. **Lessons & Insights Capture**:
+   When you successfully debug a complex error, discover an undocumented requirement, or establish a convention, persist it:
+   - Call `memory_lesson_save` to record lessons that improve your coding capabilities. Duplicate saves strengthen confidence scores.
+   - Call `memory_save` to save long-term structural facts. Always extract 2-5 specific lowercased tags (e.g. `auth-flow`, `refresh-token`) as concepts.
+
+3. **Checklist Before Ending**:
+   Before stating a task is complete:
+   - Reflect on whether any lessons learned should be saved.
+   - Call `memory_reflect` to automatically distribute observations into slots if needed.
