@@ -81,7 +81,10 @@ def api_observe():
         res = functions.observe(_get_kv(), body)
         return jsonify(res), 201
     except Exception as e:
-        return jsonify({"error": str(e)}), 400
+        import traceback
+        print(f"[observe] 400 error — body keys: {list(body.keys())} — {type(e).__name__}: {e}")
+        print(traceback.format_exc())
+        return jsonify({"error": str(e), "detail": type(e).__name__}), 400
 
 
 # ---------------------------------------------------------------------------
@@ -121,9 +124,14 @@ def api_agent_observe():
         res = functions.folder_observe(_get_kv(), payload)
         return jsonify(res), 201
     except ValueError as e:
+        import traceback
+        print(f"[agent_observe] 400 ValueError — body keys: {list(body.keys())} — {e}")
         return jsonify({"error": str(e)}), 400
     except Exception as e:
-        return jsonify({"error": str(e)}), 400
+        import traceback
+        print(f"[agent_observe] 400 error — body keys: {list(body.keys())} — {type(e).__name__}: {e}")
+        print(traceback.format_exc())
+        return jsonify({"error": str(e), "detail": type(e).__name__}), 400
 
 
 # ---------------------------------------------------------------------------
