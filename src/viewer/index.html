@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
@@ -198,7 +198,7 @@
       outline-offset: -2px;
     }
 
-    /* â”€â”€ B6.3 Loading skeleton states â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+    /* -- B6.3 Loading skeleton states --------------------------------- */
     @keyframes shimmer {
       0%   { background-position: -200% 0; }
       100% { background-position:  200% 0; }
@@ -216,8 +216,9 @@
     .skeleton-line  { height: 14px;  margin-bottom: 6px; }
     .skeleton-line.short { width: 60%; }
 
-    /* â”€â”€ B1 Command palette â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+    /* -- B1 Command palette ------------------------------------------- */
     #cmd-palette { display: contents; }
+    #cmd-palette[hidden] { display: none !important; }
     #cmd-backdrop {
       position: fixed; inset: 0;
       background: rgba(0,0,0,0.45);
@@ -269,7 +270,7 @@
     .cmd-main  { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .cmd-sub   { font-size: 11px; color: var(--ink-faint); flex-shrink: 0; }
 
-    /* â”€â”€ B5 MCP Tool Tester tab â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+    /* -- B5 MCP Tool Tester tab --------------------------------------- */
     .tools-list { display: flex; flex-direction: column; gap: 0; max-width: 900px; }
     .tool-row {
       border: 1px solid var(--border-light); border-top: none;
@@ -319,7 +320,7 @@
     .badge-ok  { color: var(--green); }
     .badge-err { color: var(--accent); }
 
-    /* â”€â”€ B4 Onboarding card â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+    /* -- B4 Onboarding card ------------------------------------------- */
     .onboarding-card {
       border: 2px solid var(--border); padding: 28px 32px;
       max-width: 640px; margin: 32px auto; background: var(--cream);
@@ -811,7 +812,7 @@
     }
     .empty-state .empty-link { color: var(--accent); text-decoration: underline; font-size: 13px; font-style: normal; }
 
-    /* Feature flag banner system â€” compact collapsed by default */
+    /* Feature flag banner system -- compact collapsed by default */
     .flag-banners {
       padding: 0 12px 10px 12px;
       background: var(--bg);
@@ -1312,13 +1313,13 @@
   <div id="view-memories" class="view" role="tabpanel" aria-labelledby="tab-btn-memories"></div>
   <div id="view-timeline" class="view" role="tabpanel" aria-labelledby="tab-btn-timeline"></div>
   <div id="view-tools" class="view" role="tabpanel" aria-labelledby="tab-btn-tools"></div>
-  <!-- legacy view containers removed â€” backed by endpoints that no longer exist -->
+  <!-- legacy view containers removed -- backed by endpoints that no longer exist -->
 
   <!-- Command Palette (B1) -->
   <div id="cmd-palette" hidden role="dialog" aria-modal="true" aria-label="Command Palette">
     <div id="cmd-backdrop"></div>
     <div id="cmd-panel">
-      <input id="cmd-input" type="text" placeholder="Search folders, memories, tabsâ€¦" autocomplete="off" aria-label="Command palette search">
+      <input id="cmd-input" type="text" placeholder="Search folders, memories, tabs..." autocomplete="off" aria-label="Command palette search">
       <ul id="cmd-results" role="listbox" aria-label="Search results"></ul>
     </div>
   </div>
@@ -1701,7 +1702,7 @@
         var fp = f.folderPath || '';
         var aid = f.agentId || '';
         var obs = f.obsCount || 0;
-        var updated = f.lastUpdated ? new Date(f.lastUpdated).toLocaleString() : 'â€”';
+        var updated = f.lastUpdated ? new Date(f.lastUpdated).toLocaleString() : '\u2014';
         html += '<tr class="folder-row" data-folder="' + esc(fp) + '" data-agent="' + esc(aid) + '" style="border-bottom:1px solid var(--border-light);cursor:pointer;" onmouseover="this.style.background=\'var(--bg-subtle)\'" onmouseout="this.style.background=\'\'">';
         html += '<td style="padding:10px 12px;max-width:320px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="' + esc(fp) + '"><span style="font-family:var(--font-mono);font-size:12px;">' + esc(fp) + '</span></td>';
         html += '<td style="padding:10px 12px;"><span style="background:var(--bg-inset);padding:2px 8px;border-radius:3px;font-size:11px;font-weight:600;">' + esc(aid) + '</span></td>';
@@ -1748,7 +1749,7 @@
             html += '<span style="font-size:11px;color:var(--ink-muted);font-family:var(--font-mono);">' + esc(ts) + '</span>';
             html += '</div>';
             if (o.title) html += '<div style="font-weight:600;font-size:14px;color:var(--ink);margin-bottom:4px;">' + esc(o.title) + '</div>';
-            if (o.text) html += '<div style="font-size:13px;color:var(--ink-secondary);line-height:1.5;white-space:pre-wrap;">' + esc(o.text.length > 300 ? o.text.slice(0,300)+'â€¦' : o.text) + '</div>';
+            if (o.text) html += '<div style="font-size:13px;color:var(--ink-secondary);line-height:1.5;white-space:pre-wrap;">' + esc(o.text.length > 300 ? o.text.slice(0,300)+'\u2026' : o.text) + '</div>';
             html += '</div>';
           });
         }
@@ -1804,7 +1805,7 @@
 
     async function loadGraph() {
       var el = document.getElementById('view-graph');
-      el.innerHTML = '<div class="graph-container"><div class="graph-canvas-wrap"><canvas id="graph-canvas"></canvas><div class="graph-controls"><button title="Zoom In" data-action="zoom-graph" data-dir="1">+</button><button title="Zoom Out" data-action="zoom-graph" data-dir="-1">&minus;</button><div class="ctrl-divider"></div><button title="Recenter" data-action="recenter-graph">âŒ–</button></div><div class="graph-tooltip" id="graph-tooltip"></div></div><div class="graph-sidebar" id="graph-sidebar"></div></div>';
+      el.innerHTML = '<div class="graph-container"><div class="graph-canvas-wrap"><canvas id="graph-canvas"></canvas><div class="graph-controls"><button title="Zoom In" data-action="zoom-graph" data-dir="1">+</button><button title="Zoom Out" data-action="zoom-graph" data-dir="-1">&minus;</button><div class="ctrl-divider"></div><button title="Recenter" data-action="recenter-graph">&#x2316;</button></div><div class="graph-tooltip" id="graph-tooltip"></div></div><div class="graph-sidebar" id="graph-sidebar"></div></div>';
 
       state.graph.queryError = null;
       var graphData;
@@ -1918,7 +1919,7 @@
       });
       html += '</div>';
 
-      html += '<button class="btn" style="margin-top:14px;width:100%;font-size:11px;padding:8px;letter-spacing:0.06em;transition:all 0.15s ease;" data-action="rebuild-graph">â†» Rebuild Graph</button>';
+      html += '<button class="btn" style="margin-top:14px;width:100%;font-size:11px;padding:8px;letter-spacing:0.06em;transition:all 0.15s ease;" data-action="rebuild-graph">&#x21bb; Rebuild Graph</button>';
       html += '<div id="selected-node-panel"></div>';
       var __focus = captureSearchFocus(['graph-search']);
       sb.innerHTML = html;
@@ -2773,7 +2774,7 @@
       html += '</div>';
       if (o.title) html += '<div style="font-weight:600;font-size:13px;color:var(--ink);margin-bottom:3px;">' + esc(o.title) + '</div>';
       if (o.text) {
-        var excerpt = o.text.length > 200 ? o.text.slice(0, 200) + 'â€¦' : o.text;
+        var excerpt = o.text.length > 200 ? o.text.slice(0, 200) + '\u2026' : o.text;
         html += '<div style="font-size:12px;color:var(--ink-secondary);line-height:1.5;">' + esc(excerpt) + '</div>';
       }
       html += '</div>';
@@ -3303,7 +3304,7 @@
       host.innerHTML = '<button type="button" class="flag-summary" data-action="toggle-flags" aria-expanded="' + (expanded ? 'true' : 'false') + '" aria-controls="flag-list">' +
           pills +
           '<span class="flag-count">Feature flags</span>' +
-          '<span style="color:var(--ink-faint);">â€” click to ' + (expanded ? 'collapse' : 'expand') + '</span>' +
+          '<span style="color:var(--ink-faint);">&mdash; click to ' + (expanded ? 'collapse' : 'expand') + '</span>' +
           '<span class="flag-toggle" aria-hidden="true">' + (expanded ? '&#9650;' : '&#9660;') + '</span>' +
         '</button>' +
         '<div class="flag-list' + (expanded ? ' open' : '') + '" id="flag-list">' + listHtml + '</div>';
@@ -3543,7 +3544,7 @@
         var doneClass = done ? ' done' : '';
         return '<div class="onboarding-step">' +
           '<div class="step-header">' +
-          '<div class="step-num' + doneClass + '">' + (done ? 'âœ“' : num) + '</div>' +
+          '<div class="step-num' + doneClass + '">' + (done ? '\u2713' : num) + '</div>' +
           '<div class="step-title">' + title + '</div>' +
           '</div>' +
           '<div class="step-code-wrap">' +
@@ -3638,7 +3639,7 @@
       html += '<div id="tool-panel" style="display:none;">' +
         '<h3 id="tool-panel-title"></h3>' +
         '<textarea id="tool-args-editor" spellcheck="false">{}</textarea>' +
-        '<div><button id="tool-run-btn">Run â–¶</button></div>' +
+        '<div><button id="tool-run-btn">Run &#9654;</button></div>' +
         '<div id="tool-response" style="display:none;"></div>' +
         '<div class="tool-history" id="tool-history-wrap"></div>' +
         '</div>';
@@ -3686,7 +3687,7 @@
           respEl.style.display = '';
           return;
         }
-        btn.textContent = 'Runningâ€¦';
+        btn.textContent = 'Running...';
         btn.disabled = true;
         try {
           var result = await apiFetchRaw('/agentmemory/mcp/tools', {
@@ -3707,7 +3708,7 @@
           respEl.className = 'error';
           respEl.style.display = '';
         } finally {
-          btn.textContent = 'Run â–¶';
+          btn.textContent = 'Run \u25b6';
           btn.disabled = false;
         }
       });
@@ -3721,8 +3722,8 @@
       var html = '<details class="tool-history"><summary>History (' + _toolHistory.length + ')</summary>';
       _toolHistory.forEach(function(h) {
         var badge = h.ok
-          ? '<span class="badge-ok">âœ“ ok</span>'
-          : '<span class="badge-err">âœ— err</span>';
+          ? '<span class="badge-ok">&#10003; ok</span>'
+          : '<span class="badge-err">&#10007; err</span>';
         html += '<details class="tool-history-entry">' +
           '<summary>' + badge + ' <span style="font-weight:600;">' + esc(h.name) + '</span>' +
           ' <span style="color:var(--ink-faint);font-size:10px;">' + h.ts.slice(11,19) + '</span></summary>' +
@@ -3818,7 +3819,7 @@
 
     // Global keydown handler for command palette
     document.addEventListener('keydown', function(e) {
-      // Ctrl+K or Cmd+K â€” open palette
+      // Ctrl+K or Cmd+K -- open palette
       if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
         e.preventDefault();
         if (_cmdOpen) { closeCommandPalette(); } else { openCommandPalette(); }
