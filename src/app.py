@@ -46,6 +46,10 @@ def create_app() -> Flask:
     """Create and return a fully configured Flask application."""
     global kv, embedding_provider, persistence
 
+    # Check security credentials
+    if not os.getenv("AGENTMEMORY_SECRET"):
+        print("[security] WARNING: AGENTMEMORY_SECRET is not set! All API endpoints are publicly accessible without authentication.")
+
     import search as search_mod
     import functions
     from db import StateKV
@@ -94,6 +98,12 @@ def create_app() -> Flask:
     functions.set_index_persistence(persistence)
     loaded = persistence.load()
     print(f"[persistence] Load results: BM25={loaded['bm25']}, Vector={loaded['vector']}")
+
+    # Backfill coordinate lookup index if missing/incomplete
+    try:
+        functions.backfill_obs_lookup_if_needed(kv)
+    except Exception as e:
+        print(f"[db] Warning backfilling obs_lookup: {e}")
 
     # 4. Flask app + blueprints
     flask_app = Flask(__name__)
@@ -157,7 +167,7 @@ def create_app() -> Flask:
     _default_cors = (
         "http://localhost,http://127.0.0.1,"
         "https://huggingface.co,https://*.hf.space,"
-        "vscode-webview://,chrome-extension://"
+        "vscode-webview://*,chrome-extension://*"
     )
     _cors_origins_raw = os.getenv("AGENTMEMORY_CORS_ORIGINS", _default_cors)
 

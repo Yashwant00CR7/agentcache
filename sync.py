@@ -79,22 +79,46 @@ def _get_audit_high_water_mark() -> int:
 
 
 def _load_sync_state() -> dict:
-    """C4.1: Load the persisted sync state dict."""
-    if os.path.exists(STATE_FILE):
-        try:
-            with open(STATE_FILE, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except Exception:
-            pass
+    """C4.1: Load the persisted sync state dict from SQLite sync_state_metadata table."""
+    try:
+        if os.path.exists(DB_PATH):
+            conn = sqlite3.connect(DB_PATH, check_same_thread=False, timeout=5)
+            try:
+                conn.execute("""
+                    CREATE TABLE IF NOT EXISTS sync_state_metadata (
+                        key   TEXT PRIMARY KEY,
+                        value TEXT NOT NULL
+                    )
+                """)
+                row = conn.execute("SELECT value FROM sync_state_metadata WHERE key = ?", ("sync_state",)).fetchone()
+                if row:
+                    return json.loads(row[0])
+            finally:
+                conn.close()
+    except Exception as e:
+        print(f"[sync] load state error: {e}")
     return {"last_synced_audit_id": 0, "last_sync_at": None, "sync_status": "never"}
 
 
 def _save_sync_state(state: dict) -> None:
-    """C4.1/C4.2: Persist the sync state dict."""
+    """C4.1/C4.2: Persist the sync state dict to SQLite sync_state_metadata table."""
     try:
-        os.makedirs(DATA_DIR, exist_ok=True)
-        with open(STATE_FILE, "w", encoding="utf-8") as f:
-            json.dump(state, f)
+        if os.path.exists(DB_PATH):
+            conn = sqlite3.connect(DB_PATH, check_same_thread=False, timeout=5)
+            try:
+                conn.execute("""
+                    CREATE TABLE IF NOT EXISTS sync_state_metadata (
+                        key   TEXT PRIMARY KEY,
+                        value TEXT NOT NULL
+                    )
+                """)
+                conn.execute(
+                    "INSERT OR REPLACE INTO sync_state_metadata (key, value) VALUES (?, ?)",
+                    ("sync_state", json.dumps(state))
+                )
+                conn.commit()
+            finally:
+                conn.close()
     except Exception as e:
         print(f"[sync] failed to save sync state: {e}")
 

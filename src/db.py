@@ -127,6 +127,12 @@ class StateKV:
                         message   TEXT NOT NULL
                     )
                 """)
+                conn.execute("""
+                    CREATE TABLE IF NOT EXISTS sync_state_metadata (
+                        key   TEXT PRIMARY KEY,
+                        value TEXT NOT NULL
+                    )
+                """)
                 conn.commit()
             finally:
                 conn.close()

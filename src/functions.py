@@ -35,6 +35,10 @@ class KV:
     # Key = "{safe_folder_path}:{agent_id}", value = FolderIndexEntry dict.
     folders = "mem:folders"
 
+    # Lookup index for O(1) observation hydration.
+    # Scope = "mem:obs_lookup", Key = obs_id, Value = {"folderPath": folder_path, "agentId": agent_id}
+    obs_lookup = "mem:obs_lookup"
+
     @staticmethod
     def folder_obs(folder_path: str, agent_id: str) -> str:
         """Per-(folder, agent) observations scope.
@@ -1056,6 +1060,12 @@ def folder_observe(kv: StateKV, payload: Dict[str, Any]) -> Dict[str, Any]:
     obs_scope = KV.folder_obs(folder_path, agent_id)
     kv.set(obs_scope, obs_id, obs)
 
+    # Write coordinate lookup mapping
+    kv.set(KV.obs_lookup, obs_id, {
+        "folderPath": folder_path,
+        "agentId": agent_id,
+    })
+
     # 7. Upsert folder metadata (REQ-005)
     meta_scope = KV.folder_meta(folder_path, agent_id)
     meta = kv.get(meta_scope, "meta") or {
@@ -1136,41 +1146,7 @@ def folder_search(
 
     candidates = _hybrid_search.search(query, limit * 2)
 
-    # --- Build a comprehensive obs_id → observation mapping from all folder pairs ---
-    # First, collect all known (folder_path, agent_id) pairs from the folders index.
-    index_entries = kv.list(KV.folders)
-
-    obs_map: Dict[str, Dict[str, Any]] = {}  # obs_id → observation dict
-
-    for entry in index_entries:
-        fp = entry.get("folderPath", "")
-        aid = entry.get("agentId", "")
-        if not fp or not aid:
-            continue
-
-        # Apply early filter: skip pairs that don't match the requested filters
-        if folder_path is not None and fp != folder_path:
-            continue
-        if agent_id is not None and aid != agent_id:
-            continue
-
-        obs_scope = KV.folder_obs(fp, aid)
-        pair_obs_list = kv.list(obs_scope)
-        for obs in pair_obs_list:
-            oid = obs.get("id")
-            if oid:
-                obs_map[oid] = obs
-
-    # --- Also build a memory map from KV.memories for cross-inclusion (REQ-018) ---
-    # We include memories regardless of folder/agent filters since they are global.
-    all_memories = kv.list(KV.memories)
-    memory_map: Dict[str, Dict[str, Any]] = {}
-    for mem in all_memories:
-        mid = mem.get("id")
-        if mid:
-            memory_map[mid] = mem
-
-    # --- Hydrate candidates from the search results ---
+    # --- Hydrate candidates from the search results (REQ-018, REQ-019) ---
     results: List[Dict[str, Any]] = []
     seen_ids: set = set()
 
@@ -1178,32 +1154,68 @@ def folder_search(
         obs_id = candidate.get("obsId") or candidate.get("id", "")
         score = candidate.get("combinedScore") or candidate.get("score", 0.0)
 
-        if obs_id in seen_ids:
+        if not obs_id or obs_id in seen_ids:
             continue
 
-        # Try folder observation first
-        obs = obs_map.get(obs_id)
-        if obs is not None:
-            result = dict(obs)
-            result["score"] = score
-            # Ensure folderPath and agentId are present (REQ-019)
-            result.setdefault("folderPath", obs.get("folderPath", ""))
-            result.setdefault("agentId", obs.get("agentId", ""))
-            results.append(result)
-            seen_ids.add(obs_id)
-            continue
+        # 1. Try folder observation first via O(1) coordinate lookup index
+        lookup = kv.get(KV.obs_lookup, obs_id)
+        if lookup and isinstance(lookup, dict):
+            fp = lookup.get("folderPath")
+            aid = lookup.get("agentId")
+            if fp and aid:
+                if folder_path is not None and fp != folder_path:
+                    continue
+                if agent_id is not None and aid != agent_id:
+                    continue
 
-        # Try global memory (REQ-018)
-        mem = memory_map.get(obs_id)
-        if mem is not None:
-            result = dict(mem)
-            result["score"] = score
-            # Global memories have no folder scope; use empty strings as sentinels
-            result.setdefault("folderPath", "")
-            result.setdefault("agentId", mem.get("agentId") or "")
-            results.append(result)
-            seen_ids.add(obs_id)
-            continue
+                obs = kv.get(KV.folder_obs(fp, aid), obs_id)
+                if obs and isinstance(obs, dict):
+                    result = dict(obs)
+                    result["score"] = score
+                    result.setdefault("folderPath", fp)
+                    result.setdefault("agentId", aid)
+                    results.append(result)
+                    seen_ids.add(obs_id)
+                    continue
+
+        # 2. Fallback scan for unindexed folder observations (e.g. from prior versions)
+        if obs_id.startswith("fobs_"):
+            found = False
+            for entry in kv.list(KV.folders):
+                fp = entry.get("folderPath", "")
+                aid = entry.get("agentId", "")
+                if not fp or not aid:
+                    continue
+                if folder_path is not None and fp != folder_path:
+                    continue
+                if agent_id is not None and aid != agent_id:
+                    continue
+                obs = kv.get(KV.folder_obs(fp, aid), obs_id)
+                if obs and isinstance(obs, dict):
+                    result = dict(obs)
+                    result["score"] = score
+                    result.setdefault("folderPath", fp)
+                    result.setdefault("agentId", aid)
+                    results.append(result)
+                    seen_ids.add(obs_id)
+                    # Lazy backfill the lookup index
+                    kv.set(KV.obs_lookup, obs_id, {"folderPath": fp, "agentId": aid})
+                    found = True
+                    break
+            if found:
+                continue
+
+        # 3. Try global memory (REQ-018)
+        mem = kv.get(KV.memories, obs_id)
+        if mem and isinstance(mem, dict):
+            if mem.get("isLatest") is not False:
+                result = dict(mem)
+                result["score"] = score
+                result.setdefault("folderPath", "")
+                result.setdefault("agentId", mem.get("agentId") or "")
+                results.append(result)
+                seen_ids.add(obs_id)
+                continue
 
         # obs_id not found in either map — skip (stale index entry)
 
@@ -1447,6 +1459,7 @@ def forget(kv: StateKV, data: Dict[str, Any]) -> Dict[str, Any]:
             for oid in obs_ids:
                 existed = kv.delete(obs_scope, oid)
                 if existed:
+                    kv.delete(KV.obs_lookup, oid)
                     _bm25_index.remove(oid)
                     if _vector_index:
                         _vector_index.remove(oid)
@@ -1475,6 +1488,7 @@ def forget(kv: StateKV, data: Dict[str, Any]) -> Dict[str, Any]:
                 obs_id = obs.get("id")
                 if obs_id:
                     kv.delete(obs_scope, obs_id)
+                    kv.delete(KV.obs_lookup, obs_id)
                     _bm25_index.remove(obs_id)
                     if _vector_index:
                         _vector_index.remove(obs_id)
@@ -1498,6 +1512,7 @@ def forget(kv: StateKV, data: Dict[str, Any]) -> Dict[str, Any]:
 
             kv.delete(KV.observations(session_id), base_oid)
             kv.delete(KV.observations(session_id), f"{base_oid}:raw")
+            kv.delete(KV.obs_lookup, base_oid)
 
             for o in (obs, raw_obs):
                 if o:
@@ -1519,6 +1534,7 @@ def forget(kv: StateKV, data: Dict[str, Any]) -> Dict[str, Any]:
         obs_list = kv.list(KV.observations(session_id))
         for obs in obs_list:
             kv.delete(KV.observations(session_id), obs["id"])
+            kv.delete(KV.obs_lookup, obs["id"])
             img = obs.get("imageData") or obs.get("imageRef")
             if img:
                 refs = kv.get(KV.imageRefs, img) or 0
@@ -2286,6 +2302,9 @@ def rebuild_index(kv: StateKV) -> int:
         for obs in obs_list:
             if not obs.get("id"):
                 continue
+            # Populate coordinate lookup index
+            kv.set(KV.obs_lookup, obs["id"], {"folderPath": fp, "agentId": aid})
+            
             _bm25_index.add(obs)
             comb_text = (obs.get("title") or "") + " " + (obs.get("text") or "")
             vector_index_add_guarded(obs["id"], fp, comb_text.strip(), {"kind": "folder_observation", "logId": obs["id"]})
@@ -2591,6 +2610,10 @@ def migrate_sessions_to_folders(kv: StateKV, dry_run: bool = False) -> Dict[str,
 
                 if not dry_run:
                     kv.set(KV.folder_obs(fp, aid), obs_id, folder_obs)
+                    kv.set(KV.obs_lookup, obs_id, {
+                        'folderPath': fp,
+                        'agentId': aid,
+                    })
                 session_obs_count += 1
                 migrated_observations += 1
 
@@ -3620,3 +3643,69 @@ def broadcast_stream(payload: Dict[str, Any]) -> None:
             _stream_broadcaster(payload)
         except Exception as e:
             print(f"[broadcaster] Failed: {e}")
+
+
+def backfill_obs_lookup_if_needed(kv: StateKV) -> None:
+    """Ensure every folder observation has an entry in KV.obs_lookup."""
+    folders = kv.list(KV.folders)
+    if not folders:
+        return
+
+    # Check if lookup index needs populating
+    lookups = kv.list(KV.obs_lookup)
+    if len(lookups) >= sum(int(f.get("obsCount", 0)) for f in folders):
+        return  # already populated
+
+    print("[db] Backfilling obs_lookup index...")
+    for entry in folders:
+        fp = entry.get("folderPath")
+        aid = entry.get("agentId")
+        if not fp or not aid:
+            continue
+        obs_list = kv.list(KV.folder_obs(fp, aid))
+        for obs in obs_list:
+            oid = obs.get("id")
+            if oid:
+                kv.set(KV.obs_lookup, oid, {"folderPath": fp, "agentId": aid})
+    print("[db] obs_lookup backfill complete.")
+
+
+def verify_index_sync_on_boot(kv: StateKV) -> bool:
+    """Check if the search index size matches the database counts.
+    Returns True if in sync, False if a rebuild is needed.
+    """
+    try:
+        # 1. Total folder obs count
+        folders = kv.list(KV.folders)
+        folder_obs_count = sum(int(f.get("obsCount", 0)) for f in folders)
+
+        # 2. Total memories count
+        memories = kv.list(KV.memories)
+        latest_memories_count = len([m for m in memories if m.get("isLatest") is not False])
+
+        # 3. Total legacy observations count
+        legacy_obs_count = 0
+        try:
+            sessions = kv.list(KV.sessions)
+            for s in sessions:
+                sid = s.get("id")
+                if sid:
+                    obs_list = kv.list(KV.observations(sid))
+                    # Only legacy observations that were indexed (having title and narrative)
+                    legacy_obs_count += len([o for o in obs_list if o.get("title") and o.get("narrative")])
+        except Exception:
+            pass
+
+        total_db_count = folder_obs_count + latest_memories_count + legacy_obs_count
+        index_size = _bm25_index.size
+
+        if total_db_count != index_size:
+            print(f"[persistence] Index out of sync with DB (DB={total_db_count}, Index={index_size}). Rebuild required.")
+            return False
+
+        print(f"[persistence] Index is in sync with DB (size={index_size}).")
+        return True
+    except Exception as e:
+        print(f"[persistence] verify_index_sync_on_boot failed: {e}")
+        return False
+

@@ -125,9 +125,15 @@ def start_background_workers(kv) -> None:
     # Register graceful shutdown signal handlers (C5.1)
     _register_signal_handlers()
 
-    # Rebuild search index if empty
-    if functions._bm25_index.size == 0:
-        print("[persistence] Search index is empty. Rebuilding in background thread...")
+    # Rebuild search index if empty or out of sync (Step 5)
+    index_empty = functions._bm25_index.size == 0
+    index_in_sync = True
+    if not index_empty:
+        index_in_sync = functions.verify_index_sync_on_boot(kv)
+
+    if index_empty or not index_in_sync:
+        reason = "empty" if index_empty else "out of sync"
+        print(f"[persistence] Search index is {reason}. Rebuilding in background thread...")
         t_rebuild = threading.Thread(
             target=_rebuild_index,
             args=(kv,),
