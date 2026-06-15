@@ -1329,16 +1329,28 @@
   </div>
 
   <footer id="viewer-footer" class="viewer-footer">
-    <span>agentmemory viewer Â· <span id="footer-version">loading...</span></span>
-    <span class="footer-sep">Â·</span>
+    <span>agentmemory viewer &middot; <span id="footer-version">loading...</span></span>
+    <span class="footer-sep">&middot;</span>
     <a href="https://github.com/rohitg00/agentmemory" target="_blank" rel="noopener">github</a>
-    <span class="footer-sep">Â·</span>
+    <span class="footer-sep">&middot;</span>
     <a href="https://github.com/rohitg00/agentmemory#readme" target="_blank" rel="noopener">docs</a>
-    <span class="footer-sep">Â·</span>
+    <span class="footer-sep">&middot;</span>
     <a id="footer-feedback" href="#" target="_blank" rel="noopener">report issue &rarr;</a>
   </footer>
 
   <script nonce="__AGENTMEMORY_VIEWER_NONCE__">
+    var safeStorage = {
+      _mem: {},
+      getItem: function(key) {
+        try { return localStorage.getItem(key); } catch (_) { return this._mem[key] || null; }
+      },
+      setItem: function(key, val) {
+        try { localStorage.setItem(key, val); } catch (_) { this._mem[key] = String(val); }
+      },
+      removeItem: function(key) {
+        try { localStorage.removeItem(key); } catch (_) { delete this._mem[key]; }
+      }
+    };
     var params = new URLSearchParams(window.location.search);
     var paramPort = params.get('port');
     var locPort = window.location.port;
@@ -1373,10 +1385,10 @@
       document.documentElement.dataset.theme = dark ? 'dark' : 'light';
       var btn = document.getElementById('theme-toggle');
       if (btn) btn.textContent = dark ? 'LIGHT' : 'DARK';
-      if (persist) localStorage.setItem('agentmemory-theme', dark ? 'dark' : 'light');
+      if (persist) safeStorage.setItem('agentmemory-theme', dark ? 'dark' : 'light');
     }
     window.toggleTheme = function() { applyTheme(!isDarkMode(), true); };
-    var savedTheme = localStorage.getItem('agentmemory-theme');
+    var savedTheme = safeStorage.getItem('agentmemory-theme');
     if (savedTheme) {
       applyTheme(savedTheme === 'dark', false);
     } else if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
@@ -3529,10 +3541,10 @@
     }
 
     // ==========================================================================
-    // B4 â€” Onboarding card (empty state detection)
+    // B4 -- Onboarding card (empty state detection)
     // ==========================================================================
     function maybeShowOnboarding(health, flags) {
-      if (localStorage.getItem('agentmemory_onboarding_dismissed')) return;
+      if (safeStorage.getItem('agentmemory_onboarding_dismissed')) return;
       if ((health.observationCount || 0) > 0 || (health.memoryCount || 0) > 0) return;
       var el = document.getElementById('view-folders');
       if (!el) return;
@@ -3554,7 +3566,7 @@
       }
 
       var secretSet = false; // AGENTMEMORY_SECRET status not exposed by flags endpoint
-      var geminiSet = !!(cfg && cfg.embeddingProvider && cfg.embeddingProvider !== 'none');
+      var geminiSet = !!(flags && flags.embeddingProvider && flags.embeddingProvider !== 'none');
 
       var card = document.createElement('div');
       card.className = 'onboarding-card';
@@ -3579,7 +3591,7 @@
         });
       });
       card.querySelector('.onboarding-dismiss').addEventListener('click', function() {
-        localStorage.setItem('agentmemory_onboarding_dismissed', '1');
+        safeStorage.setItem('agentmemory_onboarding_dismissed', '1');
         card.remove();
       });
 
