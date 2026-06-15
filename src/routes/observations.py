@@ -52,53 +52,44 @@ def api_observe():
     if auth_err:
         return auth_err
 
+    body = {}
     try:
         body = request.get_json(force=True) or {}
 
-        # Auto-detect folder-based payload: if folderPath + agentId present,
-        # route to folder_observe instead of legacy observe().
-        folder_path = body.get("folderPath")
-        agent_id = body.get("agentId")
+        # Compat shim: accept both folder-based and legacy session-based payloads.
+        # Old clients send sessionId/project/cwd; new clients send folderPath/agentId.
+        folder_path = (
+            body.get("folderPath")
+            or body.get("cwd")
+            or body.get("project")
+            or os.getenv("AGENTMEMORY_CWD")
+            or "/unknown"
+        )
+        agent_id = (
+            body.get("agentId")
+            or body.get("sessionId")
+            or functions.get_agent_id()
+            or os.getenv("AGENT_ID")
+            or "agent"
+        )
         text = body.get("text") or body.get("content") or ""
 
-        # Compat shim: old clients send sessionId/project/cwd — map to folder model.
-        if not folder_path:
-            folder_path = (
-                body.get("cwd")
-                or body.get("project")
-                or os.getenv("AGENTMEMORY_CWD")
-                or "/unknown"
-            )
-        if not agent_id:
-            agent_id = (
-                body.get("sessionId")
-                or functions.get_agent_id()
-                or os.getenv("AGENT_ID")
-                or "agent"
-            )
-
-        if folder_path and agent_id:
-            # New folder-based model — delegate to folder_observe
-            payload = {
-                "folderPath": folder_path,
-                "agentId": agent_id,
-                "text": text,
-                "timestamp": body.get("timestamp") or _datetime_now_iso(),
-                "type": body.get("type"),
-                "title": body.get("title"),
-                "concepts": body.get("concepts"),
-                "files": body.get("files"),
-                "importance": body.get("importance"),
-            }
-            res = functions.folder_observe(_get_kv(), payload)
-            return jsonify(res), 201
-
-        # Legacy session-based model
-        res = functions.observe(_get_kv(), body)
+        payload = {
+            "folderPath": folder_path,
+            "agentId": agent_id,
+            "text": text,
+            "timestamp": body.get("timestamp") or _datetime_now_iso(),
+            "type": body.get("type"),
+            "title": body.get("title"),
+            "concepts": body.get("concepts"),
+            "files": body.get("files"),
+            "importance": body.get("importance"),
+        }
+        res = functions.folder_observe(_get_kv(), payload)
         return jsonify(res), 201
     except Exception as e:
         import traceback
-        print(f"[observe] 400 error — body keys: {list(body.keys())} — {type(e).__name__}: {e}")
+        print(f"[observe] 400 — keys={list(body.keys())} {type(e).__name__}: {e}")
         print(traceback.format_exc())
         return jsonify({"error": str(e), "detail": type(e).__name__}), 400
 
