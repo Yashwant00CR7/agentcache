@@ -145,23 +145,71 @@ def create_app() -> Flask:
         return send_from_directory(os.path.join(_base_dir, "viewer"), "favicon.svg")
 
     # 7. CORS after_request — D2.1: configurable via AGENTMEMORY_CORS_ORIGINS env var
-    # Default allows localhost, 127.0.0.1, vscode-webview://, and chrome-extension://
-    _default_cors = "http://localhost,http://127.0.0.1,vscode-webview://,chrome-extension://"
+    # Default allows localhost, 127.0.0.1, HuggingFace Spaces, vscode-webview://, chrome-extension://
+    # Wildcard entries like "*.hf.space" match any subdomain via suffix check.
+    _default_cors = (
+        "http://localhost,http://127.0.0.1,"
+        "https://huggingface.co,https://*.hf.space,"
+        "vscode-webview://,chrome-extension://"
+    )
     _cors_origins_raw = os.getenv("AGENTMEMORY_CORS_ORIGINS", _default_cors)
-    _allowed_origins = [o.strip().rstrip("*") for o in _cors_origins_raw.split(",") if o.strip()]
+
+    def _parse_cors_origins(raw: str):
+        """Return (exact_set, suffix_list) for efficient origin matching."""
+        exact, suffixes = set(), []
+        for entry in raw.split(","):
+            entry = entry.strip()
+            if not entry:
+                continue
+            if entry.startswith("*."):
+                # *.hf.space → match anything ending with .hf.space
+                suffixes.append(entry[1:].lower())   # keep the leading dot: ".hf.space"
+            elif "*" in entry:
+                # generic prefix wildcard: strip trailing * and treat as prefix
+                suffixes.append(("prefix:", entry.rstrip("*").lower()))
+            else:
+                exact.add(entry.lower())
+        return exact, suffixes
+
+    _cors_exact, _cors_suffixes = _parse_cors_origins(_cors_origins_raw)
+
+    def _origin_allowed(origin: str) -> bool:
+        lo = origin.lower()
+        if lo in _cors_exact:
+            return True
+        for s in _cors_suffixes:
+            if isinstance(s, tuple) and s[0] == "prefix:":
+                if lo.startswith(s[1]):
+                    return True
+            elif lo.endswith(s):
+                return True
+        return False
 
     @flask_app.after_request
     def _cors(response):
         origin = request.headers.get("Origin")
-        if origin:
-            lo = origin.lower()
-            if any(lo == allowed.lower() or lo.startswith(allowed.lower())
-                   for allowed in _allowed_origins):
-                response.headers["Access-Control-Allow-Origin"] = origin
-                response.headers["Access-Control-Allow-Credentials"] = "true"
+        if origin and _origin_allowed(origin):
+            response.headers["Access-Control-Allow-Origin"] = origin
+            response.headers["Access-Control-Allow-Credentials"] = "true"
         response.headers.add("Access-Control-Allow-Headers", "Content-Type, Authorization")
         response.headers.add("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
         return response
+
+    # Handle CORS preflight OPTIONS requests globally
+    from flask import Response as _FlaskResponse
+
+    @flask_app.before_request
+    def _handle_options():
+        if request.method == "OPTIONS":
+            origin = request.headers.get("Origin", "")
+            if origin and _origin_allowed(origin):
+                resp = _FlaskResponse("", status=204)
+                resp.headers["Access-Control-Allow-Origin"] = origin
+                resp.headers["Access-Control-Allow-Credentials"] = "true"
+                resp.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
+                resp.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
+                resp.headers["Access-Control-Max-Age"] = "86400"
+                return resp
 
     # 8. Background workers
     from workers import start_background_workers
