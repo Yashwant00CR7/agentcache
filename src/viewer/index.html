@@ -3493,12 +3493,8 @@
     async function runReplayImport() { return; }
 
     document.addEventListener('keydown', function(e) {
-      // Replay tab removed — keyboard shortcuts are no-ops
-      if (false) {
-      if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT' || e.target.tagName === 'TEXTAREA')) return;
-      if (e.key === ' ') { e.preventDefault(); toggleReplayPlay(); }
-      else if (e.key === 'ArrowLeft') { e.preventDefault(); stepReplay(-1); }
-      else if (e.key === 'ArrowRight') { e.preventDefault(); stepReplay(1); }
+      // Replay keyboard shortcuts removed — replay tab no longer exists
+      if (false) { return; }
     });
 
     switchTab(tabFromRoute(), { replaceRoute: true });
@@ -3587,17 +3583,20 @@
       el.insertAdjacentElement('afterbegin', card);
     }
 
-    // Hook into existing folder load to check empty state
-    var _origLoadFolders = loadFolders;
-    async function loadFolders() {
-      await _origLoadFolders.apply(this, arguments);
-      // After load, check health for onboarding
-      try {
-        var h = await apiFetch('/agentmemory/health');
-        var f = state.flagsConfig;
-        maybeShowOnboarding(h, f);
-      } catch(_) {}
-    }
+    // Hook into existing folder load to check empty state (B4 onboarding)
+    // Uses a closure over the original loadFolders instead of hoisted re-declaration
+    (function() {
+      var _origLoadFolders = loadFolders;
+      loadFolders = async function() {
+        await _origLoadFolders.apply(this, arguments);
+        // After load, check health for onboarding card
+        try {
+          var h = await apiFetchRaw('/agentmemory/health');
+          var f = state.flagsConfig;
+          maybeShowOnboarding(h, f);
+        } catch(_) {}
+      };
+    })();
 
     // ==========================================================================
     // B5 â€” MCP Tool Tester tab
