@@ -1732,56 +1732,190 @@
       });
     }
 
+    // Per-folder-detail state for bulk selection
+    var _folderDetailFp = '';
+    var _folderDetailAid = '';
+    var _selectedObsIds = new Set();
+
     async function loadFolderDetail(folderPath, agentId) {
       var el = document.getElementById('view-folders');
       if (!el) return;
+      _folderDetailFp = folderPath;
+      _folderDetailAid = agentId;
+      _selectedObsIds = new Set();
       el.innerHTML = '<div style="padding:24px;"><div class="skeleton skeleton-card"></div><div class="skeleton skeleton-card"></div></div>';
       try {
-        var params = 'folderPath=' + encodeURIComponent(folderPath) + '&agentId=' + encodeURIComponent(agentId);
-        var result = await apiFetchRaw('/agentmemory/folder/observations?' + params);
+        var qp = 'folderPath=' + encodeURIComponent(folderPath) + '&agentId=' + encodeURIComponent(agentId);
+        var result = await apiFetchRaw('/agentmemory/folder/observations?' + qp);
         var obs = (result && result.observations) || [];
 
-        var html = '<div style="padding:20px 24px;">';
-        html += '<div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;">';
-        html += '<button onclick="loadFolders()" style="background:none;border:1px solid var(--border-light);padding:6px 14px;cursor:pointer;font-family:var(--font-ui);font-size:12px;border-radius:3px;">&larr; Back</button>';
+        var html = '<div id="folder-detail-root" style="padding:20px 24px;">';
+
+        // ── Header row ──────────────────────────────────────────────────
+        html += '<div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap;">';
+        html += '<button class="btn" data-action="back-to-folders">&larr; Back</button>';
         html += '<span style="font-family:var(--font-mono);font-size:13px;color:var(--ink);">' + esc(folderPath) + '</span>';
         html += '<span style="background:var(--bg-inset);padding:2px 8px;border-radius:3px;font-size:11px;font-weight:600;">' + esc(agentId) + '</span>';
-        html += '<span style="margin-left:auto;font-size:12px;color:var(--ink-muted);">' + obs.length + ' observations</span>';
+        html += '<span style="font-size:12px;color:var(--ink-muted);">' + obs.length + ' observation' + (obs.length !== 1 ? 's' : '') + '</span>';
+        html += '<span style="flex:1;"></span>';
+        html += '<button class="btn btn-danger" data-action="delete-folder" data-folder-path="' + esc(folderPath) + '" data-agent-id="' + esc(agentId) + '">Delete folder</button>';
         html += '</div>';
 
         if (obs.length === 0) {
-          html += '<div class="empty-state"><p>No observations found.</p></div>';
+          html += '<div class="empty-state"><div class="empty-icon">&#128203;</div><p>No observations found.</p></div>';
         } else {
+          // ── Bulk-delete toolbar ─────────────────────────────────────────
+          html += '<div id="obs-bulk-toolbar" style="display:flex;align-items:center;gap:10px;margin-bottom:14px;padding:10px 14px;background:var(--bg-alt);border:1px solid var(--border-light);">';
+          html += '<label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-family:var(--font-ui);font-size:12px;">';
+          html += '<input type="checkbox" id="obs-select-all" style="accent-color:var(--ink);"> Select all</label>';
+          html += '<button class="btn btn-danger" id="obs-delete-selected-btn" data-action="delete-obs-selected" disabled style="font-size:11px;padding:4px 12px;">Delete selected (0)</button>';
+          html += '<button class="btn" data-action="run-dedup" data-folder-path="' + esc(folderPath) + '" data-agent-id="' + esc(agentId) + '" style="font-size:11px;padding:4px 12px;" title="Remove duplicate observations automatically">&#x2728; Dedup</button>';
+          html += '</div>';
+
+          // ── Observation cards ───────────────────────────────────────────
+          html += '<div id="obs-list">';
           obs.forEach(function(o) {
             var ts = o.timestamp ? new Date(o.timestamp).toLocaleString() : '';
             var typeColor = {'file_edit':'var(--blue)','command_run':'var(--orange)','search':'var(--green)','error':'var(--red)','conversation':'var(--purple)'}[o.type] || 'var(--ink-muted)';
-            html += '<div style="border:1px solid var(--border-light);border-radius:4px;padding:14px 16px;margin-bottom:10px;background:var(--bg);">';
-            html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">';
+            html += '<div class="obs-detail-card" data-obs-id="' + esc(o.id) + '" style="border:1px solid var(--border-light);border-radius:4px;padding:12px 16px;margin-bottom:8px;background:var(--bg);display:flex;gap:10px;align-items:flex-start;">';
+            // checkbox
+            html += '<label style="padding-top:2px;cursor:pointer;flex-shrink:0;">';
+            html += '<input type="checkbox" class="obs-checkbox" data-obs-id="' + esc(o.id) + '" style="accent-color:var(--ink);">';
+            html += '</label>';
+            // content
+            html += '<div style="flex:1;min-width:0;">';
+            html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap;">';
             html += '<span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:' + typeColor + ';background:var(--bg-subtle);padding:2px 7px;border-radius:3px;">' + esc(o.type || 'other') + '</span>';
             html += '<span style="font-size:11px;color:var(--ink-muted);font-family:var(--font-mono);">' + esc(ts) + '</span>';
+            html += '<span style="flex:1;"></span>';
+            html += '<button class="btn btn-danger" data-action="delete-obs" data-obs-id="' + esc(o.id) + '" data-folder-path="' + esc(folderPath) + '" data-agent-id="' + esc(agentId) + '" style="font-size:9px;padding:2px 8px;">Delete</button>';
             html += '</div>';
             if (o.title) html += '<div style="font-weight:600;font-size:14px;color:var(--ink);margin-bottom:4px;">' + esc(o.title) + '</div>';
-            if (o.text) html += '<div style="font-size:13px;color:var(--ink-secondary);line-height:1.5;white-space:pre-wrap;">' + esc(o.text.length > 300 ? o.text.slice(0,300)+'\u2026' : o.text) + '</div>';
+            if (o.text) html += '<div style="font-size:13px;color:var(--ink-secondary);line-height:1.5;white-space:pre-wrap;">' + esc(o.text.length > 300 ? o.text.slice(0, 300) + '\u2026' : o.text) + '</div>';
+            html += '</div>';
             html += '</div>';
           });
+          html += '</div>'; // #obs-list
         }
 
-        html += '<div style="margin-top:20px;padding-top:16px;border-top:1px solid var(--border-light);">';
-        html += '<button onclick="deleteFolderMemory(\'' + esc(folderPath).replace(/'/g,"\\'") + '\',\'' + esc(agentId).replace(/'/g,"\\'") + '\')" style="background:var(--accent);color:white;border:none;padding:8px 18px;cursor:pointer;font-family:var(--font-ui);font-size:13px;border-radius:3px;">Delete folder memory</button>';
-        html += '</div></div>';
+        html += '</div>'; // #folder-detail-root
         el.innerHTML = html;
+
+        // Wire up checkbox logic after innerHTML is set
+        _wireFolderDetailCheckboxes();
+
       } catch(err) {
-        el.innerHTML = '<div style="padding:20px;"><button onclick="loadFolders()" style="background:none;border:1px solid var(--border-light);padding:6px 14px;cursor:pointer;">&larr; Back</button><div style="margin-top:16px;color:var(--accent);">Error: ' + esc(String(err)) + '</div></div>';
+        el.innerHTML = '<div style="padding:20px;">' +
+          '<button class="btn" data-action="back-to-folders">&larr; Back</button>' +
+          '<div style="margin-top:16px;color:var(--accent);">Error loading observations: ' + esc(String(err)) + '</div></div>';
       }
     }
 
-    async function deleteFolderMemory(folderPath, agentId) {
-      if (!confirm('Delete all observations for ' + folderPath + ' / ' + agentId + '?')) return;
+    function _wireFolderDetailCheckboxes() {
+      var selectAll = document.getElementById('obs-select-all');
+      var deleteBtn = document.getElementById('obs-delete-selected-btn');
+      if (!selectAll || !deleteBtn) return;
+
+      function updateDeleteBtn() {
+        deleteBtn.textContent = 'Delete selected (' + _selectedObsIds.size + ')';
+        deleteBtn.disabled = _selectedObsIds.size === 0;
+      }
+
+      selectAll.addEventListener('change', function() {
+        document.querySelectorAll('.obs-checkbox').forEach(function(cb) {
+          cb.checked = selectAll.checked;
+          var oid = cb.getAttribute('data-obs-id');
+          if (selectAll.checked) { _selectedObsIds.add(oid); }
+          else { _selectedObsIds.delete(oid); }
+        });
+        updateDeleteBtn();
+      });
+
+      document.querySelectorAll('.obs-checkbox').forEach(function(cb) {
+        cb.addEventListener('change', function() {
+          var oid = cb.getAttribute('data-obs-id');
+          if (cb.checked) { _selectedObsIds.add(oid); }
+          else { _selectedObsIds.delete(oid); }
+          // Update select-all indeterminate state
+          var total = document.querySelectorAll('.obs-checkbox').length;
+          selectAll.indeterminate = _selectedObsIds.size > 0 && _selectedObsIds.size < total;
+          selectAll.checked = _selectedObsIds.size === total;
+          updateDeleteBtn();
+        });
+      });
+    }
+
+    function confirmDeleteFolder(fp, aid) {
+      var modal = document.getElementById('modal');
+      var overlay = document.getElementById('modal-overlay');
+      modal.innerHTML = '<h3>Delete Folder Memory</h3>' +
+        '<p>Delete <strong>all observations</strong> for<br><code style="font-size:11px;">' + esc(fp) + '</code> / <code style="font-size:11px;">' + esc(aid) + '</code>?<br><br>This cannot be undone.</p>' +
+        '<div class="modal-actions">' +
+          '<button class="btn" data-action="close-modal">Cancel</button>' +
+          '<button class="btn btn-danger" data-action="confirm-delete-folder" data-folder-path="' + esc(fp) + '" data-agent-id="' + esc(aid) + '">Delete all</button>' +
+        '</div>';
+      overlay.classList.add('open');
+    }
+
+    async function execDeleteFolder(fp, aid) {
+      closeModal();
       try {
-        await apiFetchRaw('/agentmemory/forget', { method: 'POST', body: JSON.stringify({ folderPath: folderPath, agentId: agentId }) });
+        await apiPost('forget', { folderPath: fp, agentId: aid });
         loadFolders();
       } catch(err) {
         alert('Delete failed: ' + String(err));
+      }
+    }
+
+    function confirmDeleteObs(obsId, fp, aid) {
+      var modal = document.getElementById('modal');
+      var overlay = document.getElementById('modal-overlay');
+      modal.innerHTML = '<h3>Delete Observation</h3>' +
+        '<p>Delete this observation? This cannot be undone.</p>' +
+        '<div class="modal-actions">' +
+          '<button class="btn" data-action="close-modal">Cancel</button>' +
+          '<button class="btn btn-danger" data-action="confirm-delete-obs" data-obs-id="' + esc(obsId) + '" data-folder-path="' + esc(fp) + '" data-agent-id="' + esc(aid) + '">Delete</button>' +
+        '</div>';
+      overlay.classList.add('open');
+    }
+
+    async function execDeleteObs(obsId, fp, aid) {
+      closeModal();
+      try {
+        await apiPost('forget', { folderPath: fp, agentId: aid, observationIds: [obsId] });
+        // Remove card from DOM without reload
+        var card = document.querySelector('.obs-detail-card[data-obs-id="' + obsId + '"]');
+        if (card) card.remove();
+        _selectedObsIds.delete(obsId);
+        // Update count in header
+        var remaining = document.querySelectorAll('.obs-detail-card').length;
+        var countEl = document.querySelector('#folder-detail-root span[style*="ink-muted"]');
+        if (countEl) countEl.textContent = remaining + ' observation' + (remaining !== 1 ? 's' : '');
+      } catch(err) {
+        alert('Delete failed: ' + String(err));
+      }
+    }
+
+    async function execDeleteObsSelected() {
+      var ids = Array.from(_selectedObsIds);
+      if (!ids.length) return;
+      closeModal();
+      try {
+        await apiPost('forget', { folderPath: _folderDetailFp, agentId: _folderDetailAid, observationIds: ids });
+        ids.forEach(function(oid) {
+          var card = document.querySelector('.obs-detail-card[data-obs-id="' + oid + '"]');
+          if (card) card.remove();
+          _selectedObsIds.delete(oid);
+        });
+        var remaining = document.querySelectorAll('.obs-detail-card').length;
+        var countEl = document.querySelector('#folder-detail-root span[style*="ink-muted"]');
+        if (countEl) countEl.textContent = remaining + ' observation' + (remaining !== 1 ? 's' : '');
+        var deleteBtn = document.getElementById('obs-delete-selected-btn');
+        if (deleteBtn) { deleteBtn.textContent = 'Delete selected (0)'; deleteBtn.disabled = true; }
+        var selectAll = document.getElementById('obs-select-all');
+        if (selectAll) { selectAll.checked = false; selectAll.indeterminate = false; }
+      } catch(err) {
+        alert('Bulk delete failed: ' + String(err));
       }
     }
 
@@ -3416,6 +3550,56 @@
         if (memoryId) confirmDeleteMemory(memoryId);
         return;
       }
+      if (action === 'back-to-folders') {
+        loadFolders();
+        return;
+      }
+      if (action === 'delete-folder') {
+        var fp = target.getAttribute('data-folder-path');
+        var aid = target.getAttribute('data-agent-id');
+        if (fp && aid) confirmDeleteFolder(fp, aid);
+        return;
+      }
+      if (action === 'confirm-delete-folder') {
+        var fp = target.getAttribute('data-folder-path');
+        var aid = target.getAttribute('data-agent-id');
+        if (fp && aid) execDeleteFolder(fp, aid);
+        return;
+      }
+      if (action === 'delete-obs') {
+        var obsId = target.getAttribute('data-obs-id');
+        var fp = target.getAttribute('data-folder-path');
+        var aid = target.getAttribute('data-agent-id');
+        if (obsId && fp && aid) confirmDeleteObs(obsId, fp, aid);
+        return;
+      }
+      if (action === 'confirm-delete-obs') {
+        var obsId = target.getAttribute('data-obs-id');
+        var fp = target.getAttribute('data-folder-path');
+        var aid = target.getAttribute('data-agent-id');
+        if (obsId && fp && aid) execDeleteObs(obsId, fp, aid);
+        return;
+      }
+      if (action === 'delete-obs-selected') {
+        if (_selectedObsIds.size > 0) execDeleteObsSelected();
+        return;
+      }
+      if (action === 'run-dedup') {
+        var fp = target.getAttribute('data-folder-path');
+        var aid = target.getAttribute('data-agent-id');
+        if (!fp || !aid) return;
+        target.textContent = '⏳ Running…';
+        target.disabled = true;
+        apiPost('folder/dedup', { folderPath: fp, agentId: aid }).then(function(res) {
+          var removed = res && res.deduplicated != null ? res.deduplicated : '?';
+          target.textContent = '✓ Removed ' + removed + ' dupes';
+          setTimeout(function() { loadFolderDetail(fp, aid); }, 1200);
+        }).catch(function() {
+          target.textContent = '✗ Failed';
+          target.disabled = false;
+        });
+        return;
+      }
       if (action === 'save-viewer-token') {
         var tokenInput = document.getElementById('viewer-auth-token');
         var token = tokenInput ? tokenInput.value.trim() : '';
@@ -3701,12 +3885,18 @@
         btn.textContent = 'Running...';
         btn.disabled = true;
         try {
-          var result = await apiFetchRaw('/agentmemory/mcp/tools', {
+          // Use raw fetch so we can call .text() on the Response — apiFetchRaw
+          // already parses JSON and returns a plain object, not a Response.
+          var _toolToken = getViewerToken();
+          var _toolHeaders = { 'Content-Type': 'application/json' };
+          if (_toolToken) _toolHeaders['Authorization'] = 'Bearer ' + _toolToken;
+          var rawRes = await fetch(REST + '/agentmemory/mcp/tools', {
             method: 'POST',
+            headers: _toolHeaders,
             body: JSON.stringify({ name: name, arguments: args })
           });
-          var text = await result.text();
-          var ok = result.ok;
+          var text = await rawRes.text();
+          var ok = rawRes.ok;
           respEl.textContent = text;
           respEl.className = ok ? '' : 'error';
           respEl.style.display = '';

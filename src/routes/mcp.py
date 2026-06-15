@@ -217,6 +217,17 @@ def mcp_tools_list():
                 },
             },
         },
+        {
+            "name": "memory_dedup",
+            "description": "Remove duplicate observations from a (folderPath, agentId) pair or all pairs. Keeps the earliest observation per unique text fingerprint.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "folderPath": {"type": "string", "description": "Folder path to deduplicate (optional — omit for all pairs)"},
+                    "agentId": {"type": "string", "description": "Agent ID to deduplicate (optional — omit for all pairs)"},
+                },
+            },
+        },
     ]
     return jsonify({"tools": tools}), 200
 
@@ -421,6 +432,14 @@ def mcp_tools_call():
                 agent_id=request_aid,
                 before=args.get("before"),
                 after=args.get("after"),
+            )
+            text_out = json.dumps(res, indent=2)
+
+        elif name == "memory_dedup":
+            res = functions.dedup_folder_observations(
+                kv,
+                args.get("folderPath") or None,
+                args.get("agentId") or None,
             )
             text_out = json.dumps(res, indent=2)
 

@@ -26,6 +26,8 @@ _embedding_provider = None
 _hybrid_search = HybridSearch(_bm25_index, _vector_index, None, None)
 _index_persistence = None
 _stream_broadcaster = None  # Callable: (payload) -> None
+_dedup_locks: Dict[str, threading.Lock] = {}   # per-(folder, agent) write locks
+_dedup_locks_meta = threading.Lock()           # protects _dedup_locks dict itself
 
 # KV scope registry — folder-based memory model
 class KV:
@@ -56,6 +58,16 @@ class KV:
         safe_path = folder_path.replace("\\", "/").strip("/")
         safe_agent = agent_id.strip()
         return f"mem:foldermeta:{safe_path}:{safe_agent}"
+
+    @staticmethod
+    def obs_dedup(folder_path: str, agent_id: str) -> str:
+        """Deduplication index scope for (folder, agent) pairs.
+        Key = SHA-256 fingerprint hex of normalized text.
+        Value = {"obsId": str, "timestamp": str}
+        """
+        safe_path = folder_path.replace("\\", "/").strip("/")
+        safe_agent = agent_id.strip()
+        return f"mem:obs_dedup:{safe_path}:{safe_agent}"
 
     # ---- Global / shared scopes (kept) ----
 
@@ -223,6 +235,18 @@ def validate_agent_id(agent_id: str) -> str:
         raise ValueError("agent_id is empty after stripping whitespace")
 
     return sanitized
+
+
+def _get_dedup_lock(folder_path: str, agent_id: str) -> threading.Lock:
+    """Return a per-(folder_path, agent_id) Lock, creating it if necessary.
+
+    Uses _dedup_locks_meta to protect concurrent creation of new lock entries.
+    """
+    key = f"{folder_path}:{agent_id}"
+    with _dedup_locks_meta:
+        if key not in _dedup_locks:
+            _dedup_locks[key] = threading.Lock()
+        return _dedup_locks[key]
 
 
 def auto_complete_old_active_sessions(kv: StateKV, current_session_id: str, project: Optional[str] = None, agent_id: Optional[str] = None) -> int:
@@ -1004,67 +1028,80 @@ def folder_observe(kv: StateKV, payload: Dict[str, Any]) -> Dict[str, Any]:
     safe_text = strip_private_data(text_raw)
     safe_text = safe_text[:4000]
 
-    # 10. Enforce MAX_OBS_PER_FOLDER cap before writing (REQ-015)
-    max_obs = int(os.getenv("MAX_OBS_PER_FOLDER", "2000"))
-    if max_obs > 0:
-        existing_obs = kv.list(KV.folder_obs(folder_path, agent_id))
-        if len(existing_obs) >= max_obs:
-            raise ValueError(f"Folder observation limit reached ({max_obs})")
+    # 3a. Deduplication check — compute fingerprint over normalized text (REQ-DEDUP)
+    _dedup_fp = hashlib.sha256(safe_text[:4000].strip().lower().encode("utf-8")).hexdigest()
+    _dedup_lock = _get_dedup_lock(folder_path, agent_id)
+    _dedup_lock.acquire()
+    try:
+        _existing_dedup = kv.get(KV.obs_dedup(folder_path, agent_id), _dedup_fp)
+        if _existing_dedup and isinstance(_existing_dedup, dict) and _existing_dedup.get("obsId"):
+            return {"observationId": _existing_dedup["obsId"], "deduplicated": True}
 
-    # 4. Generate obs_id (REQ-010)
-    obs_id = generate_id("fobs")
+        # 10. Enforce MAX_OBS_PER_FOLDER cap before writing (REQ-015)
+        max_obs = int(os.getenv("MAX_OBS_PER_FOLDER", "2000"))
+        if max_obs > 0:
+            existing_obs = kv.list(KV.folder_obs(folder_path, agent_id))
+            if len(existing_obs) >= max_obs:
+                raise ValueError(f"Folder observation limit reached ({max_obs})")
 
-    # 5. Determine optional fields
-    obs_type = payload.get("type")
-    if not obs_type:
-        # Use infer_type with no tool_name; pass "other" as hook_type
-        obs_type = infer_type(None, "other")
+        # 4. Generate obs_id (REQ-010)
+        obs_id = generate_id("fobs")
 
-    title = payload.get("title")
-    if not title:
-        title = safe_text[:80]
+        # 5. Determine optional fields
+        obs_type = payload.get("type")
+        if not obs_type:
+            obs_type = infer_type(None, "other")
 
-    concepts = payload.get("concepts") or []
-    if not isinstance(concepts, list):
-        concepts = []
+        title = payload.get("title")
+        if not title:
+            title = safe_text[:80]
 
-    files = payload.get("files")
-    if not isinstance(files, list):
-        # Try to extract file refs from the payload itself
-        files = extract_files(payload)
+        concepts = payload.get("concepts") or []
+        if not isinstance(concepts, list):
+            concepts = []
 
-    raw_importance = payload.get("importance")
-    if raw_importance is None:
-        importance = 5
-    else:
-        try:
-            importance = max(1, min(10, int(raw_importance)))
-        except (TypeError, ValueError):
+        files = payload.get("files")
+        if not isinstance(files, list):
+            files = extract_files(payload)
+
+        raw_importance = payload.get("importance")
+        if raw_importance is None:
             importance = 5
+        else:
+            try:
+                importance = max(1, min(10, int(raw_importance)))
+            except (TypeError, ValueError):
+                importance = 5
 
-    # 5. Build FolderObservation dict (REQ-003)
-    obs: Dict[str, Any] = {
-        "id": obs_id,
-        "folderPath": folder_path,
-        "agentId": agent_id,
-        "timestamp": timestamp,
-        "text": safe_text,
-        "type": obs_type,
-        "title": title,
-        "concepts": concepts,
-        "files": files,
-        "importance": importance,
-    }
+        # 5. Build FolderObservation dict (REQ-003)
+        obs: Dict[str, Any] = {
+            "id": obs_id,
+            "folderPath": folder_path,
+            "agentId": agent_id,
+            "timestamp": timestamp,
+            "text": safe_text,
+            "type": obs_type,
+            "title": title,
+            "concepts": concepts,
+            "files": files,
+            "importance": importance,
+        }
 
-    # 6. Write observation to KV (REQ-001)
-    obs_scope = KV.folder_obs(folder_path, agent_id)
-    kv.set(obs_scope, obs_id, obs)
+        # 6. Write observation to KV (REQ-001)
+        obs_scope = KV.folder_obs(folder_path, agent_id)
+        kv.set(obs_scope, obs_id, obs)
 
-    # Write coordinate lookup mapping
-    kv.set(KV.obs_lookup, obs_id, {
-        "folderPath": folder_path,
-        "agentId": agent_id,
-    })
+        # Write coordinate lookup mapping
+        kv.set(KV.obs_lookup, obs_id, {
+            "folderPath": folder_path,
+            "agentId": agent_id,
+        })
+
+        # Write dedup index entry — inside lock so check+write is atomic (REQ-DEDUP)
+        kv.set(KV.obs_dedup(folder_path, agent_id), _dedup_fp, {"obsId": obs_id, "timestamp": timestamp})
+
+    finally:
+        _dedup_lock.release()
 
     # 7. Upsert folder metadata (REQ-005)
     meta_scope = KV.folder_meta(folder_path, agent_id)
@@ -1112,6 +1149,92 @@ def folder_observe(kv: StateKV, payload: Dict[str, Any]) -> Dict[str, Any]:
     })
 
     return {"observationId": obs_id}
+
+
+# =====================================================================
+# Folder Deduplication (dedup_folder_observations)
+# =====================================================================
+
+def dedup_folder_observations(
+    kv: StateKV,
+    folder_path_raw: Optional[str],
+    agent_id_raw: Optional[str],
+) -> Dict[str, Any]:
+    """Remove duplicate observations from one or all (folder, agent) pairs.
+
+    For each pair, groups observations by SHA-256 fingerprint of their normalized
+    text, keeps the earliest observation per group, and deletes the rest.
+    Also rebuilds the dedup index for each processed pair.
+
+    Args:
+        folder_path_raw: folder path to deduplicate; None = all pairs.
+        agent_id_raw:    agent ID to deduplicate; None = all pairs.
+
+    Returns:
+        {"deduplicated": <count>, "pairs_processed": <n>, "kept": <count>}
+    """
+    # Determine which pairs to process
+    if folder_path_raw and agent_id_raw:
+        try:
+            fp = normalize_folder_path(folder_path_raw)
+            aid = validate_agent_id(agent_id_raw)
+        except ValueError as exc:
+            return {"success": False, "error": str(exc)}
+        pairs = [{"folderPath": fp, "agentId": aid}]
+    else:
+        pairs = [
+            {"folderPath": e.get("folderPath", ""), "agentId": e.get("agentId", "")}
+            for e in kv.list(KV.folders)
+            if e.get("folderPath") and e.get("agentId")
+        ]
+
+    total_removed = 0
+    total_kept = 0
+
+    for pair in pairs:
+        fp = pair["folderPath"]
+        aid = pair["agentId"]
+        all_obs = kv.list(KV.folder_obs(fp, aid))
+
+        # Group by fingerprint, keeping earliest by timestamp
+        fingerprint_map: Dict[str, Dict[str, Any]] = {}
+        duplicates: List[str] = []
+
+        for obs in all_obs:
+            text = obs.get("text") or ""
+            fp_hash = hashlib.sha256(text[:4000].strip().lower().encode("utf-8")).hexdigest()
+            if fp_hash not in fingerprint_map:
+                fingerprint_map[fp_hash] = obs
+            else:
+                # Keep the one with the earlier timestamp
+                existing_ts = fingerprint_map[fp_hash].get("timestamp", "")
+                this_ts = obs.get("timestamp", "")
+                if this_ts < existing_ts:
+                    # This one is older — demote the previously-kept one
+                    duplicates.append(fingerprint_map[fp_hash]["id"])
+                    fingerprint_map[fp_hash] = obs
+                else:
+                    duplicates.append(obs["id"])
+
+        if duplicates:
+            forget(kv, {"folderPath": fp, "agentId": aid, "observationIds": duplicates})
+            total_removed += len(duplicates)
+
+        total_kept += len(fingerprint_map)
+
+        # Rebuild the dedup index for this pair from scratch
+        dedup_scope = KV.obs_dedup(fp, aid)
+        # Clear existing dedup entries by re-writing from surviving observations
+        for fp_hash, obs in fingerprint_map.items():
+            kv.set(dedup_scope, fp_hash, {"obsId": obs["id"], "timestamp": obs.get("timestamp", "")})
+
+    print(f"[dedup] Processed {len(pairs)} pair(s): removed {total_removed}, kept {total_kept}")
+    return {
+        "success": True,
+        "deduplicated": total_removed,
+        "pairs_processed": len(pairs),
+        "kept": total_kept,
+    }
 
 
 # =====================================================================

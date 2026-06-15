@@ -242,6 +242,34 @@ def api_session_end():
 # GET /agentmemory/observations  (legacy compat shim)
 # ---------------------------------------------------------------------------
 
+@observations_bp.route("/agentmemory/folder/dedup", methods=["POST"])
+def api_folder_dedup():
+    """POST /agentmemory/folder/dedup — remove duplicate observations.
+
+    Body (both optional):
+        folderPath: str  — deduplicate only this folder pair
+        agentId:    str  — deduplicate only this agent
+
+    If both are omitted all folder pairs are processed.
+    Returns: {"success": bool, "deduplicated": int, "pairs_processed": int, "kept": int}
+    """
+    auth_err = _check_auth()
+    if auth_err:
+        return auth_err
+    try:
+        body = request.get_json(force=True) or {}
+        folder_path = body.get("folderPath") or None
+        agent_id = body.get("agentId") or None
+        res = functions.dedup_folder_observations(_get_kv(), folder_path, agent_id)
+        return jsonify(res), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+
+
+# ---------------------------------------------------------------------------
+# GET /agentmemory/observations  (legacy compat shim)
+# ---------------------------------------------------------------------------
+
 @observations_bp.route("/agentmemory/observations", methods=["GET"])
 def api_observations_legacy():
     """Legacy /observations?sessionId=... shim.

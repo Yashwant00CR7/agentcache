@@ -31,6 +31,16 @@ class KV:
         safe_agent = agent_id.strip()
         return f"mem:foldermeta:{safe_path}:{safe_agent}"
 
+    @staticmethod
+    def obs_dedup(folder_path: str, agent_id: str) -> str:
+        """Deduplication index scope for (folder, agent) pairs.
+        Key = SHA-256 fingerprint hex of normalized text.
+        Value = {"obsId": str, "timestamp": str}
+        """
+        safe_path = folder_path.replace("\\", "/").strip("/")
+        safe_agent = agent_id.strip()
+        return f"mem:obs_dedup:{safe_path}:{safe_agent}"
+
     # ---- Global / shared scopes (kept) ----
 
     # Long-term memories — unchanged from previous implementation.
