@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
@@ -198,7 +198,7 @@
       outline-offset: -2px;
     }
 
-    /* ── B6.3 Loading skeleton states ──────────────────────────────────── */
+    /* â”€â”€ B6.3 Loading skeleton states â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
     @keyframes shimmer {
       0%   { background-position: -200% 0; }
       100% { background-position:  200% 0; }
@@ -216,7 +216,7 @@
     .skeleton-line  { height: 14px;  margin-bottom: 6px; }
     .skeleton-line.short { width: 60%; }
 
-    /* ── B1 Command palette ────────────────────────────────────────────── */
+    /* â”€â”€ B1 Command palette â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
     #cmd-palette { display: contents; }
     #cmd-backdrop {
       position: fixed; inset: 0;
@@ -269,7 +269,7 @@
     .cmd-main  { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .cmd-sub   { font-size: 11px; color: var(--ink-faint); flex-shrink: 0; }
 
-    /* ── B5 MCP Tool Tester tab ────────────────────────────────────────── */
+    /* â”€â”€ B5 MCP Tool Tester tab â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
     .tools-list { display: flex; flex-direction: column; gap: 0; max-width: 900px; }
     .tool-row {
       border: 1px solid var(--border-light); border-top: none;
@@ -319,7 +319,7 @@
     .badge-ok  { color: var(--green); }
     .badge-err { color: var(--accent); }
 
-    /* ── B4 Onboarding card ─────────────────────────────────────────────── */
+    /* â”€â”€ B4 Onboarding card â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
     .onboarding-card {
       border: 2px solid var(--border); padding: 28px 32px;
       max-width: 640px; margin: 32px auto; background: var(--cream);
@@ -811,7 +811,7 @@
     }
     .empty-state .empty-link { color: var(--accent); text-decoration: underline; font-size: 13px; font-style: normal; }
 
-    /* Feature flag banner system — compact collapsed by default */
+    /* Feature flag banner system â€” compact collapsed by default */
     .flag-banners {
       padding: 0 12px 10px 12px;
       background: var(--bg);
@@ -1310,16 +1310,13 @@
   <div id="view-memories" class="view" role="tabpanel" aria-labelledby="tab-btn-memories"></div>
   <div id="view-timeline" class="view" role="tabpanel" aria-labelledby="tab-btn-timeline"></div>
   <div id="view-tools" class="view" role="tabpanel" aria-labelledby="tab-btn-tools"></div>
-  <div id="view-activity" class="view"></div>
-  <div id="view-profile" class="view"></div>
-  <div id="view-replay" class="view"></div>
-  <div id="view-personal" class="view"></div>
+  <!-- legacy view containers removed â€” backed by endpoints that no longer exist -->
 
   <!-- Command Palette (B1) -->
   <div id="cmd-palette" hidden role="dialog" aria-modal="true" aria-label="Command Palette">
     <div id="cmd-backdrop"></div>
     <div id="cmd-panel">
-      <input id="cmd-input" type="text" placeholder="Search folders, memories, tabs…" autocomplete="off" aria-label="Command palette search">
+      <input id="cmd-input" type="text" placeholder="Search folders, memories, tabsâ€¦" autocomplete="off" aria-label="Command palette search">
       <ul id="cmd-results" role="listbox" aria-label="Search results"></ul>
     </div>
   </div>
@@ -1329,12 +1326,12 @@
   </div>
 
   <footer id="viewer-footer" class="viewer-footer">
-    <span>agentmemory viewer · <span id="footer-version">loading...</span></span>
-    <span class="footer-sep">·</span>
+    <span>agentmemory viewer Â· <span id="footer-version">loading...</span></span>
+    <span class="footer-sep">Â·</span>
     <a href="https://github.com/rohitg00/agentmemory" target="_blank" rel="noopener">github</a>
-    <span class="footer-sep">·</span>
+    <span class="footer-sep">Â·</span>
     <a href="https://github.com/rohitg00/agentmemory#readme" target="_blank" rel="noopener">docs</a>
-    <span class="footer-sep">·</span>
+    <span class="footer-sep">Â·</span>
     <a id="footer-feedback" href="#" target="_blank" rel="noopener">report issue &rarr;</a>
   </footer>
 
@@ -1429,24 +1426,15 @@
       task: '&#9745;', other: '&#128196;'
     };
     var CB_STATE_COLORS = { closed: 'badge-green', open: 'badge-red', 'half-open': 'badge-yellow' };
-    var TAB_IDS = ['folders', 'memories', 'graph', 'timeline'];
+    var TAB_IDS = ['folders', 'memories', 'graph', 'timeline', 'tools'];
     var VIEWER_TOKEN_STORAGE_KEY = 'agentmemory-viewer-token';
 
     var state = {
-      activeTab: 'dashboard',
-      dashboard: { loaded: false, health: null, sessions: [], memories: [], graphStats: null, recentAudit: [], lessons: [], crystals: [], semantic: [], procedural: [] },
+      activeTab: 'folders',
       graph: { loaded: false, nodes: [], edges: [], stats: null, filters: {}, selectedNode: null, queryError: null, truncated: false, totalNodes: 0, totalEdges: 0 },
       memories: { loaded: false, items: [], search: '', typeFilter: '', folderFilter: '' },
       timeline: { loaded: false, observations: [], sessionId: '', minImportance: 0, page: 0, pageSize: 50 },
-      sessions: { loaded: false, items: [], selectedId: null, folderFilter: '' },
       audit: { loaded: false, entries: [], opFilter: '' },
-      activity: { loaded: false, observations: [], sessions: [], typeFilter: '' },
-      lessons: { loaded: false, items: [], search: '' },
-      actions: { loaded: false, items: [], frontier: [], statusFilter: '', search: '' },
-      crystals: { loaded: false, items: [], search: '', lessonMap: {} },
-      profile: { loaded: false, projects: [], selectedProject: '', data: null },
-      replay: { loaded: false, sessions: [], selectedId: '', timeline: null, cursor: 0, playing: false, speed: 1, timer: null, startAt: 0, offsetAt: 0 },
-      personal: { loaded: false, files: [], selectedFile: '', search: '' },
       flagsConfig: null,
       flagsDismissed: {},
       ws: null
@@ -1669,7 +1657,8 @@
     }
 
     async function loadDashboard() {
-      // Dashboard removed — redirect to folders
+      // Dashboard tab was removed; redirect to the Folders tab which is the
+      // active landing page backed by real endpoints (/agentmemory/folders).
       switchTab('folders');
     }
 
@@ -1681,8 +1670,9 @@
       if (!el) return;
       el.innerHTML = '<div style="padding:24px;"><div class="skeleton skeleton-card"></div><div class="skeleton skeleton-card"></div><div class="skeleton skeleton-card"></div></div>';
       try {
-        var result = await apiPost('folders-list', null, 'GET');
+        var result = await apiGet('folders');
         var folders = (result && result.folders) || [];
+        window._cachedFolders = folders; // cache for command palette
         renderFolderList(folders);
       } catch(err) {
         el.innerHTML = '<div class="loading" style="color:var(--accent);">Failed to load folders: ' + esc(String(err)) + '</div>';
@@ -1709,7 +1699,7 @@
         var fp = f.folderPath || '';
         var aid = f.agentId || '';
         var obs = f.obsCount || 0;
-        var updated = f.lastUpdated ? new Date(f.lastUpdated).toLocaleString() : '—';
+        var updated = f.lastUpdated ? new Date(f.lastUpdated).toLocaleString() : 'â€”';
         html += '<tr class="folder-row" data-folder="' + esc(fp) + '" data-agent="' + esc(aid) + '" style="border-bottom:1px solid var(--border-light);cursor:pointer;" onmouseover="this.style.background=\'var(--bg-subtle)\'" onmouseout="this.style.background=\'\'">';
         html += '<td style="padding:10px 12px;max-width:320px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="' + esc(fp) + '"><span style="font-family:var(--font-mono);font-size:12px;">' + esc(fp) + '</span></td>';
         html += '<td style="padding:10px 12px;"><span style="background:var(--bg-inset);padding:2px 8px;border-radius:3px;font-size:11px;font-weight:600;">' + esc(aid) + '</span></td>';
@@ -1756,7 +1746,7 @@
             html += '<span style="font-size:11px;color:var(--ink-muted);font-family:var(--font-mono);">' + esc(ts) + '</span>';
             html += '</div>';
             if (o.title) html += '<div style="font-weight:600;font-size:14px;color:var(--ink);margin-bottom:4px;">' + esc(o.title) + '</div>';
-            if (o.text) html += '<div style="font-size:13px;color:var(--ink-secondary);line-height:1.5;white-space:pre-wrap;">' + esc(o.text.length > 300 ? o.text.slice(0,300)+'…' : o.text) + '</div>';
+            if (o.text) html += '<div style="font-size:13px;color:var(--ink-secondary);line-height:1.5;white-space:pre-wrap;">' + esc(o.text.length > 300 ? o.text.slice(0,300)+'â€¦' : o.text) + '</div>';
             html += '</div>';
           });
         }
@@ -1783,305 +1773,23 @@
     async function apiFetchRaw(path, opts) {
       opts = opts || {};
       var headers = Object.assign({ 'Content-Type': 'application/json' }, opts.headers || {});
-      if (state.token) headers['Authorization'] = 'Bearer ' + state.token;
-      var url = (path.startsWith('/') ? '' : '/agentmemory/') + path;
+      var viewerToken = getViewerToken();
+      if (viewerToken && !headers.Authorization) headers['Authorization'] = 'Bearer ' + viewerToken;
+      // Always use REST base so cross-origin ?port= param works correctly
+      var url = path.startsWith('http') ? path
+        : REST + (path.startsWith('/') ? path : '/agentmemory/' + path);
       var res = await fetch(url, Object.assign({}, opts, { headers: headers }));
       if (!res.ok) throw new Error(res.status + ' ' + res.statusText);
       return res.json();
     }
 
-    async function apiPost(endpoint, body, method) {
-      method = method || 'POST';
-      var headers = { 'Content-Type': 'application/json' };
-      if (state.token) headers['Authorization'] = 'Bearer ' + state.token;
-      var url = '/agentmemory/' + endpoint;
-      var opts = { method: method, headers: headers };
-      if (body !== null && body !== undefined) opts.body = JSON.stringify(body);
-      var res = await fetch(url, opts);
-      if (!res.ok) throw new Error(res.status + ' ' + res.statusText);
-      return res.json();
+    async function apiFetch(path, opts) {
+      return apiFetchRaw(path, opts);
     }
 
 
 
     function renderDashboard() {
-      var el = document.getElementById('view-dashboard');
-      var d = state.dashboard;
-      var h = d.health || {};
-      var snap = h.health || {};
-      var healthStatus = h.status || 'unknown';
-      var dotClass = healthStatus === 'healthy' ? 'healthy' : healthStatus === 'degraded' ? 'degraded' : healthStatus === 'critical' ? 'critical' : '';
-      var activeSessions = d.sessions.filter(function(s) { return s.status === 'active'; }).length;
-      var gs = d.graphStats || {};
-      var nodeCount = gs.totalNodes !== undefined ? gs.totalNodes : (gs.nodes !== undefined ? gs.nodes : (gs.nodeCount || 0));
-      var edgeCount = gs.totalEdges !== undefined ? gs.totalEdges : (gs.edges !== undefined ? gs.edges : (gs.edgeCount || 0));
-      var fMetrics = h.functionMetrics || [];
-      var cb = h.circuitBreaker || null;
-      var workers = snap.workers || [];
-
-      var html = '';
-      if (d.sessions.length === 0) {
-        html += '<div class="card" style="margin-bottom:14px;padding:24px 28px;background:var(--bg-subtle);border-left:3px solid var(--accent);">' +
-          '<div style="font-family:var(--font-ui);font-size:11px;letter-spacing:0.15em;text-transform:uppercase;color:var(--accent);font-weight:700;margin-bottom:8px;">First run &rarr; magical moment in 10 seconds</div>' +
-          '<div style="font-family:var(--font-display,Lora,Georgia,serif);font-size:22px;font-weight:700;color:var(--ink);margin-bottom:8px;">Seed sample data + prove semantic recall works</div>' +
-          '<div style="font-size:13px;color:var(--ink-muted);margin-bottom:12px;line-height:1.5;max-width:640px;">agentmemory is running but hasn&rsquo;t seen any sessions yet. Run the demo command in a second terminal: it seeds 3 realistic coding sessions and proves the hybrid search finds semantically-related memories that keyword search would miss.</div>' +
-          '<pre style="display:inline-block;margin:0;padding:10px 14px;background:var(--bg);border:1px solid var(--border);border-radius:4px;font-family:var(--font-mono);font-size:12px;color:var(--ink);">npx @agentmemory/agentmemory demo</pre>' +
-          '<div style="margin-top:10px;"><a class="empty-link" href="https://github.com/rohitg00/agentmemory#quick-start" target="_blank" rel="noopener" style="font-size:12px;">Or: wire up your real agent &rarr;</a></div>' +
-          '</div>';
-      }
-      html += '<div class="stats-grid">';
-      html += '<div class="stat-card"><div class="label">Sessions</div><div class="value">' + d.sessions.length + '</div><div class="sub">' + activeSessions + ' active</div></div>';
-      html += '<div class="stat-card"><div class="label">Memories</div><div class="value">' + d.memories.length + '</div><div class="sub">latest versions</div></div>';
-      var lessonCount = (d.lessons || []).length;
-      var crystalCount = (d.crystals || []).length;
-      html += '<div class="stat-card"><div class="label">Lessons</div><div class="value">' + lessonCount + '</div><div class="sub">confidence-scored</div></div>';
-      html += '<div class="stat-card"><div class="label">Crystals</div><div class="value">' + crystalCount + '</div><div class="sub">action digests</div></div>';
-      html += '<div class="stat-card"><div class="label">Graph Nodes</div><div class="value">' + nodeCount + '</div><div class="sub">' + edgeCount + ' edges</div></div>';
-      html += '<div class="stat-card"><div class="label">Health</div><div class="value"><div class="health-bar"><span class="health-dot ' + dotClass + '"></span> ' + esc(healthStatus) + '</div></div>';
-      html += '<div class="sub">' + esc(snap.connectionState || 'unknown') + '</div></div>';
-      var totalCalls = fMetrics.reduce(function(a, m) { return a + (m.totalCalls || 0); }, 0);
-      html += '<div class="stat-card"><div class="label">Function Calls</div><div class="value">' + totalCalls + '</div><div class="sub">' + fMetrics.length + ' functions tracked</div></div>';
-      if (cb) {
-        var cbClass = cb.state === 'closed' ? 'cb-closed' : cb.state === 'open' ? 'cb-open' : 'cb-half-open';
-        html += '<div class="stat-card"><div class="label">Circuit Breaker</div><div class="value"><span class="cb-indicator ' + cbClass + '">' + esc(cb.state) + '</span></div>';
-        html += '<div class="sub">' + (cb.failures || 0) + ' failures</div></div>';
-      }
-      var totalObs = d.sessions.reduce(function(a, s) { return a + (s.observationCount || 0); }, 0);
-      var tokenBudget = parseInt(new URLSearchParams(window.location.search).get('tokenBudget') || '2000', 10) || 2000;
-      var estFull = totalObs * 80;
-      var estInjected = d.sessions.length * tokenBudget;
-      var savings = estFull > 0 ? Math.round((1 - estInjected / Math.max(estFull, 1)) * 100) : 0;
-      if (savings < 0) savings = 0;
-      var tokensSaved = Math.max(0, estFull - estInjected);
-      var costDollars = tokensSaved / 1000 * 0.3;
-      var costCents = Math.round(costDollars * 100);
-      var costStr = costCents >= 100 ? '$' + (costCents / 100).toFixed(2) : costCents + 'ct';
-      html += '<div class="stat-card"><div class="label">Token Savings</div><div class="value">' + savings + '%</div><div class="sub">~' + tokensSaved.toLocaleString() + ' tokens · ' + costStr + ' saved</div></div>';
-      html += '</div>';
-
-      if (snap.memory || snap.cpu) {
-        html += '<div class="card" style="margin-bottom:16px"><div class="card-title">System Resources</div>';
-        if (snap.memory) {
-          var heapUsed = Math.round((snap.memory.heapUsed || 0) / 1024 / 1024);
-          var heapTotal = Math.round((snap.memory.heapTotal || 0) / 1024 / 1024);
-          var rss = Math.round((snap.memory.rss || 0) / 1024 / 1024);
-          var heapPct = heapTotal > 0 ? Math.round((heapUsed / heapTotal) * 100) : 0;
-          var rssAboveFloor = rss >= 512;
-          var heapColor = (heapPct > 80 && rssAboveFloor) ? 'var(--red)' : (heapPct > 60 && rssAboveFloor) ? 'var(--yellow)' : 'var(--green)';
-          html += '<div class="gauge"><span class="gauge-label">Heap</span><div class="gauge-bar"><div class="gauge-fill" style="width:' + heapPct + '%;background:' + heapColor + '"></div></div><span class="gauge-value">' + heapUsed + ' / ' + heapTotal + ' MB</span></div>';
-          html += '<div class="gauge"><span class="gauge-label">RSS</span><div class="gauge-bar"><div class="gauge-fill" style="width:' + Math.min(100, Math.round(rss / 512 * 100)) + '%;background:var(--blue)"></div></div><span class="gauge-value">' + rss + ' MB</span></div>';
-          if (snap.memory.external) {
-            var ext = Math.round(snap.memory.external / 1024 / 1024);
-            html += '<div class="gauge"><span class="gauge-label">External</span><div class="gauge-bar"><div class="gauge-fill" style="width:' + Math.min(100, Math.round(ext / 128 * 100)) + '%;background:var(--purple)"></div></div><span class="gauge-value">' + ext + ' MB</span></div>';
-          }
-        }
-        if (snap.cpu) {
-          var cpuPct = snap.cpu.percent || 0;
-          var cpuColor = cpuPct > 80 ? 'var(--red)' : cpuPct > 50 ? 'var(--yellow)' : 'var(--green)';
-          html += '<div class="gauge"><span class="gauge-label">CPU</span><div class="gauge-bar"><div class="gauge-fill" style="width:' + Math.min(100, cpuPct) + '%;background:' + cpuColor + '"></div></div><span class="gauge-value">' + cpuPct.toFixed(1) + '%</span></div>';
-        }
-        if (snap.eventLoopLagMs !== undefined) {
-          var lag = snap.eventLoopLagMs;
-          var lagColor = lag > 100 ? 'var(--red)' : lag > 20 ? 'var(--yellow)' : 'var(--green)';
-          html += '<div class="gauge"><span class="gauge-label">Event Loop</span><div class="gauge-bar"><div class="gauge-fill" style="width:' + Math.min(100, lag) + '%;background:' + lagColor + '"></div></div><span class="gauge-value">' + lag.toFixed(1) + ' ms</span></div>';
-        }
-        if (snap.uptimeSeconds) {
-          var mins = Math.floor(snap.uptimeSeconds / 60);
-          var hrs = Math.floor(mins / 60);
-          var upStr = hrs > 0 ? hrs + 'h ' + (mins % 60) + 'm' : mins + 'm';
-          html += '<div style="font-size:10px;color:var(--ink-faint);margin-top:6px;font-family:var(--font-mono);letter-spacing:0.04em;">UPTIME: ' + upStr + '</div>';
-        }
-        html += '</div>';
-      }
-
-      if (snap.alerts && snap.alerts.length > 0) {
-        html += '<div class="card" style="margin-bottom:16px;border-color:var(--accent);border-width:2px;"><div class="card-title" style="color:var(--accent);border-bottom-color:var(--accent);">Alerts (' + snap.alerts.length + ')</div>';
-        snap.alerts.forEach(function(al) {
-          html += '<div style="font-size:12px;color:var(--accent);padding:4px 0;border-bottom:1px solid var(--border-light);font-family:var(--font-ui);">' + esc(al) + '</div>';
-        });
-        html += '</div>';
-      }
-
-      if (snap.notes && snap.notes.length > 0) {
-        html += '<div class="card" style="margin-bottom:16px;"><div class="card-title" style="color:var(--ink-muted);">Notes (' + snap.notes.length + ')</div>';
-        snap.notes.forEach(function(n) {
-          html += '<div style="font-size:12px;color:var(--ink-muted);padding:4px 0;border-bottom:1px solid var(--border-light);font-family:var(--font-ui);">' + esc(n) + '</div>';
-        });
-        html += '</div>';
-      }
-
-      html += '<div class="two-col">';
-
-      html += '<div class="card"><div class="card-title">Recent Sessions</div>';
-      if (d.sessions.length === 0) {
-        html += '<div class="empty-state"><p>No sessions yet. Start a coding session with agentmemory hooks enabled.</p></div>';
-      } else {
-        var recent = d.sessions.slice().sort(function(a, b) { return (b.startedAt || '').localeCompare(a.startedAt || ''); }).slice(0, 5);
-        html += '<table><tr><th>Project</th><th>Status</th><th>Obs</th><th>Started</th></tr>';
-        recent.forEach(function(s) {
-          var statusBadge = s.status === 'active' ? 'badge-green' : s.status === 'completed' ? 'badge-blue' : 'badge-muted';
-          html += '<tr><td style="color:var(--ink);font-weight:500;">' + esc(sessionDisplayName(s)) + '</td>';
-          html += '<td><span class="badge ' + statusBadge + '">' + esc(s.status) + '</span></td>';
-          html += '<td style="color:var(--ink-muted);font-family:var(--font-mono);font-size:12px;">' + (s.observationCount || 0) + '</td>';
-          html += '<td style="font-family:var(--font-mono);font-size:11px;color:var(--ink-faint);">' + esc(shortTime(s.startedAt)) + '</td></tr>';
-        });
-        html += '</table>';
-      }
-      html += '</div>';
-
-      html += '<div class="card"><div class="card-title">Recent Activity</div>';
-      if (d.recentAudit.length === 0) {
-        html += '<div class="empty-state"><p>No activity recorded yet</p></div>';
-      } else {
-        d.recentAudit.forEach(function(a) {
-          var badgeClass = OP_BADGES[a.operation] || 'badge-muted';
-          html += '<div style="padding:6px 0;border-bottom:1px solid var(--border-light);font-size:13px;">';
-          html += '<span class="badge ' + badgeClass + '">' + esc(a.operation) + '</span> ';
-          if (a.functionId) html += '<span style="font-size:11px;color:var(--ink-muted);font-family:var(--font-mono);">' + esc(a.functionId) + '</span> ';
-          html += '<span style="color:var(--ink-faint);font-size:10px;font-family:var(--font-mono);">' + esc(shortTime(a.timestamp)) + '</span>';
-          if (a.targetIds && a.targetIds.length) html += '<span style="font-size:10px;color:var(--ink-faint);margin-left:4px;">(' + a.targetIds.length + ' targets)</span>';
-          html += '</div>';
-        });
-      }
-      html += '</div>';
-
-      html += '</div>';
-
-      html += '<div class="two-col" style="margin-top:16px;">';
-
-      html += '<div class="card"><div class="card-title">Semantic Memory (Consolidated Facts)</div>';
-      var semanticList = d.semantic || [];
-      if (semanticList.length === 0) {
-        html += '<div class="empty-state"><p>No semantic memories consolidated yet. Run consolidation to synthesize episodic facts.</p></div>';
-      } else {
-        html += '<div style="display:flex; flex-direction:column; gap:8px; max-height: 300px; overflow-y: auto; padding-right: 4px;">';
-        semanticList.forEach(function(item) {
-          var confPct = Math.round((item.confidence || 0) * 100);
-          var confClass = confPct > 80 ? 'badge-green' : confPct > 50 ? 'badge-blue' : 'badge-muted';
-          html += '<div style="padding:8px 10px; border:1px solid var(--border-light); border-radius:4px; font-size:13px; background:var(--bg);">';
-          html += '<div style="color:var(--ink); font-weight:500; line-height:1.4;">' + esc(item.fact) + '</div>';
-          html += '<div style="margin-top:6px; display:flex; gap:8px; align-items:center; font-size:11px; color:var(--ink-muted); font-family:var(--font-mono);">';
-          html += '<span class="badge ' + confClass + '">' + confPct + '% confidence</span>';
-          html += '<span>accessed: ' + (item.accessCount || 1) + 'x</span>';
-          html += '</div></div>';
-        });
-        html += '</div>';
-      }
-      html += '</div>';
-
-      html += '<div class="card"><div class="card-title">Procedural Memory (Action Workflows)</div>';
-      var proceduralList = d.procedural || [];
-      if (proceduralList.length === 0) {
-        html += '<div class="empty-state"><p>No procedural memories extracted yet. Consolidated sessions with recurring patterns will generate reusable workflows.</p></div>';
-      } else {
-        html += '<div style="display:flex; flex-direction:column; gap:10px; max-height: 300px; overflow-y: auto; padding-right: 4px;">';
-        proceduralList.forEach(function(item) {
-          html += '<div style="padding:10px; border:1px solid var(--border-light); border-radius:4px; background:var(--bg);">';
-          html += '<div style="font-weight:700; color:var(--ink); font-size:14px; font-family:var(--font-display);">' + esc(item.name) + '</div>';
-          if (item.triggerCondition) {
-            html += '<div style="font-size:11px; color:var(--ink-muted); font-style:italic; margin:4px 0;">Trigger: ' + esc(item.triggerCondition) + '</div>';
-          }
-          if (item.steps && item.steps.length > 0) {
-            html += '<ol style="margin-left:16px; margin-top:6px; font-size:12px; line-height:1.5; color:var(--ink-secondary);">';
-            item.steps.forEach(function(step) {
-              html += '<li>' + esc(step) + '</li>';
-            });
-            html += '</ol>';
-          }
-          html += '<div style="margin-top:6px; font-size:10px; color:var(--ink-faint); font-family:var(--font-mono);">';
-          html += 'Frequency: ' + (item.frequency || 1) + 'x';
-          html += '</div></div>';
-        });
-        html += '</div>';
-      }
-      html += '</div>';
-
-      html += '</div>';
-
-      if (fMetrics.length > 0) {
-        var sorted = fMetrics.slice().sort(function(a, b) { return (b.totalCalls || 0) - (a.totalCalls || 0); });
-        html += '<div class="card" style="margin-top:16px"><div class="card-title">Function Metrics (OTel)</div>';
-        html += '<table class="metric-table"><tr><th>Function</th><th style="text-align:right">Calls</th><th style="text-align:right">Success</th><th style="text-align:right">Fail</th><th style="text-align:right">Avg Latency</th><th style="text-align:right">Quality</th></tr>';
-        sorted.forEach(function(m) {
-          var successRate = m.totalCalls > 0 ? Math.round((m.successCount / m.totalCalls) * 100) : 0;
-          var rateColor = successRate >= 95 ? 'var(--green)' : successRate >= 80 ? 'var(--yellow)' : 'var(--red)';
-          var latencyColor = m.avgLatencyMs > 1000 ? 'var(--red)' : m.avgLatencyMs > 200 ? 'var(--yellow)' : 'var(--green)';
-          html += '<tr>';
-          html += '<td class="metric-fn">' + esc(m.functionId) + '</td>';
-          html += '<td class="metric-num">' + m.totalCalls + '</td>';
-          html += '<td class="metric-num" style="color:' + rateColor + '">' + m.successCount + ' (' + successRate + '%)</td>';
-          html += '<td class="metric-num" style="color:' + (m.failureCount > 0 ? 'var(--red)' : 'var(--ink-faint)') + '">' + m.failureCount + '</td>';
-          html += '<td class="metric-num" style="color:' + latencyColor + '">' + Math.round(m.avgLatencyMs) + ' ms</td>';
-          html += '<td class="metric-num">' + (m.avgQualityScore > 0 ? m.avgQualityScore.toFixed(2) : '-') + '</td>';
-          html += '</tr>';
-        });
-        html += '</table></div>';
-      }
-
-      if (workers.length > 0) {
-        html += '<div class="card" style="margin-top:16px"><div class="card-title">Workers</div>';
-        workers.forEach(function(w) {
-          var statusClass = w.status === 'running' ? 'running' : w.status === 'starting' ? 'starting' : 'stopped';
-          html += '<div class="worker-row"><span class="worker-dot ' + statusClass + '"></span>';
-          html += '<span style="color:var(--ink);font-weight:600;font-family:var(--font-ui);font-size:12px;">' + esc(w.name) + '</span>';
-          html += '<span class="badge ' + (w.status === 'running' ? 'badge-green' : 'badge-muted') + '">' + esc(w.status) + '</span>';
-          html += '<span style="font-size:10px;color:var(--ink-faint);font-family:var(--font-mono);">' + esc(w.id) + '</span></div>';
-        });
-        html += '</div>';
-      }
-
-      if (cb && cb.state !== 'closed') {
-        html += '<div class="card" style="margin-top:16px;border-color:var(--accent);border-width:2px;"><div class="card-title" style="color:var(--accent);">Circuit Breaker Details</div>';
-        html += '<div class="detail-row"><div class="dl">State</div><div class="dv"><span class="cb-indicator ' + (cb.state === 'open' ? 'cb-open' : 'cb-half-open') + '">' + esc(cb.state) + '</span></div></div>';
-        html += '<div class="detail-row"><div class="dl">Failures</div><div class="dv" style="color:var(--accent);font-family:var(--font-mono);">' + (cb.failures || 0) + '</div></div>';
-        if (cb.lastFailureAt) html += '<div class="detail-row"><div class="dl">Last Failure</div><div class="dv" style="font-family:var(--font-mono);font-size:12px;">' + esc(formatTime(cb.lastFailureAt)) + '</div></div>';
-        if (cb.openedAt) html += '<div class="detail-row"><div class="dl">Opened At</div><div class="dv" style="font-family:var(--font-mono);font-size:12px;">' + esc(formatTime(cb.openedAt)) + '</div></div>';
-        html += '</div>';
-      }
-
-      var semFacts = d.semantic || [];
-      var procItems = d.procedural || [];
-      var relItems = d.relations || [];
-
-      html += '<div class="card" style="margin-top:16px;"><div class="card-title">Consolidation Status</div>';
-      html += '<div class="consolidation-row"><span class="cl">Semantic facts</span><span class="cv">' + semFacts.length + '</span></div>';
-      html += '<div class="consolidation-row"><span class="cl">Procedures</span><span class="cv">' + procItems.length + '</span></div>';
-      html += '<div class="consolidation-row"><span class="cl">Relations</span><span class="cv">' + relItems.length + '</span></div>';
-      html += '</div>';
-
-      if (relItems.length > 0) {
-        html += '<div class="card" style="margin-top:16px;"><div class="card-title">Memory Relations</div>';
-        relItems.slice(0, 8).forEach(function(r) {
-          var relType = r.type || r.relationType || 'related';
-          var badgeClass = relType === 'supersedes' ? 'badge-red' : relType === 'extends' ? 'badge-green' : relType === 'contradicts' ? 'badge-yellow' : 'badge-muted';
-          html += '<div style="padding:4px 0;border-bottom:1px solid var(--border-light);font-size:12px;display:flex;align-items:center;gap:6px;">';
-          html += '<span style="font-family:var(--font-mono);color:var(--blue);font-size:11px;">' + esc(truncate(r.sourceId || r.fromId || '', 8)) + '</span>';
-          html += '<span class="badge ' + badgeClass + '">' + esc(relType) + '</span>';
-          html += '<span style="font-family:var(--font-mono);color:var(--blue);font-size:11px;">' + esc(truncate(r.targetId || r.toId || '', 8)) + '</span>';
-          html += '</div>';
-        });
-        html += '</div>';
-      }
-
-      html += '<div style="text-align:center;margin-top:20px;"><button class="btn btn-primary" data-action="refresh-dashboard">Refresh</button>';
-      html += '<span style="font-size:10px;color:var(--ink-faint);margin-left:10px;font-family:var(--font-mono);text-transform:uppercase;letter-spacing:0.08em;">Auto-refresh 30s</span></div>';
-
-      el.innerHTML = html;
-    }
-
-    var dashboardTimer = null;
-    function refreshDashboard() {
-      state.dashboard.loaded = false;
-      loadDashboard();
-    }
-    function startDashboardAutoRefresh() {
-      if (dashboardTimer) clearInterval(dashboardTimer);
-      dashboardTimer = setInterval(function() {
-        if (pollTimer) return;
-        if (state.activeTab === 'dashboard') refreshDashboard();
-      }, 30000);
-    }
-
     var graphSim = { nodes: [], edges: [], running: false, canvas: null, ctx: null, raf: null, panX: 0, panY: 0, zoom: 1, dragNode: null, mouseX: 0, mouseY: 0, tickCount: 0, quietTicks: 0 };
     function wakeGraphSim() {
       graphSim.quietTicks = 0;
@@ -2094,7 +1802,7 @@
 
     async function loadGraph() {
       var el = document.getElementById('view-graph');
-      el.innerHTML = '<div class="graph-container"><div class="graph-canvas-wrap"><canvas id="graph-canvas"></canvas><div class="graph-controls"><button title="Zoom In" data-action="zoom-graph" data-dir="1">+</button><button title="Zoom Out" data-action="zoom-graph" data-dir="-1">&minus;</button><div class="ctrl-divider"></div><button title="Recenter" data-action="recenter-graph">⌖</button></div><div class="graph-tooltip" id="graph-tooltip"></div></div><div class="graph-sidebar" id="graph-sidebar"></div></div>';
+      el.innerHTML = '<div class="graph-container"><div class="graph-canvas-wrap"><canvas id="graph-canvas"></canvas><div class="graph-controls"><button title="Zoom In" data-action="zoom-graph" data-dir="1">+</button><button title="Zoom Out" data-action="zoom-graph" data-dir="-1">&minus;</button><div class="ctrl-divider"></div><button title="Recenter" data-action="recenter-graph">âŒ–</button></div><div class="graph-tooltip" id="graph-tooltip"></div></div><div class="graph-sidebar" id="graph-sidebar"></div></div>';
 
       state.graph.queryError = null;
       var graphData;
@@ -2208,7 +1916,7 @@
       });
       html += '</div>';
 
-      html += '<button class="btn" style="margin-top:14px;width:100%;font-size:11px;padding:8px;letter-spacing:0.06em;transition:all 0.15s ease;" data-action="rebuild-graph">↻ Rebuild Graph</button>';
+      html += '<button class="btn" style="margin-top:14px;width:100%;font-size:11px;padding:8px;letter-spacing:0.06em;transition:all 0.15s ease;" data-action="rebuild-graph">â†» Rebuild Graph</button>';
       html += '<div id="selected-node-panel"></div>';
       var __focus = captureSearchFocus(['graph-search']);
       sb.innerHTML = html;
@@ -2964,7 +2672,7 @@
     }
 
     // =====================================================================
-    // Timeline Tab — folder activity feed
+    // Timeline Tab â€” folder activity feed
     // =====================================================================
     var tlFolderFilter = '';
     var tlAgentFilter = '';
@@ -3063,7 +2771,7 @@
       html += '</div>';
       if (o.title) html += '<div style="font-weight:600;font-size:13px;color:var(--ink);margin-bottom:3px;">' + esc(o.title) + '</div>';
       if (o.text) {
-        var excerpt = o.text.length > 200 ? o.text.slice(0, 200) + '…' : o.text;
+        var excerpt = o.text.length > 200 ? o.text.slice(0, 200) + 'â€¦' : o.text;
         html += '<div style="font-size:12px;color:var(--ink-secondary);line-height:1.5;">' + esc(excerpt) + '</div>';
       }
       html += '</div>';
@@ -3258,983 +2966,35 @@
       renderObservations();
     }
 
-    async function loadActivity() {
-      var el = document.getElementById('view-activity');
-      el.innerHTML = '<div class="loading">Loading activity...</div>';
-      var results = await Promise.all([
-        apiGet('sessions'),
-        apiGet('audit?limit=200')
-      ]);
-      var sessions = (results[0] && results[0].sessions) || [];
-      var auditEntries = (results[1] && results[1].entries) || [];
-
-      var allObs = [];
-      var sorted = sessions.slice().sort(function(a, b) { return (b.startedAt || '').localeCompare(a.startedAt || ''); });
-      var recentSessions = sorted.slice(0, 5);
-
-      var obsResults = await Promise.all(recentSessions.filter(function(s) { return sessionId(s); }).map(function(s) {
-        return apiGet('observations?sessionId=' + encodeURIComponent(sessionId(s)));
-      }));
-      obsResults.forEach(function(r) {
-        if (r && r.observations) allObs = allObs.concat(r.observations);
-      });
-
-      state.activity.sessions = sessions;
-      state.activity.observations = allObs;
-      state.activity.audit = auditEntries;
-      state.activity.loaded = true;
-      renderActivity();
-    }
-
-    function renderActivity() {
-      var el = document.getElementById('view-activity');
-      var obs = state.activity.observations;
-      var sessions = state.activity.sessions;
-
-      var TOOL_TYPE_MAP = { Read: 'file_read', Write: 'file_write', Edit: 'file_edit', Bash: 'command_run', Grep: 'search', Glob: 'search', WebFetch: 'web_fetch', WebSearch: 'web_fetch', AskUserQuestion: 'conversation', Task: 'subagent' };
-
-      var html = '';
-
-      html += '<div class="card"><div class="card-title">Activity Heatmap (Past Year)</div>';
-      var dayCounts = {};
-      obs.forEach(function(o) {
-        try {
-          var d = new Date(o.timestamp);
-          var key = d.toISOString().slice(0, 10);
-          dayCounts[key] = (dayCounts[key] || 0) + 1;
-        } catch(e) {}
-      });
-      sessions.forEach(function(s) {
-        try {
-          var d = new Date(s.startedAt);
-          var key = d.toISOString().slice(0, 10);
-          dayCounts[key] = (dayCounts[key] || 0) + 1;
-        } catch(e) {}
-      });
-
-      var maxCount = 0;
-      Object.keys(dayCounts).forEach(function(k) { if (dayCounts[k] > maxCount) maxCount = dayCounts[k]; });
-
-      var today = new Date();
-      var dayLabels = ['Mon', '', 'Wed', '', 'Fri', '', ''];
-      html += '<div class="heatmap-labels">';
-      dayLabels.forEach(function(l) { html += '<span style="width:10px;text-align:center;">' + l + '</span>'; });
-      html += '</div>';
-      html += '<div class="heatmap-wrap"><div class="heatmap-grid">';
-      for (var w = 51; w >= 0; w--) {
-        for (var d = 0; d < 7; d++) {
-          var cellDate = new Date(today);
-          cellDate.setDate(cellDate.getDate() - (w * 7 + (6 - d)));
-          var key = cellDate.toISOString().slice(0, 10);
-          var count = dayCounts[key] || 0;
-          var level = count === 0 ? '' : count <= (maxCount * 0.25) ? 'level-1' : count <= (maxCount * 0.5) ? 'level-2' : count <= (maxCount * 0.75) ? 'level-3' : 'level-4';
-          var title = key + ': ' + count + ' event' + (count !== 1 ? 's' : '');
-          html += '<div class="heatmap-cell ' + level + '" title="' + esc(title) + '"></div>';
-        }
-      }
-      html += '</div></div>';
-      html += '<div style="display:flex;align-items:center;gap:4px;margin-top:8px;font-size:10px;color:var(--ink-faint);font-family:var(--font-mono);justify-content:flex-end;">Less ';
-      html += '<div class="heatmap-cell" style="display:inline-block;"></div>';
-      html += '<div class="heatmap-cell level-1" style="display:inline-block;"></div>';
-      html += '<div class="heatmap-cell level-2" style="display:inline-block;"></div>';
-      html += '<div class="heatmap-cell level-3" style="display:inline-block;"></div>';
-      html += '<div class="heatmap-cell level-4" style="display:inline-block;"></div>';
-      html += ' More</div>';
-      html += '</div>';
-
-      var typeCounts = {};
-      obs.forEach(function(o) {
-        var t = o.type || TOOL_TYPE_MAP[o.toolName] || (o.hookType ? o.hookType.replace(/_/g, ' ') : 'other');
-        typeCounts[t] = (typeCounts[t] || 0) + 1;
-      });
-      var typeList = Object.keys(typeCounts).sort(function(a, b) { return typeCounts[b] - typeCounts[a]; });
-      var totalObs = obs.length || 1;
-
-      html += '<div class="two-col" style="margin-top:16px;">';
-
-      html += '<div class="card"><div class="card-title">Type Breakdown</div>';
-      if (typeList.length === 0) {
-        html += '<div style="font-size:13px;color:var(--ink-faint);font-style:italic;">No observations yet</div>';
-      } else {
-        html += '<div class="bar-chart">';
-        typeList.slice(0, 12).forEach(function(t) {
-          var pct = Math.round((typeCounts[t] / totalObs) * 100);
-          var color = OBS_TYPE_COLORS[t] || '#666666';
-          html += '<div class="bar-row"><span class="bar-label">' + esc(t.replace(/_/g, ' ')) + '</span><div class="bar-track"><div class="bar-fill" style="width:' + pct + '%;background:' + color + ';"></div></div><span class="bar-value">' + typeCounts[t] + '</span></div>';
-        });
-        html += '</div>';
-      }
-      html += '</div>';
-
-      html += '<div class="card"><div class="card-title">Activity Feed</div>';
-      var sortedObs = obs.slice().sort(function(a, b) { return (b.timestamp || '').localeCompare(a.timestamp || ''); });
-      if (sortedObs.length === 0) {
-        html += '<div style="font-size:13px;color:var(--ink-faint);font-style:italic;">No recent activity</div>';
-      } else {
-        sortedObs.slice(0, 20).forEach(function(o) {
-          var type = o.type || TOOL_TYPE_MAP[o.toolName] || 'other';
-          var typeColor = OBS_TYPE_COLORS[type] || '#666666';
-          var icon = OBS_TYPE_ICONS[type] || '&#128196;';
-          var title = o.title || o.toolName || (o.hookType ? o.hookType.replace(/_/g, ' ') : 'Observation');
-
-          html += '<div class="activity-feed-item">';
-          html += '<div class="activity-feed-icon" style="color:' + typeColor + ';border-color:' + typeColor + ';">' + icon + '</div>';
-          html += '<div class="activity-feed-body">';
-          html += '<div class="activity-feed-title">' + esc(truncate(title, 60)) + '</div>';
-          if (o.narrative) html += '<div style="font-size:12px;color:var(--ink-muted);margin-top:2px;">' + esc(truncate(o.narrative, 100)) + '</div>';
-          html += '<div class="activity-feed-meta">' + esc(type.replace(/_/g, ' '));
-          if (o.files && o.files.length) html += ' &middot; <span class="tag file-tag" style="font-size:9px;padding:0 4px;">' + esc(o.files[0].split('/').pop()) + '</span>';
-          html += ' &middot; ' + esc(shortTime(o.timestamp)) + '</div>';
-          html += '</div></div>';
-        });
-      }
-      html += '</div>';
-
-      html += '</div>';
-
-      el.innerHTML = html;
-    }
-
-    async function loadSessions() {
-      var el = document.getElementById('view-sessions');
-      el.innerHTML = '<div class="loading">Loading sessions...</div>';
-      var result = await apiGet('sessions');
-      state.sessions.items = (result && result.sessions) || [];
-      state.sessions.loaded = true;
-      renderSessions();
-    }
-
-    function renderSessions() {
-      var el = document.getElementById('view-sessions');
-      var items = state.sessions.items.slice().sort(function(a, b) {
-        return (b.startedAt || '').localeCompare(a.startedAt || '');
-      });
-
-      var folderFilter = state.sessions.folderFilter || '';
-      var projects = [];
-      var hasNoFolder = false;
-      state.sessions.items.forEach(function(s) {
-        var pPath = s.project ? String(s.project).trim() : '';
-        if (pPath) {
-          if (!projects.includes(pPath)) {
-            projects.push(pPath);
-          }
-        } else {
-          hasNoFolder = true;
-        }
-      });
-      projects.sort();
-
-      var toolbarHtml = '<div class="toolbar" style="margin-bottom: 12px; display: flex; gap: 10px; align-items: center;">';
-      toolbarHtml += '<span style="font-size: 12px; font-weight: 600; color: var(--ink-muted);">FILTER BY FOLDER PATH:</span>';
-      toolbarHtml += '<select id="sessions-folder-filter" style="width: 280px; padding: 6px 10px; border-radius: 4px; border: 1px solid var(--border); background: var(--bg); color: var(--ink);">';
-      toolbarHtml += '<option value="">All Folders</option>';
-      if (hasNoFolder) {
-        var selected = folderFilter === '_none_' ? ' selected' : '';
-        toolbarHtml += '<option value="_none_"' + selected + '>Uncategorized (No Folder)</option>';
-      }
-      projects.forEach(function(p) {
-        var selected = p === folderFilter ? ' selected' : '';
-        toolbarHtml += '<option value="' + esc(p) + '"' + selected + '>' + esc(p) + '</option>';
-      });
-      toolbarHtml += '</select>';
-      toolbarHtml += '</div>';
-
-      var filteredItems = items.filter(function(s) {
-        if (!folderFilter) return true;
-        var pPath = s.project ? String(s.project).trim() : '';
-        if (folderFilter === '_none_') {
-          return !pPath;
-        }
-        return pPath === folderFilter;
-      });
-
-      var html = toolbarHtml + '<div class="session-list">';
-      if (filteredItems.length === 0) {
-        html += '<div class="empty-state"><div class="empty-icon">&#128466;</div><p>No sessions</p></div>';
-      } else {
-        filteredItems.forEach(function(s) {
-          var statusBadge = s.status === 'active' ? 'badge-green' : s.status === 'completed' ? 'badge-blue' : 'badge-muted';
-          var id = sessionId(s);
-          var selected = id && state.sessions.selectedId === id;
-          html += '<div class="session-item' + (selected ? ' selected' : '') + '"' + (id ? ' data-action="select-session" data-session-id="' + esc(id) + '"' : '') + '>';
-          html += '<div class="session-top"><span class="session-project">' + esc(sessionDisplayName(s)) + '</span>';
-          html += '<span class="badge ' + statusBadge + '">' + esc(s.status) + '</span></div>';
-          var preview = s.summary || s.firstPrompt || '';
-          if (preview) {
-            html += '<div class="session-preview" style="font-size:13px;color:var(--ink);margin:4px 0;line-height:1.4;">' + esc(truncate(preview, 140)) + '</div>';
-          }
-          html += '<div class="session-meta">' + esc(shortSessionId(s, 12) || 'missing id') + ' &middot; ' + esc(formatTime(s.startedAt));
-          html += ' &middot; ' + (s.observationCount || 0) + ' obs';
-          if (s.model) html += ' &middot; ' + esc(s.model);
-          html += '</div></div>';
-        });
-      }
-      html += '</div>';
-      html += '<div id="session-detail"></div>';
-      el.innerHTML = html;
-
-      var selectFilter = document.getElementById('sessions-folder-filter');
-      if (selectFilter) {
-        selectFilter.addEventListener('change', function() {
-          state.sessions.folderFilter = this.value;
-          renderSessions();
-        });
-      }
-
-      if (state.sessions.selectedId) renderSessionDetail();
-    }
-
-    function selectSession(id) {
-      state.sessions.selectedId = state.sessions.selectedId === id ? null : id;
-      renderSessions();
-    }
-
-    async function renderSessionDetail() {
-      var panel = document.getElementById('session-detail');
-      if (!panel) return;
-      var s = state.sessions.items.find(function(x) { return sessionId(x) === state.sessions.selectedId; });
-      var id = sessionId(s);
-      if (!s || !id) { panel.innerHTML = ''; return; }
-
-      panel.innerHTML = '<div class="detail-panel"><h3>Loading session details…</h3></div>';
-
-      var obsRes = await apiGet('observations?sessionId=' + encodeURIComponent(id));
-      var obs = (obsRes && obsRes.observations) || [];
-
-      var typeCounts = {};
-      var toolCounts = {};
-      var fileSet = new Set();
-      var firstPromptFromObs = '';
-      obs.forEach(function(o) {
-        var t = o.type || o.hookType || 'other';
-        typeCounts[t] = (typeCounts[t] || 0) + 1;
-        var tool = o.title || o.toolName;
-        if (tool && t !== 'conversation') toolCounts[tool] = (toolCounts[tool] || 0) + 1;
-        (o.files || []).forEach(function(f) { fileSet.add(f); });
-        if (!firstPromptFromObs && (o.userPrompt || (o.type === 'conversation' && o.narrative))) {
-          firstPromptFromObs = o.userPrompt || o.narrative || '';
-        }
-      });
-
-      var durationMs = s.endedAt ? new Date(s.endedAt).getTime() - new Date(s.startedAt).getTime() : 0;
-      var durationLabel = durationMs > 0 ? (durationMs < 60000 ? (durationMs / 1000).toFixed(1) + 's' : (durationMs / 60000).toFixed(1) + 'm') : '-';
-
-      var preview = s.summary || s.firstPrompt || firstPromptFromObs || '';
-
-      var html = '<div class="detail-panel">';
-      html += '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px;">';
-      html += '<h3 style="margin:0;">Session · ' + esc(s.project || 'Unknown') + '</h3>';
-      html += '<span class="badge ' + (s.status === 'active' ? 'badge-green' : 'badge-blue') + '">' + esc(s.status) + '</span>';
-      html += '</div>';
-
-      if (preview) {
-        html += '<div style="padding:10px 12px;margin-bottom:12px;background:var(--bg-alt);border-left:3px solid var(--accent);font-size:13px;line-height:1.5;color:var(--ink);">' + esc(truncate(preview, 600)) + '</div>';
-      }
-
-      html += '<div style="display:grid;grid-template-columns:repeat(4, 1fr);gap:10px;margin-bottom:14px;">';
-      html += '<div class="card" style="padding:10px;"><div style="font-size:10px;letter-spacing:0.08em;color:var(--ink-muted);">OBSERVATIONS</div><div style="font-size:20px;font-weight:600;">' + obs.length + '</div></div>';
-      html += '<div class="card" style="padding:10px;"><div style="font-size:10px;letter-spacing:0.08em;color:var(--ink-muted);">TOOLS USED</div><div style="font-size:20px;font-weight:600;">' + Object.keys(toolCounts).length + '</div></div>';
-      html += '<div class="card" style="padding:10px;"><div style="font-size:10px;letter-spacing:0.08em;color:var(--ink-muted);">FILES TOUCHED</div><div style="font-size:20px;font-weight:600;">' + fileSet.size + '</div></div>';
-      html += '<div class="card" style="padding:10px;"><div style="font-size:10px;letter-spacing:0.08em;color:var(--ink-muted);">DURATION</div><div style="font-size:20px;font-weight:600;">' + esc(durationLabel) + '</div></div>';
-      html += '</div>';
-
-      var topTools = Object.keys(toolCounts).sort(function(a, b) { return toolCounts[b] - toolCounts[a]; }).slice(0, 10);
-      if (topTools.length > 0) {
-        var maxC = toolCounts[topTools[0]] || 1;
-        html += '<div class="card" style="margin-bottom:12px;"><div class="card-title">Tool Invocations</div>';
-        html += '<div class="bar-chart" style="margin-top:8px;">';
-        topTools.forEach(function(t) {
-          var pct = Math.round((toolCounts[t] / maxC) * 100);
-          html += '<div class="bar-row"><span class="bar-label" style="font-family:var(--font-mono);">' + esc(t) + '</span><div class="bar-track"><div class="bar-fill" style="width:' + pct + '%;background:var(--accent);"></div></div><span class="bar-value">' + toolCounts[t] + '</span></div>';
-        });
-        html += '</div></div>';
-      }
-
-      var typeKeys = Object.keys(typeCounts).sort(function(a, b) { return typeCounts[b] - typeCounts[a]; });
-      if (typeKeys.length > 0) {
-        html += '<div class="card" style="margin-bottom:12px;"><div class="card-title">Activity Breakdown</div>';
-        html += '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;">';
-        typeKeys.forEach(function(t) {
-          html += '<span class="badge badge-muted" style="font-family:var(--font-mono);">' + esc(t.replace(/_/g, ' ')) + ' · ' + typeCounts[t] + '</span>';
-        });
-        html += '</div></div>';
-      }
-
-      if (fileSet.size > 0) {
-        var filesArr = Array.from(fileSet).slice(0, 30);
-        html += '<div class="card" style="margin-bottom:12px;"><div class="card-title">Files</div>';
-        html += '<div style="font-size:12px;font-family:var(--font-mono);line-height:1.6;margin-top:8px;">';
-        filesArr.forEach(function(f) { html += '<div>&#8226; ' + esc(f) + '</div>'; });
-        if (fileSet.size > 30) html += '<div style="color:var(--ink-faint);">+' + (fileSet.size - 30) + ' more</div>';
-        html += '</div></div>';
-      }
-
-      html += '<div class="card" style="margin-bottom:12px;"><div class="card-title">Metadata</div>';
-      html += '<div style="font-size:12px;font-family:var(--font-mono);margin-top:8px;line-height:1.7;">';
-      var detailId = sessionId(s);
-      html += '<div><span style="color:var(--ink-muted);">id:</span> ' + esc(detailId || 'missing id') + '</div>';
-      html += '<div><span style="color:var(--ink-muted);">cwd:</span> ' + esc(s.cwd || '-') + '</div>';
-      html += '<div><span style="color:var(--ink-muted);">started:</span> ' + esc(formatTime(s.startedAt)) + '</div>';
-      if (s.endedAt) html += '<div><span style="color:var(--ink-muted);">ended:</span> ' + esc(formatTime(s.endedAt)) + '</div>';
-      if (s.model) html += '<div><span style="color:var(--ink-muted);">model:</span> ' + esc(s.model) + '</div>';
-      if (s.tags && s.tags.length) html += '<div><span style="color:var(--ink-muted);">tags:</span> ' + s.tags.map(esc).join(', ') + '</div>';
-      html += '</div></div>';
-
-      html += '<div style="display:flex;gap:8px;">';
-      if (detailId && s.status === 'active') {
-        html += '<button class="btn btn-danger" data-action="end-session" data-session-id="' + esc(detailId) + '">End Session</button>';
-      }
-      if (detailId) {
-        html += '<button class="btn btn-primary" data-action="summarize-session" data-session-id="' + esc(detailId) + '">Summarize</button>';
-      } else {
-        html += '<button class="btn btn-primary" disabled>Summarize unavailable</button>';
-      }
-      html += '</div></div>';
-      panel.innerHTML = html;
-    }
-
-    async function endSession(id) {
-      await apiPost('session/end', { sessionId: id });
-      state.sessions.loaded = false;
-      loadSessions();
-    }
-
-    async function summarizeSession(id, btn) {
-      if (!btn) return;
-      btn.textContent = 'Summarizing...';
-      btn.disabled = true;
-      await apiPost('summarize', { sessionId: id });
-      btn.textContent = 'Done';
-      setTimeout(function() { btn.textContent = 'Summarize'; btn.disabled = false; }, 2000);
-    }
-
-    async function loadLessons() {
-      var el = document.getElementById('view-lessons');
-      el.innerHTML = '<div class="loading">Loading lessons...</div>';
-      var result = await apiGet('lessons');
-      state.lessons.items = (result && result.lessons) || [];
-      state.lessons.loaded = true;
-      renderLessons();
-    }
-
-    function renderLessons() {
-      var el = document.getElementById('view-lessons');
-      var items = state.lessons.items;
-      var search = state.lessons.search.toLowerCase();
-
-      if (search) {
-        items = items.filter(function(l) {
-          return (l.content + ' ' + l.context + ' ' + (l.tags || []).join(' ')).toLowerCase().indexOf(search) >= 0;
-        });
-      }
-
-      var html = '<div class="card" style="margin-bottom:12px;padding:12px;background:var(--bg-subtle);">';
-      html += '<div style="font-size:13px;color:var(--ink-muted);line-height:1.5;">';
-      html += '<strong>Lessons</strong> are portable heuristics — short imperative rules (always/never/prefer/avoid) extracted from past work. Auto-surface from JSONL imports (low confidence, tag <code>auto-import</code>), get reinforced when the agent applies them, and decay if unused. Higher confidence = more battle-tested.';
-      html += '</div></div>';
-
-      html += '<div style="display:flex;gap:8px;margin-bottom:12px;">';
-      html += '<input id="lessons-search" class="search-input" type="text" placeholder="Search lessons..." value="' + esc(state.lessons.search) + '" style="flex:1" />';
-      html += '<span style="font-size:12px;color:var(--ink-faint);align-self:center;">' + items.length + ' lessons</span>';
-      html += '</div>';
-
-      if (items.length === 0) {
-        html += '<div class="empty-state">' +
-          '<div class="empty-icon">&#128161;</div>' +
-          '<div class="empty-title">No lessons yet</div>' +
-          '<div class="empty-lead">Lessons are confidence-scored pattern observations &mdash; things you corrected once that the agent should never do again. They persist across projects.</div>' +
-          '<pre class="empty-cmd"># Save a lesson explicitly\nmemory_lesson_save { rule, reason, confidence }\n\n# Or: Replay tab &rarr; Import JSONL auto-extracts lessons\n# from your past Claude Code sessions</pre>' +
-          '<div><a class="empty-link" href="https://github.com/rohitg00/agentmemory#lessons" target="_blank" rel="noopener">Lesson decay &amp; scoring &rarr;</a></div>' +
-          '</div>';
-      } else {
-        html += '<table><thead><tr><th>Lesson</th><th>Confidence</th><th>Reinforcements</th><th>Source</th><th>Project</th><th>Updated</th></tr></thead><tbody>';
-        items.forEach(function(l) {
-          var confPct = Math.round(l.confidence * 100);
-          var confColor = confPct >= 70 ? 'var(--green)' : confPct >= 40 ? 'var(--yellow)' : 'var(--red)';
-          html += '<tr>';
-          html += '<td style="max-width:400px;">' + esc(truncate(l.content, 120)) + (l.context ? '<div style="font-size:11px;color:var(--ink-faint);margin-top:2px;">' + esc(truncate(l.context, 80)) + '</div>' : '') + '</td>';
-          html += '<td><div class="gauge" style="min-width:80px;"><div class="gauge-bar"><div class="gauge-fill" style="width:' + confPct + '%;background:' + confColor + '"></div></div><span class="gauge-value" style="font-size:11px;">' + confPct + '%</span></div></td>';
-          html += '<td style="text-align:center;">' + (l.reinforcements || 0) + '</td>';
-          html += '<td><span class="badge badge-' + (l.source === 'crystal' ? 'purple' : l.source === 'consolidation' ? 'yellow' : 'blue') + '">' + esc(l.source) + '</span></td>';
-          html += '<td style="font-size:12px;color:var(--ink-muted);">' + esc(l.project || '-') + '</td>';
-          html += '<td style="font-size:12px;color:var(--ink-muted);">' + shortTime(l.updatedAt) + '</td>';
-          html += '</tr>';
-        });
-        html += '</tbody></table>';
-      }
-
-      var __focus = captureSearchFocus(['lessons-search']);
-      el.innerHTML = html;
-      var __ls = document.getElementById('lessons-search');
-      if (__ls) bindImeSafeSearch(__ls, 200, function(v){ state.lessons.search = v; renderLessons(); });
-      restoreSearchFocus(__focus);
-    }
-
-    async function loadActions() {
-      var el = document.getElementById('view-actions');
-      el.innerHTML = '<div class="loading">Loading actions...</div>';
-      var results = await Promise.all([apiGet('actions'), apiGet('frontier')]);
-      state.actions.items = (results[0] && results[0].actions) || [];
-      state.actions.frontier = (results[1] && (results[1].frontier || results[1].actions)) || [];
-      state.actions.loaded = true;
-      renderActions();
-    }
-
-    function renderActions() {
-      var el = document.getElementById('view-actions');
-      var items = state.actions.items;
-      var search = state.actions.search.toLowerCase();
-      var statusFilter = state.actions.statusFilter;
-      var frontierIds = new Set((state.actions.frontier || []).map(function(a) { return a.id; }));
-
-      if (search) {
-        items = items.filter(function(a) {
-          return (a.title + ' ' + (a.description || '') + ' ' + (a.tags || []).join(' ')).toLowerCase().indexOf(search) >= 0;
-        });
-      }
-      if (statusFilter) {
-        items = items.filter(function(a) { return a.status === statusFilter; });
-      }
-
-      var html = '<div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;">';
-      html += '<input id="actions-search" class="search-input" type="text" placeholder="Search actions..." value="' + esc(state.actions.search) + '" style="flex:1;min-width:200px" />';
-      html += '<select id="actions-status-filter" style="padding:4px 8px;font-size:12px;border:1px solid var(--border);border-radius:4px;background:var(--bg);color:var(--ink);">';
-      html += '<option value="">All statuses</option>';
-      ['pending','active','done','blocked','cancelled'].forEach(function(s) {
-        html += '<option value="' + s + '"' + (statusFilter === s ? ' selected' : '') + '>' + s + '</option>';
-      });
-      html += '</select>';
-      html += '<span style="font-size:12px;color:var(--ink-faint);align-self:center;">' + items.length + ' actions</span>';
-      html += '</div>';
-
-      if (items.length === 0) {
-        html += '<div class="empty-state">' +
-          '<div class="empty-icon">&#9745;</div>' +
-          '<div class="empty-title">No actions tracked yet</div>' +
-          '<div class="empty-lead">Actions are follow-ups the agent surfaced during a session: <em>decisions to revisit</em>, <em>files to inspect</em>, <em>tasks blocked on input</em>. They show up here with status pending &rarr; active &rarr; done/blocked so nothing slips through between sessions.</div>' +
-          '<div class="empty-lead" style="margin-top:0;">Three ways to create them:</div>' +
-          '<pre class="empty-cmd"># 1. MCP tool (from any agent)\nmemory_action_create { title, description, priority }\n\n# 2. Curl\ncurl -X POST http://localhost:3111/agentmemory/actions \\\n  -H \'Content-Type: application/json\' \\\n  -d \'{"title":"ship v1","priority":"high"}\'\n\n# 3. Hooks auto-extract from long session bodies</pre>' +
-          '<div><a class="empty-link" href="https://github.com/rohitg00/agentmemory#actions" target="_blank" rel="noopener">Action lifecycle docs &rarr;</a></div>' +
-          '</div>';
-      } else {
-        html += '<table><thead><tr><th>Title</th><th>Status</th><th>Priority</th><th>Tags</th><th>Frontier</th><th>Updated</th></tr></thead><tbody>';
-        items = items.slice().sort(function(a, b) { return (b.priority || 0) - (a.priority || 0); });
-        items.forEach(function(a) {
-          var statusClass = a.status === 'done' ? 'badge-green' : a.status === 'active' ? 'badge-blue' : a.status === 'blocked' ? 'badge-red' : a.status === 'cancelled' ? 'badge-red' : 'badge-yellow';
-          var isFrontier = frontierIds.has(a.id);
-          html += '<tr' + (isFrontier ? ' style="background:rgba(45,106,79,0.08);"' : '') + '>';
-          html += '<td style="max-width:350px;"><strong>' + esc(a.title) + '</strong>';
-          if (a.description) html += '<div style="font-size:11px;color:var(--ink-faint);margin-top:2px;">' + esc(truncate(a.description, 80)) + '</div>';
-          html += '</td>';
-          html += '<td><span class="badge ' + statusClass + '">' + esc(a.status) + '</span></td>';
-          html += '<td style="text-align:center;font-weight:600;">' + (a.priority || '-') + '</td>';
-          html += '<td style="font-size:11px;color:var(--ink-muted);">' + (a.tags || []).map(esc).join(', ') + '</td>';
-          html += '<td style="text-align:center;">' + (isFrontier ? '&#9889;' : '') + '</td>';
-          html += '<td style="font-size:12px;color:var(--ink-muted);">' + shortTime(a.updatedAt) + '</td>';
-          html += '</tr>';
-        });
-        html += '</tbody></table>';
-      }
-
-      var __focus = captureSearchFocus(['actions-search']);
-      el.innerHTML = html;
-      var __as = document.getElementById('actions-search');
-      if (__as) bindImeSafeSearch(__as, 200, function(v){ state.actions.search = v; renderActions(); });
-      var __af = document.getElementById('actions-status-filter');
-      if (__af) __af.addEventListener('change', function(){ state.actions.statusFilter = this.value; renderActions(); });
-      restoreSearchFocus(__focus);
-    }
-
-    async function loadCrystals() {
-      var el = document.getElementById('view-crystals');
-      el.innerHTML = '<div class="loading">Loading crystals...</div>';
-      var results = await Promise.all([apiGet('crystals'), apiGet('lessons')]);
-      state.crystals.items = (results[0] && results[0].crystals) || [];
-      var lessonMap = {};
-      var lessons = (results[1] && results[1].lessons) || [];
-      lessons.forEach(function(l) { if (l && l.id) lessonMap[l.id] = l; });
-      state.crystals.lessonMap = lessonMap;
-      state.crystals.loaded = true;
-      renderCrystals();
-    }
-
-    function renderCrystals() {
-      var el = document.getElementById('view-crystals');
-      var items = state.crystals.items;
-      var search = state.crystals.search.toLowerCase();
-      var lessonMap = state.crystals.lessonMap || {};
-
-      if (search) {
-        items = items.filter(function(c) {
-          var lessonText = (c.lessons || [])
-            .map(function(lid) {
-              var l = lessonMap[lid];
-              return l && typeof l.content === 'string' ? l.content : lid;
-            })
-            .join(' ');
-          var filesText = (c.filesAffected || []).join(' ');
-          var haystack = [
-            c.narrative || '',
-            (c.keyOutcomes || []).join(' '),
-            lessonText,
-            filesText,
-            c.project || '',
-          ].join(' ').toLowerCase();
-          return haystack.indexOf(search) >= 0;
-        });
-      }
-
-      var html = '<div class="card" style="margin-bottom:12px;padding:12px;background:var(--bg-subtle);">';
-      html += '<div style="font-size:13px;color:var(--ink-muted);line-height:1.5;">';
-      html += '<strong>Crystals</strong> are frozen snapshots of completed work. Each crystal captures one session\'s narrative, the tools invoked (key outcomes), files touched, and lessons surfaced — a replayable summary you keep after raw observations are pruned. Auto-created on JSONL import or via <code>memory_crystallize</code>.';
-      html += '</div></div>';
-
-      html += '<div style="display:flex;gap:8px;margin-bottom:12px;">';
-      html += '<input id="crystals-search" class="search-input" type="text" placeholder="Search crystals..." value="' + esc(state.crystals.search) + '" style="flex:1" />';
-      html += '<span style="font-size:12px;color:var(--ink-faint);align-self:center;">' + items.length + ' crystals</span>';
-      html += '</div>';
-
-      if (items.length === 0) {
-        html += '<div class="empty-state">' +
-          '<div class="empty-icon">&#128142;</div>' +
-          '<div class="empty-title">No crystals yet</div>' +
-          '<div class="empty-lead">Crystals are compressed action digests &mdash; the 3-line summary of what happened in a session. Generated from long conversations to give the next session fast context without re-reading everything.</div>' +
-          '<pre class="empty-cmd"># Auto: import a JSONL transcript\n#   Replay tab &rarr; Import JSONL\n\n# Manual: crystallize a specific session\nmemory_crystallize { sessionId }</pre>' +
-          '<div><a class="empty-link" href="https://github.com/rohitg00/agentmemory#crystals" target="_blank" rel="noopener">Crystal pipeline &rarr;</a></div>' +
-          '</div>';
-      } else {
-        items.forEach(function(c) {
-          html += '<div class="card" style="margin-bottom:12px;border-left:3px solid var(--accent);">';
-          html += '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:8px;">';
-          html += '<div style="flex:1;font-size:14px;font-weight:600;color:var(--ink);line-height:1.4;">' + esc(truncate(c.narrative || 'Untitled crystal', 300)) + '</div>';
-          html += '<div style="font-size:10px;color:var(--ink-faint);font-family:var(--font-mono);white-space:nowrap;">' + esc(formatTime(c.createdAt)) + '</div>';
-          html += '</div>';
-
-          var pillRow = [];
-          if (c.project) pillRow.push('<span class="badge badge-muted">' + esc(c.project) + '</span>');
-          if (c.sessionId) pillRow.push('<span class="badge badge-blue" style="font-family:var(--font-mono);">' + esc(c.sessionId.slice(0, 14)) + '</span>');
-          if (c.keyOutcomes && c.keyOutcomes.length) pillRow.push('<span style="font-size:11px;color:var(--ink-muted);">' + c.keyOutcomes.length + ' tools</span>');
-          if (c.filesAffected && c.filesAffected.length) pillRow.push('<span style="font-size:11px;color:var(--ink-muted);">' + c.filesAffected.length + ' files</span>');
-          if (c.lessons && c.lessons.length) pillRow.push('<span style="font-size:11px;color:var(--ink-muted);">' + c.lessons.length + ' lessons</span>');
-          if (pillRow.length) html += '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;">' + pillRow.join('') + '</div>';
-
-          if (c.keyOutcomes && c.keyOutcomes.length > 0) {
-            html += '<div style="margin:10px 0;"><div style="font-size:10px;letter-spacing:0.08em;color:var(--ink-muted);margin-bottom:4px;">TOOLS USED</div>';
-            html += '<div style="display:flex;gap:4px;flex-wrap:wrap;">';
-            c.keyOutcomes.forEach(function(o) {
-              html += '<span class="badge" style="background:var(--bg-alt);color:var(--ink);font-family:var(--font-mono);">' + esc(o) + '</span>';
-            });
-            html += '</div></div>';
-          }
-
-          if (c.filesAffected && c.filesAffected.length > 0) {
-            html += '<div style="margin:10px 0;"><div style="font-size:10px;letter-spacing:0.08em;color:var(--ink-muted);margin-bottom:4px;">FILES TOUCHED</div>';
-            html += '<div style="font-size:12px;font-family:var(--font-mono);color:var(--ink);line-height:1.6;">';
-            c.filesAffected.slice(0, 10).forEach(function(f) {
-              html += '<div>&#8226; ' + esc(f) + '</div>';
-            });
-            if (c.filesAffected.length > 10) html += '<div style="color:var(--ink-faint);">+' + (c.filesAffected.length - 10) + ' more</div>';
-            html += '</div></div>';
-          }
-
-          if (c.lessons && c.lessons.length > 0) {
-            html += '<div style="margin:10px 0;"><div style="font-size:10px;letter-spacing:0.08em;color:var(--ink-muted);margin-bottom:4px;">LESSONS SURFACED</div>';
-            c.lessons.slice(0, 8).forEach(function(lid) {
-              var content = lessonMap[lid] ? lessonMap[lid].content : lid;
-              html += '<div style="font-size:12px;padding:4px 8px;margin:2px 0;background:var(--bg-alt);border-radius:3px;color:var(--ink);line-height:1.4;">&#128161; ' + esc(content) + '</div>';
-            });
-            if (c.lessons.length > 8) html += '<div style="font-size:11px;color:var(--ink-faint);margin-top:4px;">+' + (c.lessons.length - 8) + ' more lessons</div>';
-            html += '</div>';
-          }
-
-          html += '</div>';
-        });
-      }
-
-      var __focus = captureSearchFocus(['crystals-search']);
-      el.innerHTML = html;
-      var __cs = document.getElementById('crystals-search');
-      if (__cs) bindImeSafeSearch(__cs, 200, function(v){ state.crystals.search = v; renderCrystals(); });
-      restoreSearchFocus(__focus);
-    }
-
-    async function loadAudit() {
-      var el = document.getElementById('view-audit');
-      el.innerHTML = '<div class="loading">Loading audit log...</div>';
-      var result = await apiGet('audit?limit=100');
-      state.audit.entries = (result && result.entries) || [];
-      state.audit.loaded = true;
-      renderAudit();
-    }
-
-    function renderAudit() {
-      var el = document.getElementById('view-audit');
-      var entries = state.audit.entries;
-      var opFilter = state.audit.opFilter;
-
-      var ops = {};
-      entries.forEach(function(e) { ops[e.operation] = true; });
-      var opList = Object.keys(ops).sort();
-
-      var filtered = opFilter ? entries.filter(function(e) { return e.operation === opFilter; }) : entries;
-
-      var html = '<div class="toolbar">';
-      html += '<select id="audit-op-filter"><option value="">All operations</option>';
-      opList.forEach(function(op) {
-        html += '<option value="' + esc(op) + '"' + (opFilter === op ? ' selected' : '') + '>' + esc(op) + '</option>';
-      });
-      html += '</select></div>';
-
-      html += '<div class="card">';
-      if (filtered.length === 0) {
-        html += '<div class="empty-state"><div class="empty-icon">&#128220;</div><p>No audit entries yet</p><p style="font-size:12px;color:var(--ink-faint);font-style:italic;">Audit entries are created by governance operations (delete, evolve, consolidate).</p></div>';
-      } else {
-        filtered.forEach(function(a, idx) {
-          var badgeClass = OP_BADGES[a.operation] || 'badge-muted';
-          html += '<div class="audit-entry">';
-          html += '<div class="audit-head">';
-          html += '<span class="badge ' + badgeClass + '">' + esc(a.operation) + '</span>';
-          html += '<span style="font-size:12px;color:var(--ink-muted);font-family:var(--font-mono);">' + esc(a.functionId || '') + '</span>';
-          html += '<span style="font-size:10px;color:var(--ink-faint);margin-left:auto;font-family:var(--font-mono);">' + esc(formatTime(a.timestamp)) + '</span>';
-          html += '<button class="btn" style="font-size:9px;padding:1px 6px;margin-left:8px;" data-action="toggle-audit" data-audit-index="' + idx + '">&#9660;</button>';
-          html += '</div>';
-          if (a.targetIds && a.targetIds.length) {
-            html += '<div style="font-size:10px;color:var(--ink-faint);font-family:var(--font-mono);">' + a.targetIds.length + ' target(s): ' + esc(a.targetIds.slice(0, 3).join(', ')) + (a.targetIds.length > 3 ? '...' : '') + '</div>';
-          }
-          html += '<div class="audit-detail" id="audit-detail-' + idx + '"><pre>' + esc(JSON.stringify(a.details || {}, null, 2)) + '</pre></div>';
-          html += '</div>';
-        });
-      }
-      html += '</div>';
-
-      el.innerHTML = html;
-
-      document.getElementById('audit-op-filter').addEventListener('change', function() {
-        state.audit.opFilter = this.value;
-        renderAudit();
-      });
+    // loadActivity removed â€” /agentmemory/sessions endpoint does not exist.
+    async function loadActivity() { return; }
+    function renderActivity() { return; }
+
+    // loadSessions removed â€” /agentmemory/sessions endpoint does not exist.
+    async function loadSessions() { return; }
+    function renderSessions() { return; }
+    function selectSession(id) { return; }
+    async function renderSessionDetail() { return; }
+    async function endSession(id) { return; }
+    async function summarizeSession(id, btn) { return; }
+
+    // All dead legacy load/render functions (loadSessions, renderSessions, loadLessons,
+    // renderLessons, loadActions, renderActions, loadCrystals, renderCrystals,
+    // loadAudit, renderAudit, loadProfile, renderProfile, loadPersonal, renderPersonal,
+    // renderPersonalFileListOnly, loadReplay, renderReplay) have been removed.
+    // These called endpoints that don't exist in this Python backend.
+    // The audit state is still used for the command-palette; keep a minimal helper:
+    async function loadAuditSilent() {
+      try {
+        var result = await apiGet('audit?limit=100');
+        state.audit.entries = (result && result.entries) || [];
+        state.audit.loaded = true;
+      } catch(_) {}
     }
 
     function toggleAuditDetail(idx) {
       var el = document.getElementById('audit-detail-' + idx);
       if (el) el.classList.toggle('open');
-    }
-
-    async function loadProfile() {
-      var el = document.getElementById('view-profile');
-      el.innerHTML = '<div class="loading">Loading profile...</div>';
-      var sessResult = await apiGet('sessions');
-      var sessions = (sessResult && sessResult.sessions) || [];
-
-      var projects = {};
-      sessions.forEach(function(s) { if (s.project) projects[s.project] = true; });
-      state.profile.projects = Object.keys(projects).sort();
-      state.profile.loaded = true;
-
-      if (state.profile.projects.length > 0 && !state.profile.selectedProject) {
-        state.profile.selectedProject = state.profile.projects[0];
-      }
-
-      renderProfileToolbar();
-      if (state.profile.selectedProject) await loadProfileData();
-    }
-
-    function renderProfileToolbar() {
-      var el = document.getElementById('view-profile');
-      var html = '<div class="toolbar">';
-      html += '<select id="profile-project">';
-      if (state.profile.projects.length === 0) {
-        html += '<option value="">No projects</option>';
-      } else {
-        state.profile.projects.forEach(function(p) {
-          html += '<option value="' + esc(p) + '"' + (state.profile.selectedProject === p ? ' selected' : '') + '>' + esc(p) + '</option>';
-        });
-      }
-      html += '</select></div>';
-      html += '<div id="profile-content"></div>';
-      el.innerHTML = html;
-
-      document.getElementById('profile-project').addEventListener('change', function() {
-        state.profile.selectedProject = this.value;
-        loadProfileData();
-      });
-    }
-
-    async function loadProfileData() {
-      var content = document.getElementById('profile-content');
-      if (!content || !state.profile.selectedProject) return;
-      content.innerHTML = '<div class="loading">Loading profile data...</div>';
-      var result = await apiGet('profile?project=' + encodeURIComponent(state.profile.selectedProject));
-      state.profile.data = (result && result.profile) ? result.profile : result;
-      renderProfile();
-    }
-
-    function renderProfile() {
-      var content = document.getElementById('profile-content');
-      if (!content) return;
-      var p = state.profile.data;
-
-      if (!p) {
-        content.innerHTML = '<div class="empty-state"><div class="empty-icon">&#128203;</div><p>No profile data for this project</p></div>';
-        return;
-      }
-
-      var html = '<div class="two-col">';
-
-      html += '<div class="card"><div class="card-title">Top Concepts</div>';
-      var concepts = p.topConcepts || [];
-      if (concepts.length === 0) {
-        html += '<div style="font-size:13px;color:var(--ink-faint);font-style:italic;">No concepts yet</div>';
-      } else {
-        var maxC = Math.max.apply(null, concepts.map(function(c) { return c.frequency; })) || 1;
-        html += '<div class="bar-chart">';
-        concepts.slice(0, 10).forEach(function(c) {
-          var pct = Math.round((c.frequency / maxC) * 100);
-          html += '<div class="bar-row"><span class="bar-label">' + esc(c.concept) + '</span><div class="bar-track"><div class="bar-fill" style="width:' + pct + '%;background:var(--yellow);"></div></div><span class="bar-value">' + c.frequency + '</span></div>';
-        });
-        html += '</div>';
-      }
-      html += '</div>';
-
-      html += '<div class="card"><div class="card-title">Top Files</div>';
-      var files = p.topFiles || [];
-      if (files.length === 0) {
-        html += '<div style="font-size:13px;color:var(--ink-faint);font-style:italic;">No files yet</div>';
-      } else {
-        var maxF = Math.max.apply(null, files.map(function(f) { return f.frequency; })) || 1;
-        html += '<div class="bar-chart">';
-        files.slice(0, 10).forEach(function(f) {
-          var pct = Math.round((f.frequency / maxF) * 100);
-          html += '<div class="bar-row"><span class="bar-label">' + esc(f.file.split('/').pop()) + '</span><div class="bar-track"><div class="bar-fill" style="width:' + pct + '%;background:var(--green);"></div></div><span class="bar-value">' + f.frequency + '</span></div>';
-        });
-        html += '</div>';
-      }
-      html += '</div>';
-
-      html += '</div>';
-
-      html += '<div class="card" style="margin-top:16px;"><div class="card-title">Conventions</div>';
-      var conventions = p.conventions || [];
-      if (conventions.length === 0) {
-        html += '<div style="font-size:13px;color:var(--ink-faint);font-style:italic;">No conventions detected yet</div>';
-      } else {
-        html += '<ul style="padding-left:16px;">';
-        conventions.forEach(function(c) { html += '<li style="font-size:13px;color:var(--ink-muted);margin-bottom:4px;">' + esc(c) + '</li>'; });
-        html += '</ul>';
-      }
-      html += '</div>';
-
-      if (p.summary) {
-        html += '<div class="card" style="margin-top:16px;"><div class="card-title">Project Summary</div>';
-        html += '<p style="font-size:13px;color:var(--ink-muted);line-height:1.7;">' + esc(p.summary) + '</p></div>';
-      }
-
-      var stats = '<div class="card" style="margin-top:16px;"><div class="card-title">Project Stats</div>';
-      stats += '<div class="detail-row"><div class="dl">Sessions</div><div class="dv" style="font-family:var(--font-mono);">' + (p.sessionCount || 0) + '</div></div>';
-      stats += '<div class="detail-row"><div class="dl">Total Obs</div><div class="dv" style="font-family:var(--font-mono);">' + (p.totalObservations || 0) + '</div></div>';
-      stats += '<div class="detail-row"><div class="dl">Updated</div><div class="dv" style="font-family:var(--font-mono);font-size:12px;">' + esc(formatTime(p.updatedAt)) + '</div></div>';
-      stats += '</div>';
-
-      content.innerHTML = html + stats;
-    }
-
-    async function loadPersonal() {
-      var el = document.getElementById('view-personal');
-      el.innerHTML = '<div class="loading">Loading personal details...</div>';
-      try {
-        var res = await apiGet('second-brain');
-        if (res && res.success) {
-          state.personal.files = res.files || [];
-          state.personal.loaded = true;
-          if (state.personal.files.length > 0 && !state.personal.selectedFile) {
-            state.personal.selectedFile = state.personal.files[0].name;
-          }
-          renderPersonal();
-        } else {
-          var errorMsg = (res && res.error) ? res.error : 'Unknown error';
-          el.innerHTML = '<div class="loading" style="color:var(--accent);">Failed to load personal files: ' + esc(errorMsg) + '</div>';
-        }
-      } catch (err) {
-        var msg = (err && err.message) ? err.message : String(err);
-        console.error('[viewer] loadPersonal failed:', err);
-        el.innerHTML = '<div class="loading" style="color:var(--accent);">Failed to load personal files: ' + esc(msg) + '</div>';
-      }
-    }
-
-    function renderPersonal() {
-      var el = document.getElementById('view-personal');
-      if (!el) return;
-
-      var searchVal = (state.personal.search || '').toLowerCase();
-      var filtered = state.personal.files.filter(function(f) {
-        return f.name.toLowerCase().indexOf(searchVal) >= 0;
-      });
-
-      var fileListHtml = '';
-      if (filtered.length === 0) {
-        fileListHtml = '<div class="empty-state" style="padding: 20px;"><p style="font-size:12px;">No matching files</p></div>';
-      } else {
-        filtered.forEach(function(f) {
-          var selected = f.name === state.personal.selectedFile;
-          var sizeStr = f.size >= 1024 ? (f.size / 1024).toFixed(1) + ' KB' : f.size + ' B';
-          fileListHtml += '<div class="personal-file-item' + (selected ? ' selected' : '') + '" data-file="' + esc(f.name) + '">' +
-            '<span style="font-size:14px;">&#128196;</span>' +
-            '<div class="personal-file-name">' + esc(f.name) + '</div>' +
-            '<div class="personal-file-size">' + esc(sizeStr) + '</div>' +
-            '</div>';
-        });
-      }
-
-      var selectedFileData = state.personal.files.find(function(f) {
-        return f.name === state.personal.selectedFile;
-      });
-
-      var editorHtml = '';
-      if (!selectedFileData) {
-        editorHtml = '<div class="empty-state"><div class="empty-icon">&#128466;</div><p>No file selected</p></div>';
-      } else {
-        var sizeStr = selectedFileData.size >= 1024 ? (selectedFileData.size / 1024).toFixed(1) + ' KB' : selectedFileData.size + ' B';
-        editorHtml = '<div class="personal-editor-card">' +
-          '<div class="personal-editor-header">' +
-            '<div>' +
-              '<div class="personal-editor-title">' + esc(selectedFileData.name) + '</div>' +
-              '<div class="personal-editor-meta">' + esc(sizeStr) + ' &middot; Markdown Document</div>' +
-            '</div>' +
-          '</div>' +
-          '<textarea class="personal-editor-textarea" id="personal-textarea">' + esc(selectedFileData.content) + '</textarea>' +
-          '<div class="personal-actions">' +
-            '<span class="personal-status-indicator" id="personal-status">Saved successfully!</span>' +
-            '<button class="btn btn-primary" id="personal-save-btn">Save Changes</button>' +
-          '</div>' +
-        '</div>';
-      }
-
-      el.innerHTML =
-        '<div class="personal-grid">' +
-          '<div class="personal-sidebar">' +
-            '<div class="personal-search-wrapper">' +
-              '<input type="text" class="personal-search-input" id="personal-search" placeholder="Search files..." value="' + esc(state.personal.search || '') + '">' +
-            '</div>' +
-            '<div class="personal-file-list">' +
-              fileListHtml +
-            '</div>' +
-          '</div>' +
-          '<div class="personal-editor-pane">' +
-            editorHtml +
-          '</div>' +
-        '</div>';
-
-      var searchInput = document.getElementById('personal-search');
-      if (searchInput) {
-        searchInput.addEventListener('input', function() {
-          state.personal.search = this.value;
-          renderPersonalFileListOnly();
-        });
-      }
-
-      el.querySelectorAll('.personal-file-item').forEach(function(item) {
-        item.addEventListener('click', function() {
-          var fileName = this.getAttribute('data-file');
-          if (fileName) {
-            state.personal.selectedFile = fileName;
-            renderPersonal();
-          }
-        });
-      });
-
-      var saveBtn = document.getElementById('personal-save-btn');
-      if (saveBtn) {
-        saveBtn.addEventListener('click', async function() {
-          var textarea = document.getElementById('personal-textarea');
-          if (!textarea || !state.personal.selectedFile) return;
-          var content = textarea.value;
-          
-          saveBtn.disabled = true;
-          var statusEl = document.getElementById('personal-status');
-          if (statusEl) {
-            statusEl.textContent = 'Saving...';
-            statusEl.className = 'personal-status-indicator visible';
-          }
-
-          try {
-            var res = await apiPost('second-brain', {
-              file: state.personal.selectedFile,
-              content: content
-            });
-            if (res && res.success) {
-              var fileObj = state.personal.files.find(function(f) {
-                return f.name === state.personal.selectedFile;
-              });
-              if (fileObj) {
-                fileObj.content = content;
-                fileObj.size = res.size || content.length;
-              }
-              
-              if (statusEl) {
-                statusEl.textContent = 'Saved successfully!';
-                statusEl.className = 'personal-status-indicator visible';
-              }
-              renderPersonalFileListOnly();
-            } else {
-              var errorMsg = (res && res.error) ? res.error : 'Unknown error';
-              if (statusEl) {
-                statusEl.textContent = 'Error: ' + errorMsg;
-                statusEl.className = 'personal-status-indicator visible error';
-              }
-            }
-          } catch (err) {
-            if (statusEl) {
-              statusEl.textContent = 'Error saving file';
-              statusEl.className = 'personal-status-indicator visible error';
-            }
-          } finally {
-            saveBtn.disabled = false;
-            setTimeout(function() {
-              if (statusEl && statusEl.textContent !== 'Saving...') {
-                statusEl.className = 'personal-status-indicator';
-              }
-            }, 3000);
-          }
-        });
-      }
-    }
-
-    function renderPersonalFileListOnly() {
-      var searchVal = (state.personal.search || '').toLowerCase();
-      var filtered = state.personal.files.filter(function(f) {
-        return f.name.toLowerCase().indexOf(searchVal) >= 0;
-      });
-
-      var fileListHtml = '';
-      if (filtered.length === 0) {
-        fileListHtml = '<div class="empty-state" style="padding: 20px;"><p style="font-size:12px;">No matching files</p></div>';
-      } else {
-        filtered.forEach(function(f) {
-          var selected = f.name === state.personal.selectedFile;
-          var sizeStr = f.size >= 1024 ? (f.size / 1024).toFixed(1) + ' KB' : f.size + ' B';
-          fileListHtml += '<div class="personal-file-item' + (selected ? ' selected' : '') + '" data-file="' + esc(f.name) + '">' +
-            '<span style="font-size:14px;">&#128196;</span>' +
-            '<div class="personal-file-name">' + esc(f.name) + '</div>' +
-            '<div class="personal-file-size">' + esc(sizeStr) + '</div>' +
-            '</div>';
-        });
-      }
-
-      var listContainer = document.querySelector('.personal-file-list');
-      if (listContainer) {
-        listContainer.innerHTML = fileListHtml;
-        
-        listContainer.querySelectorAll('.personal-file-item').forEach(function(item) {
-          item.addEventListener('click', function() {
-            var fileName = this.getAttribute('data-file');
-            if (fileName) {
-              state.personal.selectedFile = fileName;
-              renderPersonal();
-            }
-          });
-        });
-      }
     }
 
     var wsReconnectTimer = null;
@@ -4257,22 +3017,18 @@
 
     function startPolling() {
       if (pollTimer) return;
-      setWsStatus('polling · ' + (POLL_INTERVAL_MS / 1000) + 's', 'disconnected');
+      setWsStatus('polling Â· ' + (POLL_INTERVAL_MS / 1000) + 's', 'disconnected');
       var tick = 0;
       pollTimer = setInterval(function() {
         tick++;
-        if (state.activeTab === 'dashboard') {
-          state.dashboard.loaded = false;
-          loadDashboard();
+        // Only refresh tabs backed by real endpoints
+        if (state.activeTab === 'folders') {
+          loadFolders();
         } else if (state.activeTab === 'memories') {
           state.memories.loaded = false;
           loadMemories();
-        } else if (state.activeTab === 'sessions') {
-          state.sessions.loaded = false;
-          loadSessions();
-        } else if (state.activeTab === 'activity') {
-          state.activity.loaded = false;
-          loadActivity();
+        } else if (state.activeTab === 'timeline') {
+          loadTimeline(tlFolderFilter || undefined, tlAgentFilter || undefined);
         }
         if (tick % WS_REPROBE_EVERY_TICKS === 0) {
           var ws = state.ws;
@@ -4434,23 +3190,13 @@
 
     function routeWsMessage(msg) {
       if (state.activeTab === 'timeline' && msg.observation) {
-        if (!state.timeline.sessionId || msg.observation.sessionId === state.timeline.sessionId) {
-          var existing = state.timeline.observations.findIndex(function(o) { return o.id === msg.observation.id; });
-          if (existing >= 0) {
-            state.timeline.observations[existing] = msg.observation;
-          } else {
-            state.timeline.observations.unshift(msg.observation);
-          }
-          renderObservations();
+        var existing = state.timeline.observations.findIndex(function(o) { return o.id === msg.observation.id; });
+        if (existing >= 0) {
+          state.timeline.observations[existing] = msg.observation;
+        } else {
+          state.timeline.observations.unshift(msg.observation);
         }
-      }
-      if (state.activeTab === 'dashboard') {
-        state.dashboard.loaded = false;
-        loadDashboard();
-      }
-      if (state.activeTab === 'activity' && msg.observation) {
-        state.activity.observations.unshift(msg.observation);
-        renderActivity();
+        renderObservations();
       }
     }
 
@@ -4492,7 +3238,7 @@
         if (f.enabled) return;
         if (dismissed[f.key]) return;
         var tabsAffected = (f.affects || []).map(function(t) { return t.toLowerCase(); });
-        if (tabsAffected.length && tabsAffected.indexOf(state.activeTab) === -1 && state.activeTab !== 'dashboard') return;
+        if (tabsAffected.length && tabsAffected.indexOf(state.activeTab) === -1) return;
         banners.push({
           kind: 'warn',
           icon: '&#9888;',
@@ -4555,7 +3301,7 @@
       host.innerHTML = '<button type="button" class="flag-summary" data-action="toggle-flags" aria-expanded="' + (expanded ? 'true' : 'false') + '" aria-controls="flag-list">' +
           pills +
           '<span class="flag-count">Feature flags</span>' +
-          '<span style="color:var(--ink-faint);">— click to ' + (expanded ? 'collapse' : 'expand') + '</span>' +
+          '<span style="color:var(--ink-faint);">â€” click to ' + (expanded ? 'collapse' : 'expand') + '</span>' +
           '<span class="flag-toggle" aria-hidden="true">' + (expanded ? '&#9650;' : '&#9660;') + '</span>' +
         '</button>' +
         '<div class="flag-list' + (expanded ? ' open' : '') + '" id="flag-list">' + listHtml + '</div>';
@@ -4722,210 +3468,33 @@
       if (e.target === this) closeModal();
     });
 
-    async function loadReplay() {
-      var el = document.getElementById('view-replay');
-      el.innerHTML = '<div class="loading">Loading sessions…</div>';
-      var res = await apiGet('replay/sessions');
-      state.replay.sessions = (res && res.sessions) || [];
-      state.replay.loaded = true;
-      renderReplay();
-    }
+    async function loadReplay() { return; }
 
-    async function refreshReplaySessions() {
-      state.replay.loaded = false;
-      await loadReplay();
-    }
+    async function refreshReplaySessions() { return; }
 
-    function renderReplay() {
-      var el = document.getElementById('view-replay');
-      var sessions = state.replay.sessions || [];
-      var options = '<option value="">— pick a session —</option>' + sessions.map(function(s) {
-        var id = sessionId(s);
-        var label = sessionDisplayName(s) + ' · ' + (shortSessionId(s, 8) || 'missing id') + ' · ' + (s.observationCount || 0) + ' obs';
-        return '<option value="' + esc(id) + '"' + (id && id === state.replay.selectedId ? ' selected' : '') + (id ? '' : ' disabled') + '>' + esc(label) + '</option>';
-      }).join('');
+    function renderReplay() { return; }
 
-      var tl = state.replay.timeline;
-      var hasTl = tl && tl.events && tl.events.length > 0;
-      var cursorEvent = hasTl ? tl.events[Math.min(state.replay.cursor, tl.events.length - 1)] : null;
-      var progress = hasTl && tl.totalDurationMs > 0 ? Math.min(100, (state.replay.offsetAt / tl.totalDurationMs) * 100) : 0;
+    function renderReplayDetail(ev) { return; }
 
-      el.innerHTML =
-        '<div class="toolbar">' +
-          '<select id="replay-session-select">' + options + '</select>' +
-          '<button data-action="replay-refresh">Refresh</button>' +
-          '<span class="sep"></span>' +
-          '<input type="text" id="replay-import-path" placeholder="~/.claude/projects or file.jsonl" style="width:280px">' +
-          '<button data-action="replay-import">Import JSONL</button>' +
-        '</div>' +
-        (hasTl
-          ? '<div class="replay-controls">' +
-              '<button data-action="replay-step" data-dir="-1" title="Previous (←)">◀</button>' +
-              '<button data-action="replay-toggle-play" title="Play/Pause (Space)">' + (state.replay.playing ? '❚❚ Pause' : '▶ Play') + '</button>' +
-              '<button data-action="replay-step" data-dir="1" title="Next (→)">▶</button>' +
-              '<button data-action="replay-reset" title="Reset">⟲</button>' +
-              '<span class="sep"></span>' +
-              '<span>Speed</span>' +
-              ['0.5', '1', '2', '4'].map(function(sp) {
-                var active = Math.abs(state.replay.speed - parseFloat(sp)) < 0.01;
-                return '<button data-action="replay-speed" data-speed="' + sp + '"' + (active ? ' class="active"' : '') + '>' + sp + '×</button>';
-              }).join('') +
-              '<span class="sep"></span>' +
-              '<span>' + (state.replay.cursor + 1) + ' / ' + tl.eventCount + '</span>' +
-            '</div>' +
-            '<div class="replay-progress"><div class="replay-progress-bar" style="width:' + progress.toFixed(1) + '%"></div></div>' +
-            '<div class="replay-grid">' +
-              '<div class="replay-list" id="replay-list">' +
-                tl.events.map(function(ev, i) {
-                  var active = i === state.replay.cursor ? ' replay-event-active' : '';
-                  return '<div class="replay-event replay-event-' + esc(ev.kind) + active + '" data-replay-idx="' + i + '">' +
-                    '<span class="replay-event-kind">' + esc(ev.kind) + '</span>' +
-                    '<span class="replay-event-label">' + esc(ev.label) + '</span>' +
-                    '<span class="replay-event-time">' + (ev.offsetMs / 1000).toFixed(1) + 's</span>' +
-                  '</div>';
-                }).join('') +
-              '</div>' +
-              '<div class="replay-detail">' + renderReplayDetail(cursorEvent) + '</div>' +
-            '</div>'
-          : '<div class="empty">Pick a session to replay, or import Claude Code JSONL transcripts from ~/.claude/projects.</div>');
+    async function selectReplaySession(sessionId) { return; }
 
-      var sel = document.getElementById('replay-session-select');
-      if (sel) sel.addEventListener('change', function() { selectReplaySession(sel.value); });
-    }
+    function toggleReplayPlay() { return; }
 
-    function renderReplayDetail(ev) {
-      if (!ev) return '<div class="empty">No event selected.</div>';
-      var blocks = [];
-      blocks.push('<div class="replay-detail-header"><b>' + esc(ev.label) + '</b> <span class="muted">' + esc(ev.kind) + '</span></div>');
-      if (ev.ts) blocks.push('<div class="muted">' + esc(formatTime(ev.ts)) + '</div>');
-      if (ev.body) {
-        blocks.push('<pre class="replay-body">' + esc(ev.body) + '</pre>');
-      }
-      if (ev.toolName) {
-        blocks.push('<div class="replay-tool"><b>Tool:</b> ' + esc(ev.toolName) + '</div>');
-      }
-      if (ev.toolInput !== undefined && ev.toolInput !== null) {
-        var inp = typeof ev.toolInput === 'string' ? ev.toolInput : JSON.stringify(ev.toolInput, null, 2);
-        blocks.push('<div class="replay-tool-block"><b>Input</b><pre>' + esc(truncate(inp, 4000)) + '</pre></div>');
-      }
-      if (ev.toolOutput !== undefined && ev.toolOutput !== null) {
-        var out = typeof ev.toolOutput === 'string' ? ev.toolOutput : JSON.stringify(ev.toolOutput, null, 2);
-        blocks.push('<div class="replay-tool-block"><b>Output</b><pre>' + esc(truncate(out, 4000)) + '</pre></div>');
-      }
-      return blocks.join('');
-    }
+    function startReplayTimer() { return; }
 
-    async function selectReplaySession(sessionId) {
-      stopReplayTimer();
-      state.replay.selectedId = sessionId;
-      state.replay.timeline = null;
-      state.replay.cursor = 0;
-      state.replay.offsetAt = 0;
-      state.replay.playing = false;
-      if (!sessionId) { renderReplay(); return; }
-      var el = document.getElementById('view-replay');
-      el.innerHTML = '<div class="loading">Loading replay…</div>';
-      var res = await apiGet('replay/load?sessionId=' + encodeURIComponent(sessionId));
-      if (res && res.success && res.timeline) {
-        state.replay.timeline = res.timeline;
-      } else {
-        state.replay.timeline = { events: [], eventCount: 0, totalDurationMs: 0 };
-      }
-      renderReplay();
-    }
+    function stopReplayTimer() { return; }
 
-    function toggleReplayPlay() {
-      if (!state.replay.timeline || state.replay.timeline.eventCount === 0) return;
-      if (state.replay.playing) {
-        stopReplayTimer();
-      } else {
-        startReplayTimer();
-      }
-      renderReplay();
-    }
+    function stepReplay(dir) { return; }
 
-    function startReplayTimer() {
-      state.replay.playing = true;
-      state.replay.startAt = Date.now();
-      var baseOffset = state.replay.offsetAt;
-      if (state.replay.timer) clearInterval(state.replay.timer);
-      state.replay.timer = setInterval(function() {
-        if (!state.replay.timeline) return;
-        var elapsed = (Date.now() - state.replay.startAt) * state.replay.speed;
-        state.replay.offsetAt = baseOffset + elapsed;
-        var events = state.replay.timeline.events;
-        var newCursor = state.replay.cursor;
-        for (var i = newCursor; i < events.length; i++) {
-          if (events[i].offsetMs <= state.replay.offsetAt) newCursor = i;
-          else break;
-        }
-        var changed = newCursor !== state.replay.cursor;
-        state.replay.cursor = newCursor;
-        if (state.replay.offsetAt >= state.replay.timeline.totalDurationMs) {
-          state.replay.offsetAt = state.replay.timeline.totalDurationMs;
-          stopReplayTimer();
-          renderReplay();
-          return;
-        }
-        if (changed) renderReplay();
-      }, 100);
-    }
+    function setReplaySpeed(sp) { return; }
 
-    function stopReplayTimer() {
-      state.replay.playing = false;
-      if (state.replay.timer) {
-        clearInterval(state.replay.timer);
-        state.replay.timer = null;
-      }
-    }
+    function resetReplay() { return; }
 
-    function stepReplay(dir) {
-      if (!state.replay.timeline) return;
-      stopReplayTimer();
-      var next = state.replay.cursor + dir;
-      if (next < 0) next = 0;
-      if (next >= state.replay.timeline.eventCount) next = state.replay.timeline.eventCount - 1;
-      state.replay.cursor = next;
-      state.replay.offsetAt = state.replay.timeline.events[next].offsetMs;
-      renderReplay();
-    }
-
-    function setReplaySpeed(sp) {
-      if (!sp || sp <= 0) return;
-      var wasPlaying = state.replay.playing;
-      stopReplayTimer();
-      state.replay.speed = sp;
-      if (wasPlaying) startReplayTimer();
-      renderReplay();
-    }
-
-    function resetReplay() {
-      stopReplayTimer();
-      state.replay.cursor = 0;
-      state.replay.offsetAt = 0;
-      renderReplay();
-    }
-
-    async function runReplayImport() {
-      var input = document.getElementById('replay-import-path');
-      var pathVal = input ? input.value.trim() : '';
-      var body = {};
-      if (pathVal) body.path = pathVal;
-      var el = document.getElementById('view-replay');
-      var prior = el.innerHTML;
-      el.innerHTML = '<div class="loading">Importing JSONL…</div>';
-      var res = await apiPost('replay/import-jsonl', body);
-      if (!res || res.success === false) {
-        el.innerHTML = prior;
-        alert((res && res.error) || 'Import failed');
-        return;
-      }
-      alert('Imported ' + (res.imported || 0) + ' file(s), ' + (res.observations || 0) + ' observation(s)');
-      await refreshReplaySessions();
-    }
+    async function runReplayImport() { return; }
 
     document.addEventListener('keydown', function(e) {
-      if (state.activeTab !== 'replay') return;
+      // Replay tab removed — keyboard shortcuts are no-ops
+      if (false) {
       if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT' || e.target.tagName === 'TEXTAREA')) return;
       if (e.key === ' ') { e.preventDefault(); toggleReplayPlay(); }
       else if (e.key === 'ArrowLeft') { e.preventDefault(); stepReplay(-1); }
@@ -4934,10 +3503,9 @@
 
     switchTab(tabFromRoute(), { replaceRoute: true });
     connectWs();
-    startDashboardAutoRefresh();
 
     // ==========================================================================
-    // B4.3 — copyToClipboard utility
+    // B4.3 â€” copyToClipboard utility
     // ==========================================================================
     function copyToClipboard(text, btn) {
       function showCopied() {
@@ -4962,7 +3530,7 @@
     }
 
     // ==========================================================================
-    // B4 — Onboarding card (empty state detection)
+    // B4 â€” Onboarding card (empty state detection)
     // ==========================================================================
     function maybeShowOnboarding(health, flags) {
       if (localStorage.getItem('agentmemory_onboarding_dismissed')) return;
@@ -4977,7 +3545,7 @@
         var doneClass = done ? ' done' : '';
         return '<div class="onboarding-step">' +
           '<div class="step-header">' +
-          '<div class="step-num' + doneClass + '">' + (done ? '✓' : num) + '</div>' +
+          '<div class="step-num' + doneClass + '">' + (done ? 'âœ“' : num) + '</div>' +
           '<div class="step-title">' + title + '</div>' +
           '</div>' +
           '<div class="step-code-wrap">' +
@@ -4986,8 +3554,8 @@
           '</div></div>';
       }
 
-      var secretSet = !!(flagMap['AGENTMEMORY_SECRET_SET']);
-      var geminiSet = !!(flagMap['GEMINI_API_KEY_SET']);
+      var secretSet = false; // AGENTMEMORY_SECRET status not exposed by flags endpoint
+      var geminiSet = !!(cfg && cfg.embeddingProvider && cfg.embeddingProvider !== 'none');
 
       var card = document.createElement('div');
       card.className = 'onboarding-card';
@@ -5032,7 +3600,7 @@
     }
 
     // ==========================================================================
-    // B5 — MCP Tool Tester tab
+    // B5 â€” MCP Tool Tester tab
     // ==========================================================================
     var _toolHistory = [];
     var _selectedTool = null;
@@ -5069,7 +3637,7 @@
       html += '<div id="tool-panel" style="display:none;">' +
         '<h3 id="tool-panel-title"></h3>' +
         '<textarea id="tool-args-editor" spellcheck="false">{}</textarea>' +
-        '<div><button id="tool-run-btn">Run ▶</button></div>' +
+        '<div><button id="tool-run-btn">Run â–¶</button></div>' +
         '<div id="tool-response" style="display:none;"></div>' +
         '<div class="tool-history" id="tool-history-wrap"></div>' +
         '</div>';
@@ -5117,7 +3685,7 @@
           respEl.style.display = '';
           return;
         }
-        btn.textContent = 'Running…';
+        btn.textContent = 'Runningâ€¦';
         btn.disabled = true;
         try {
           var result = await apiFetchRaw('/agentmemory/mcp/tools', {
@@ -5138,7 +3706,7 @@
           respEl.className = 'error';
           respEl.style.display = '';
         } finally {
-          btn.textContent = 'Run ▶';
+          btn.textContent = 'Run â–¶';
           btn.disabled = false;
         }
       });
@@ -5152,8 +3720,8 @@
       var html = '<details class="tool-history"><summary>History (' + _toolHistory.length + ')</summary>';
       _toolHistory.forEach(function(h) {
         var badge = h.ok
-          ? '<span class="badge-ok">✓ ok</span>'
-          : '<span class="badge-err">✗ err</span>';
+          ? '<span class="badge-ok">âœ“ ok</span>'
+          : '<span class="badge-err">âœ— err</span>';
         html += '<details class="tool-history-entry">' +
           '<summary>' + badge + ' <span style="font-weight:600;">' + esc(h.name) + '</span>' +
           ' <span style="color:var(--ink-faint);font-size:10px;">' + h.ts.slice(11,19) + '</span></summary>' +
@@ -5166,7 +3734,7 @@
     }
 
     // ==========================================================================
-    // B1 — Command Palette (Ctrl+K / Cmd+K)
+    // B1 â€” Command Palette (Ctrl+K / Cmd+K)
     // ==========================================================================
     var _cmdOpen = false;
     var _cmdSelectedIdx = -1;
@@ -5249,7 +3817,7 @@
 
     // Global keydown handler for command palette
     document.addEventListener('keydown', function(e) {
-      // Ctrl+K or Cmd+K — open palette
+      // Ctrl+K or Cmd+K â€” open palette
       if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
         e.preventDefault();
         if (_cmdOpen) { closeCommandPalette(); } else { openCommandPalette(); }
@@ -5302,7 +3870,7 @@
     }
 
     // ==========================================================================
-    // B6.2 — Tab keyboard navigation (arrow keys)
+    // B6.2 â€” Tab keyboard navigation (arrow keys)
     // ==========================================================================
     var tabBar = document.getElementById('tab-bar');
     if (tabBar) {
@@ -5324,7 +3892,7 @@
     }
 
     // ==========================================================================
-    // B3 — VirtualList helper
+    // B3 â€” VirtualList helper
     // ==========================================================================
     function VirtualList(opts) {
       this.container = opts.container;
