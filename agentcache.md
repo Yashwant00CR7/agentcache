@@ -1,4 +1,4 @@
-# AgentMemory Automation & Client Hook Roundabout
+# AgentCache Automation & Client Hook Roundabout
 
 This file documents the technical details and configurations for automating memory sessions, observations, and prompt-context syncing in environments that lack native client-side hook runners.
 
@@ -9,7 +9,7 @@ For standard command shells that do not have custom plugins (such as PowerShell)
 * **Profile File**: `D:\Documents\WindowsPowerShell\Microsoft.PowerShell_profile.ps1`
 * **Automation Mechanism**:
   1. **Prompt Redefinition**: Overrides the default PowerShell `prompt` function to retrieve the last executed command from the session history (`Get-History`).
-  2. **Asynchronous Dispatch**: Uses PowerShell's `Start-Job` to send the command, execution status, and duration to the Hugging Face Space database (`https://yash030-agentmemory-python.hf.space/agentmemory/observe`) in the background, keeping terminal prompts lag-free.
+  2. **Asynchronous Dispatch**: Uses PowerShell's `Start-Job` to send the command, execution status, and duration to the Hugging Face Space database (`https://yash030-agentcache-python.hf.space/agentcache/observe`) in the background, keeping terminal prompts lag-free.
   3. **Interactive Shield**: Wraps the prompts and startup session creation in `if (-not [Console]::IsInputRedirected)` so background script executions or tool runners do not pollute the database.
   4. **Active Session Reuse**: On console startup, checks for a cached session ID in `current_session.txt` and reuses it to prevent session clutter.
 

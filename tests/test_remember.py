@@ -18,7 +18,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 def _make_kv(tmp_path):
     from db import StateKV
-    os.environ.pop("AGENTMEMORY_SECRET", None)
+    os.environ.pop("AGENTCACHE_SECRET", None)
     return StateKV(db_path=str(tmp_path / "test.db"))
 
 

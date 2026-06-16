@@ -38,7 +38,7 @@ _counter = [0]
 def _fresh_kv():
     """Create a brand-new isolated StateKV in a temp directory."""
     from db import StateKV
-    os.environ.pop("AGENTMEMORY_SECRET", None)
+    os.environ.pop("AGENTCACHE_SECRET", None)
     _counter[0] += 1
     d = tempfile.mkdtemp(prefix=f"agmem_prop_{_counter[0]}_")
     return StateKV(db_path=os.path.join(d, "test.db"))

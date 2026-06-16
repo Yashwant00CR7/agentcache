@@ -4,100 +4,106 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What This Is
 
-Python reimplementation of the agentmemory persistent memory server. Exposes a REST API + WebSocket stream + MCP tools endpoint that AI coding agents use to store and retrieve session observations, long-term memories, lessons, and pinned memory slots. Backed by a Dolt SQL Server (MySQL-compatible).
+A Python REST + WebSocket + MCP memory server backed by SQLite. No Node.js, no Dolt. Agents use it to store observations scoped to `(folder_path, agent_id)` pairs and global long-term memories. The architecture is **folder-based** — sessions, lessons, slots, and actions are removed.
 
 ## Running
 
-**Prerequisite**: Dolt SQL Server must be running on `127.0.0.1:3306` with a database named `agentmemory`. Config is read from `~/.agentmemory/.env` at startup.
-
 ```bash
-# Start the memory API server and built-in viewer (port 3111)
+pip install -r requirements.txt
 python src/app.py
+# Server on http://localhost:3111
+# Viewer at http://localhost:3111/viewer
 ```
 
-The built-in HTML dashboard is accessible at:
-- `http://localhost:3111/viewer` or `http://localhost:3111/`
+No build step. SQLite file lives at `~/.agentcache/agentcache.db`. Config optionally loaded from `~/.agentcache/.env`.
 
-No build step. No test runner is configured yet.
+## Running Tests
+
+```bash
+pip install -e ".[dev]"
+pytest tests/ -v
+```
 
 ## Key Environment Variables
-
-Set in `~/.agentmemory/.env` or as system env vars:
 
 | Variable | Default | Purpose |
 |---|---|---|
 | `III_REST_PORT` / `PORT` | `3111` | API server port |
-| `DOLT_HOST/PORT/USER/PASSWORD/DATABASE` | `127.0.0.1/3306/root//"agentmemory"` | Dolt connection |
-| `GEMINI_API_KEY` / `GOOGLE_API_KEY` | — | Enables 768-dim vector search; without it, BM25-only |
-| `AGENTMEMORY_SECRET` | — | Enables Bearer token auth on all endpoints |
-| `AGENT_ID` | — | Default agent ID for scope isolation |
-| `AGENTMEMORY_AGENT_SCOPE=isolated` | — | Filters sessions/obs to current `AGENT_ID` |
-| `DOLT_AUTO_COMMIT=false` | auto-commit | Disable Dolt versioning commits per write |
-| `MAX_OBS_PER_SESSION` | `500` | Hard cap on observations per session |
-| `TOKEN_BUDGET` | `2000` | Max tokens in compiled context response |
-| `GRAPH_EXTRACTION_ENABLED=true` | `false` | Knowledge graph extraction (requires LLM) — **disabled by default** |
-| `CONSOLIDATION_ENABLED=true` | `false` | Memory consolidation (requires LLM) — **disabled by default** |
-| `AGENTMEMORY_AUTO_COMPRESS=true` | `false` | LLM-powered observation compression |
+| `GEMINI_API_KEY` / `GOOGLE_API_KEY` | — | Gemini vector search (priority 1) |
+| `OPENAI_API_KEY` | — | OpenAI vector search (priority 2) |
+| `AGENTCACHE_LOCAL_EMBEDDING_MODEL` | — | SentenceTransformer model (priority 3) |
+| `AGENTCACHE_SECRET` | — | Bearer token auth on all endpoints |
+| `AGENT_ID` | — | Default agent ID |
+| `AGENTCACHE_AGENT_SCOPE=isolated` | — | Filter data to current `AGENT_ID` |
+| `AGENTCACHE_CWD` | — | Fallback folder path for legacy clients |
+| `MAX_OBS_PER_FOLDER` | `2000` | Hard cap on observations per (folder, agent) pair |
+| `TOKEN_BUDGET` | `2000` | Context compilation cap |
+| `GRAPH_EXTRACTION_ENABLED` | `false` | Knowledge graph extraction (needs LLM) |
+| `CONSOLIDATION_ENABLED` | `false` | Memory consolidation (needs LLM) |
+| `AGENTCACHE_AUTO_COMPRESS` | `false` | LLM-powered observation compression |
+| `AGENTCACHE_CORS_ORIGINS` | see app.py | Comma-separated allowed CORS origins |
 
 ## Architecture
 
 ### `src/db.py` — Storage Layer
-`StateKV` wraps a single Dolt table `kv_store(scope VARCHAR, key VARCHAR, value LONGTEXT)`. All data is JSON-serialized. Scopes are namespaced strings (e.g. `mem:sessions`, `mem:obs:{session_id}`). Dolt versioning is triggered via `CALL dolt_add('-A')` + `CALL dolt_commit(...)` stored procedures — this is what makes the store git-versioned.
+
+`StateKV` wraps SQLite with two tables:
+- `kv_store(scope, key, value)` — all data as JSON, namespaced by scope
+- `audit_log(id, ts, agent_id, message)` — write audit trail
+
+Per-thread persistent connections via `threading.local()`. WAL checkpoint on shutdown.
+
+Key scopes: `mem:folders` (index), `mem:folder:{path}:{agent}` (observations), `mem:foldermeta:{path}:{agent}` (metadata), `mem:obs_lookup` (O(1) reverse lookup), `mem:memories` (global), `mem:index:bm25:*` (search).
 
 ### `src/functions.py` — Business Logic
-All core operations live here. Important globals:
-- `_bm25_index` / `_vector_index` — in-memory search indexes (rebuilt from DB on startup if empty)
-- `_hybrid_search` — combines BM25 + vector search; only initialized when embedding provider is set
-- `_stream_broadcaster` — WebSocket broadcast callback injected by `app.py`
 
-Key scopes are defined in the `KV` class. Dynamic scopes: `KV.observations(session_id)` → `mem:obs:{session_id}`.
+All core implementations. Key functions:
+- `folder_observe(kv, payload)` — ingest a folder-scoped observation
+- `folder_search(kv, query, limit, folder_path, agent_id)` — BM25+vector hybrid search
+- `folder_timeline(kv, limit, folder_path, agent_id, before, after)` — activity feed
+- `folder_graph_build(kv)` — build graph nodes + edges
+- `remember(kv, data)` / `forget(kv, data)` — global memory management
+- `health_check(kv)` — system stats
+- `export_data(kv, data)` — v2 JSON export
+- `migrate_sessions_to_folders(kv, dry_run)` — legacy migration
 
-**Observation pipeline**: raw payload → `strip_private_data()` → `build_synthetic_compression()` → stored + BM25-indexed + vector-indexed + Dolt-committed + WebSocket-broadcast.
-
-**Memory versioning**: `remember()` checks Jaccard similarity against existing memories; if > 0.7 match found, the new memory supersedes the old one (`isLatest=False` on old, `parentId` set on new).
-
-**Context compilation** (`context()`): assembles pinned slots → project profile → lessons (scored by confidence × project match) → past session summaries, capped at `TOKEN_BUDGET` tokens (estimated at `len/3`).
-
-**Lessons**: fingerprinted by SHA-256 of content. Duplicate saves strengthen confidence (`+0.1 × (1 - conf)`). Weekly decay sweep reduces confidence by `decayRate × weeks`; soft-deleted at ≤ 0.1 confidence with 0 reinforcements.
+`src/memory/*` contains thin shim modules that re-export from here.
 
 ### `src/search.py` — Search Indexes
-- `SearchIndex`: BM25 with custom Porter stemmer. Persisted to Dolt in sharded 2MB chunks via `IndexPersistence`.
-- `VectorIndex`: cosine similarity over Gemini 768-dim embeddings stored as base64-encoded float32 arrays.
-- `HybridSearch`: fuses BM25 + vector scores with RRF (reciprocal rank fusion).
 
-### `src/app.py` — Flask API
-Initializes DB → embedding provider → index persistence → rebuilds index if empty (background thread). All endpoints check `AGENTMEMORY_SECRET` via timing-safe Bearer token comparison. WebSocket at `/stream/mem-live/viewer` broadcasts raw + compressed observations to connected viewers.
+- `SearchIndex`: BM25 with Porter stemmer + synonym expansion. `_dirty` flag prevents unnecessary saves.
+- `VectorIndex`: cosine similarity over embeddings as base64 float32. `_dirty` flag.
+- `HybridSearch`: RRF fusion (k=60) of BM25 + vector.
+- `GeminiEmbeddingProvider`, `OpenAIEmbeddingProvider`, `SentenceTransformerProvider`.
 
-MCP tools are served at `GET /agentmemory/mcp/tools` (schema list) and `POST /agentmemory/mcp/tools` (tool call dispatch).
+### `src/app.py` — Flask Factory
 
-### `src/viewer/index.html` — Built-in HTML Dashboard
-Interactive web dashboard served directly by the Flask server. Provides real-time view of active sessions, timelines, memories with search, slots editor, and DB migration panel. Connects to the Flask backend via REST and live WebSockets. Imports legacy TypeScript `.bin` files via `src/import_data.py`.
+`create_app()`: init DB → auto-select embedding provider → init IndexPersistence → backfill obs_lookup → register blueprints → setup WebSocket → register CORS → start background workers.
 
-## API Surface
+### `src/routes/` — Flask Blueprints
 
-Base path: `/agentmemory/`
+| Blueprint | Endpoints |
+|-----------|-----------|
+| `observations.py` | `/observe`, `/agent/observe`, `/folders`, `/folder/observations`, legacy session shims |
+| `memories.py` | `/remember`, `/agent/remember`, `/memories`, `/forget` |
+| `search.py` | `/search`, `/timeline` |
+| `graph.py` | `/graph`, `/graph/stats`, `/graph/query`, `/graph/build` |
+| `health.py` | `/livez`, `/health`, `/audit`, `/config/flags` |
+| `mcp.py` | `/mcp/tools` GET+POST (12 tools) |
+| `migration.py` | `/migrate` |
 
-- `GET /livez` — health/liveness (no auth)
-- `POST /observe` — ingest a hook event observation
-- `POST /agent/observe` — simplified observe for direct agent use
-- `POST /remember` / `POST /agent/remember` — save long-term memory
-- `POST /forget` — delete memory/session/observations
-- `POST /context` — compile context for a session+project
-- `POST /search` — hybrid BM25+vector search
-- `POST/GET /lessons` — lessons CRUD + `/lessons/search`, `/lessons/strengthen`
-- `GET/POST /slots`, `GET/POST/DELETE /slot` — memory slots CRUD
-- `POST /slot/reflect` — auto-populate slots from session observations
-- `POST/GET /session/start|end|commit` — session lifecycle
-- `GET /sessions`, `GET /observations` — list data
-- `GET/POST /relations` — knowledge graph edges
-- `POST /evolve` — create new memory version
-- `POST /timeline` — chronological observation window
-- `GET /profile` — project profile (top concepts/files); no `?project` → returns list of all known projects
-- `GET /actions` — list actions (`?limit`, `?status`)
-- `POST /actions` — create action
-- `PATCH /actions/<id>` — update action status/fields
-- `GET /frontier` — pending+active actions sorted by priority
-- `GET /insights` — list insights (`?limit`)
-- `GET /replay/sessions` — sessions list for replay tab
-- `GET /replay/load?sessionId=<id>` — full session + observations for replay
-- `GET/POST /mcp/tools` — MCP protocol adapter
+### `src/workers.py` — Background Threads
+
+- Index rebuild thread (if BM25 index is empty or out of sync on boot)
+- Auto-forget sweep loop (hourly)
+- SIGTERM/SIGINT handlers: flush `IndexPersistence`, WAL checkpoint, exit 0
+
+### `src/viewer/index.html` — Dashboard
+
+Single-file HTML, served at `/viewer`. Tabs: **Folders**, **Memories**, **Graph**, **Timeline**. No build step.
+
+## MCP Tools (12 active)
+
+`agent_observe`, `agent_remember`, `memory_recall`, `memory_smart_search`, `memory_save`, `memory_export`, `memory_forget`, `memory_diagnose`, `memory_folders`, `memory_folder_observations`, `memory_timeline`
+
+Full schema at `GET /agentcache/mcp/tools`.

@@ -4,16 +4,16 @@
     handle /stream/* {
         reverse_proxy localhost:3112 {
             header_up Host localhost:3112
-            header_up Authorization "Bearer {env.AGENTMEMORY_SECRET}"
+            header_up Authorization "Bearer {env.AGENTCACHE_SECRET}"
         }
     }
 
     # Route REST API endpoints (iii-http on 3111)
     # Caddy injects the secret so the dashboard viewer works without exposing it to the browser
-    handle /agentmemory/* {
+    handle /agentcache/* /agentmemory/* {
         reverse_proxy localhost:3111 {
             header_up Host localhost:3111
-            header_up Authorization "Bearer {env.AGENTMEMORY_SECRET}"
+            header_up Authorization "Bearer {env.AGENTCACHE_SECRET}"
         }
     }
 

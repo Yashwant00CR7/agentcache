@@ -1,20 +1,23 @@
-# Agent Memory Rules
+# Agent Cache Rules
 
-This workspace is integrated with long-term semantic memory via `agentmemory-python`.
-You must act as your own memory manager by calling the memory MCP tools at critical boundaries.
+This workspace is integrated with long-term semantic memory via `agentcache-python`.
+You must act as your own memory manager by calling the cache MCP tools at critical boundaries.
 
 ## Rules & Workflow
 
 1. **Initial Search (Prefetch Context)**:
-   At the start of every session or new task, immediately call `memory_smart_search` with terms related to the current objective. This retrieves past architecture patterns, preferences, bug fixes, or lessons.
-   - Example: `memory_smart_search(query="jwt token rotation logic")`
+   At the start of every session or new task, immediately call `cache_smart_search` with terms related to the current objective. This retrieves past architecture patterns, preferences, bug fixes, and past work.
+   - Example: `cache_smart_search(query="jwt token rotation logic")`
 
-2. **Lessons & Insights Capture**:
+2. **Log Observations**:
+   As you work, call `agent_observe` to record what you are doing. Include `folderPath` (the working directory), `agentId` (your agent name), and `text` (what happened).
+   - Example: `agent_observe(folderPath="/your/project/path", agentId="cursor", text="Refactored auth middleware to use JWT rotation")`
+
+3. **Save Long-Term Memories**:
    When you successfully debug a complex error, discover an undocumented requirement, or establish a convention, persist it:
-   - Call `memory_lesson_save` to record lessons that improve your coding capabilities. Duplicate saves strengthen confidence scores.
-   - Call `memory_save` to save long-term structural facts. Always extract 2-5 specific lowercased tags (e.g. `auth-flow`, `refresh-token`) as concepts.
+   - Call `cache_save` to save long-term structural facts. Always extract 2-5 specific lowercased tags (e.g. `auth-flow`, `refresh-token`) as concepts.
 
-3. **Checklist Before Ending**:
+4. **Checklist Before Ending**:
    Before stating a task is complete:
-   - Reflect on whether any lessons learned should be saved.
-   - Call `memory_reflect` to automatically distribute observations into slots if needed.
+   - Reflect on whether any insights should be saved via `cache_save`.
+   - Review the folder activity feed with `cache_timeline` to confirm all significant work was captured.

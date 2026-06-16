@@ -18,7 +18,7 @@ mcp_bp = Blueprint("mcp", __name__)
 
 def _check_auth():
     import hmac
-    secret = os.getenv("AGENTMEMORY_SECRET")
+    secret = os.getenv("AGENTCACHE_SECRET") or os.getenv("AGENTMEMORY_SECRET")
     if not secret:
         return None
     auth = request.headers.get("Authorization") or request.headers.get("authorization")
@@ -49,9 +49,10 @@ def _parse_mcp_list_arg(arg_val):
 
 
 # ---------------------------------------------------------------------------
-# GET /agentmemory/mcp/tools
+# GET /agentcache/mcp/tools
 # ---------------------------------------------------------------------------
 
+@mcp_bp.route("/agentcache/mcp/tools", methods=["GET"])
 @mcp_bp.route("/agentmemory/mcp/tools", methods=["GET"])
 def mcp_tools_list():
     auth_err = _check_auth()
@@ -60,7 +61,7 @@ def mcp_tools_list():
 
     tools = [
         {
-            "name": "memory_recall",
+            "name": "cache_recall",
             "description": "Search past folder observations and global memories. Use when you need to recall what happened in a folder.",
             "inputSchema": {
                 "type": "object",
@@ -74,7 +75,7 @@ def mcp_tools_list():
             },
         },
         {
-            "name": "memory_smart_search",
+            "name": "cache_smart_search",
             "description": "Hybrid semantic+keyword search across folder observations and global memories.",
             "inputSchema": {
                 "type": "object",
@@ -88,7 +89,7 @@ def mcp_tools_list():
             },
         },
         {
-            "name": "memory_save",
+            "name": "cache_save",
             "description": "Explicitly save an important insight, decision, or pattern to long-term memory.",
             "inputSchema": {
                 "type": "object",
@@ -113,12 +114,12 @@ def mcp_tools_list():
             },
         },
         {
-            "name": "memory_diagnose",
+            "name": "cache_diagnose",
             "description": "Health check — returns folder, agent, observation and memory counts.",
             "inputSchema": {"type": "object", "properties": {}},
         },
         {
-            "name": "memory_forget",
+            "name": "cache_forget",
             "description": "Delete a global memory or all observations for a (folderPath, agentId) pair.",
             "inputSchema": {
                 "type": "object",
@@ -136,7 +137,7 @@ def mcp_tools_list():
             },
         },
         {
-            "name": "memory_export",
+            "name": "cache_export",
             "description": "Export all folder observations and global memories as JSON (v2 format).",
             "inputSchema": {"type": "object", "properties": {}},
         },
@@ -161,7 +162,7 @@ def mcp_tools_list():
             },
         },
         {
-            "name": "agent_remember",
+            "name": "agent_cache",
             "description": "Explicitly save a key insight, fact, or architecture decision to long-term memory.",
             "inputSchema": {
                 "type": "object",
@@ -187,12 +188,12 @@ def mcp_tools_list():
             },
         },
         {
-            "name": "memory_folders",
+            "name": "cache_folders",
             "description": "List all (folder, agent) pairs that have memory observations.",
             "inputSchema": {"type": "object", "properties": {}},
         },
         {
-            "name": "memory_folder_observations",
+            "name": "cache_folder_observations",
             "description": "Get all observations for a specific (folderPath, agentId) pair.",
             "inputSchema": {
                 "type": "object",
@@ -204,7 +205,7 @@ def mcp_tools_list():
             },
         },
         {
-            "name": "memory_timeline",
+            "name": "cache_timeline",
             "description": "Get folder activity feed — observations sorted by time, filterable by folder/agent.",
             "inputSchema": {
                 "type": "object",
@@ -218,7 +219,7 @@ def mcp_tools_list():
             },
         },
         {
-            "name": "memory_dedup",
+            "name": "cache_dedup",
             "description": "Remove duplicate observations from a (folderPath, agentId) pair or all pairs. Keeps the earliest observation per unique text fingerprint.",
             "inputSchema": {
                 "type": "object",
@@ -233,9 +234,10 @@ def mcp_tools_list():
 
 
 # ---------------------------------------------------------------------------
-# POST /agentmemory/mcp/tools
+# POST /agentcache/mcp/tools
 # ---------------------------------------------------------------------------
 
+@mcp_bp.route("/agentcache/mcp/tools", methods=["POST"])
 @mcp_bp.route("/agentmemory/mcp/tools", methods=["POST"])
 def mcp_tools_call():
     auth_err = _check_auth()
@@ -253,7 +255,7 @@ def mcp_tools_call():
         print(f"[mcp] Calling tool {name} with args: {args}")
         text_out = ""
 
-        if name == "memory_recall":
+        if name in ("cache_recall", "memory_recall"):
             q = args.get("query")
             limit = int(args.get("limit") or 10)
             folder_path = args.get("folderPath")
@@ -267,7 +269,7 @@ def mcp_tools_call():
             res = functions.folder_search(kv, q, limit, folder_path=folder_path, agent_id=agent_id)
             text_out = json.dumps(res, indent=2)
 
-        elif name == "memory_save":
+        elif name in ("cache_save", "memory_save"):
             content = args.get("content")
             concepts = _parse_mcp_list_arg(args.get("concepts"))
             files = _parse_mcp_list_arg(args.get("files"))
@@ -281,7 +283,7 @@ def mcp_tools_call():
             })
             text_out = json.dumps(res)
 
-        elif name == "memory_smart_search":
+        elif name in ("cache_smart_search", "memory_smart_search"):
             q = args.get("query")
             limit = int(args.get("limit") or 10)
             folder_path = args.get("folderPath")
@@ -295,11 +297,11 @@ def mcp_tools_call():
             res = functions.folder_search(kv, q, limit, folder_path=folder_path, agent_id=agent_id)
             text_out = json.dumps(res, indent=2)
 
-        elif name == "memory_diagnose":
+        elif name in ("cache_diagnose", "memory_diagnose"):
             res = functions.health_check(kv)
             text_out = json.dumps(res, indent=2)
 
-        elif name == "memory_forget":
+        elif name in ("cache_forget", "memory_forget"):
             obs_ids = _parse_mcp_list_arg(args.get("observationIds"))
             res = functions.forget(kv, {
                 "memoryId": args.get("memoryId"),
@@ -309,7 +311,7 @@ def mcp_tools_call():
             })
             text_out = json.dumps(res, indent=2)
 
-        elif name == "memory_export":
+        elif name in ("cache_export", "memory_export"):
             res = functions.export_data(kv, {})
             text_out = json.dumps(res, indent=2)
 
@@ -325,6 +327,7 @@ def mcp_tools_call():
                 folder_path = (
                     args.get("cwd")
                     or args.get("project")
+                    or os.getenv("AGENTCACHE_CWD")
                     or os.getenv("AGENTMEMORY_CWD")
                     or "/unknown"
                 )
@@ -361,7 +364,7 @@ def mcp_tools_call():
             res = functions.folder_observe(kv, payload)
             text_out = json.dumps(res)
 
-        elif name == "agent_remember":
+        elif name in ("agent_cache", "agent_remember"):
             agent_id = args.get("agentId") or functions.get_agent_id() or "agent"
             content = args.get("content")
             project = args.get("project")
@@ -389,7 +392,7 @@ def mcp_tools_call():
             res = functions.remember(kv, payload)
             text_out = json.dumps(res)
 
-        elif name == "memory_folders":
+        elif name in ("cache_folders", "memory_folders"):
             pairs = sorted(
                 kv.list(KV.folders),
                 key=lambda x: x.get("lastUpdated", ""),
@@ -401,7 +404,7 @@ def mcp_tools_call():
                     pairs = [p for p in pairs if p.get("agentId") == aid]
             text_out = json.dumps(pairs, indent=2)
 
-        elif name == "memory_folder_observations":
+        elif name in ("cache_folder_observations", "memory_folder_observations"):
             fp = args.get("folderPath", "")
             aid = args.get("agentId", "")
             if not fp or not aid:
@@ -417,7 +420,7 @@ def mcp_tools_call():
             )
             text_out = json.dumps(obs, indent=2)
 
-        elif name == "memory_timeline":
+        elif name in ("cache_timeline", "memory_timeline"):
             request_aid = args.get("agentId")
             if functions.is_agent_scope_isolated():
                 current_aid = functions.get_agent_id()
@@ -435,7 +438,7 @@ def mcp_tools_call():
             )
             text_out = json.dumps(res, indent=2)
 
-        elif name == "memory_dedup":
+        elif name in ("cache_dedup", "memory_dedup"):
             res = functions.dedup_folder_observations(
                 kv,
                 args.get("folderPath") or None,

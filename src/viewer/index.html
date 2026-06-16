@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>agentmemory viewer</title>
+  <title>agentcache viewer</title>
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
   <!-- Removed Google Fonts <link> in #323: the viewer CSP is strict
        (default-src 'none', style-src 'unsafe-inline', font-src 'self')
@@ -1287,8 +1287,8 @@
 <body>
   <div class="app-header">
     <a class="brand" href="#folders" data-tab-link="folders" aria-label="Open folders view">
-      <h1>agentmemory</h1>
-      <span class="version">v__AGENTMEMORY_VERSION__</span>
+      <h1>agentcache</h1>
+      <span class="version">v__AGENTCACHE_VERSION__</span>
     </a>
     <div class="header-right">
       <span class="dateline" id="dateline"></span>
@@ -1329,7 +1329,7 @@
   </div>
 
   <footer id="viewer-footer" class="viewer-footer">
-    <span>agentmemory viewer &middot; <span id="footer-version">loading...</span></span>
+    <span>agentcache viewer &middot; <span id="footer-version">loading...</span></span>
     <span class="footer-sep">&middot;</span>
     <a href="https://github.com/rohitg00/agentmemory" target="_blank" rel="noopener">github</a>
     <span class="footer-sep">&middot;</span>
@@ -1338,7 +1338,7 @@
     <a id="footer-feedback" href="#" target="_blank" rel="noopener">report issue &rarr;</a>
   </footer>
 
-  <script nonce="__AGENTMEMORY_VIEWER_NONCE__">
+  <script nonce="__AGENTCACHE_VIEWER_NONCE__">
     var safeStorage = {
       _mem: {},
       getItem: function(key) {
@@ -1385,10 +1385,10 @@
       document.documentElement.dataset.theme = dark ? 'dark' : 'light';
       var btn = document.getElementById('theme-toggle');
       if (btn) btn.textContent = dark ? 'LIGHT' : 'DARK';
-      if (persist) safeStorage.setItem('agentmemory-theme', dark ? 'dark' : 'light');
+      if (persist) safeStorage.setItem('agentcache-theme', dark ? 'dark' : 'light');
     }
     window.toggleTheme = function() { applyTheme(!isDarkMode(), true); };
-    var savedTheme = safeStorage.getItem('agentmemory-theme');
+    var savedTheme = safeStorage.getItem('agentcache-theme');
     if (savedTheme) {
       applyTheme(savedTheme === 'dark', false);
     } else if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
@@ -1442,7 +1442,7 @@
     };
     var CB_STATE_COLORS = { closed: 'badge-green', open: 'badge-red', 'half-open': 'badge-yellow' };
     var TAB_IDS = ['folders', 'memories', 'graph', 'timeline', 'tools'];
-    var VIEWER_TOKEN_STORAGE_KEY = 'agentmemory-viewer-token';
+    var VIEWER_TOKEN_STORAGE_KEY = 'agentcache-viewer-token';
 
     var state = {
       activeTab: 'folders',
@@ -1539,8 +1539,8 @@
       }
     }
     (function() {
-      var autoToken = '__AGENTMEMORY_AUTO_TOKEN__';
-      if (autoToken && autoToken.length > 0 && autoToken !== '__AGENTMEMORY_AUTO_TOKEN__') {
+      var autoToken = '__AGENTCACHE_AUTO_TOKEN__';
+      if (autoToken && autoToken.length > 0 && autoToken !== '__AGENTCACHE_AUTO_TOKEN__') {
         try { sessionStorage.setItem(VIEWER_TOKEN_STORAGE_KEY, autoToken); } catch (_) {}
       }
     })();
@@ -1561,9 +1561,9 @@
         '<div class="viewer-auth-panel">' +
           '<div>' +
             '<div class="viewer-auth-title">Viewer authorization required</div>' +
-            '<div id="viewer-auth-desc" class="viewer-auth-desc">Enter <code>AGENTMEMORY_SECRET</code> to unlock viewer API access.</div>' +
+            '<div id="viewer-auth-desc" class="viewer-auth-desc">Enter <code>AGENTCACHE_SECRET</code> to unlock viewer API access.</div>' +
           '</div>' +
-          '<input id="viewer-auth-token" type="password" autocomplete="off" spellcheck="false" aria-label="AGENTMEMORY_SECRET" aria-describedby="viewer-auth-desc" placeholder="AGENTMEMORY_SECRET" />' +
+          '<input id="viewer-auth-token" type="password" autocomplete="off" spellcheck="false" aria-label="AGENTCACHE_SECRET" aria-describedby="viewer-auth-desc" placeholder="AGENTCACHE_SECRET" />' +
           '<button class="btn" data-action="save-viewer-token">Unlock</button>' +
         '</div>';
       var input = document.getElementById('viewer-auth-token');
@@ -1578,7 +1578,7 @@
 
     async function api(path, opts) {
       try {
-        var url = REST + '/agentmemory/' + path;
+        var url = REST + '/agentcache/' + path;
         var headers = Object.assign({ 'Cache-Control': 'no-cache' }, (opts && opts.headers) || {});
         var viewerToken = getViewerToken();
         if (viewerToken && !headers.Authorization && !headers.authorization) {
@@ -1673,7 +1673,7 @@
 
     async function loadDashboard() {
       // Dashboard tab was removed; redirect to the Folders tab which is the
-      // active landing page backed by real endpoints (/agentmemory/folders).
+      // active landing page backed by real endpoints (/agentcache/folders).
       switchTab('folders');
     }
 
@@ -1746,7 +1746,7 @@
       el.innerHTML = '<div style="padding:24px;"><div class="skeleton skeleton-card"></div><div class="skeleton skeleton-card"></div></div>';
       try {
         var qp = 'folderPath=' + encodeURIComponent(folderPath) + '&agentId=' + encodeURIComponent(agentId);
-        var result = await apiFetchRaw('/agentmemory/folder/observations?' + qp);
+        var result = await apiFetchRaw('/agentcache/folder/observations?' + qp);
         var obs = (result && result.observations) || [];
 
         var html = '<div id="folder-detail-root" style="padding:20px 24px;">';
@@ -1926,7 +1926,7 @@
       if (viewerToken && !headers.Authorization) headers['Authorization'] = 'Bearer ' + viewerToken;
       // Always use REST base so cross-origin ?port= param works correctly
       var url = path.startsWith('http') ? path
-        : REST + (path.startsWith('/') ? path : '/agentmemory/' + path);
+        : REST + (path.startsWith('/') ? path : '/agentcache/' + path);
       var res = await fetch(url, Object.assign({}, opts, { headers: headers }));
       if (!res.ok) throw new Error(res.status + ' ' + res.statusText);
       return res.json();
@@ -1955,7 +1955,7 @@
       state.graph.queryError = null;
       var graphData;
       try {
-        graphData = await apiFetchRaw('/agentmemory/graph');
+        graphData = await apiFetchRaw('/agentcache/graph');
       } catch(err) {
         state.graph.queryError = String(err);
         graphData = { nodes: [], edges: [] };
@@ -2715,7 +2715,7 @@
 
       var html = '<div class="card" style="margin-bottom:12px;padding:12px;background:var(--bg-subtle);">';
       html += '<div style="font-size:13px;color:var(--ink-muted);line-height:1.5;">';
-      html += '<strong>Memories</strong> are durable facts, architecture notes, conventions, and lessons saved via <code>memory_remember</code> MCP tool or the <code>/agentmemory/remember</code> endpoint. They survive across sessions and supersede each other as v1, v2, etc. ';
+      html += '<strong>Memories</strong> are durable facts, architecture notes, conventions, and lessons saved via <code>agent_cache</code> MCP tool or the <code>/agentcache/remember</code> endpoint. They survive across sessions and supersede each other as v1, v2, etc. ';
       html += '<span style="color:var(--ink-faint);">Shown: ' + items.length + ' total.</span>';
       html += '</div></div>';
 
@@ -2740,8 +2740,8 @@
         html += '<div class="empty-state">' +
           '<div class="empty-icon">&#128218;</div>' +
           '<div class="empty-title">No memories yet</div>' +
-          '<div class="empty-lead">Memories are the distilled facts agentmemory keeps across sessions &mdash; things like file paths, architectural decisions, and user preferences. Hooks capture them automatically during coding sessions; you can also save one directly.</div>' +
-          '<pre class="empty-cmd">memory_remember {\n  title: "auth uses jose middleware",\n  content: "src/middleware/auth.ts handles JWT validation",\n  type: "architecture"\n}</pre>' +
+          '<div class="empty-lead">Memories are the distilled facts agentcache keeps across sessions &mdash; things like file paths, architectural decisions, and user preferences. Hooks capture them automatically during coding sessions; you can also save one directly.</div>' +
+          '<pre class="empty-cmd">agent_cache {\n  title: "auth uses jose middleware",\n  content: "src/middleware/auth.ts handles JWT validation",\n  type: "architecture"\n}</pre>' +
           '<div><a class="empty-link" href="https://github.com/rohitg00/agentmemory#memories" target="_blank" rel="noopener">Memory types &rarr;</a></div>' +
           '</div>';
       } else {
@@ -2833,7 +2833,7 @@
         var body = { limit: 100 };
         if (folderPath) body.folderPath = folderPath;
         if (agentId) body.agentId = agentId;
-        var result = await apiFetchRaw('/agentmemory/timeline', {
+        var result = await apiFetchRaw('/agentcache/timeline', {
           method: 'POST',
           body: JSON.stringify(body)
         });
@@ -3114,11 +3114,11 @@
       renderObservations();
     }
 
-    // loadActivity removed â€” /agentmemory/sessions endpoint does not exist.
+    // loadActivity removed â€” /agentcache/sessions endpoint does not exist.
     async function loadActivity() { return; }
     function renderActivity() { return; }
 
-    // loadSessions removed â€” /agentmemory/sessions endpoint does not exist.
+    // loadSessions removed â€” /agentcache/sessions endpoint does not exist.
     async function loadSessions() { return; }
     function renderSessions() { return; }
     function selectSession(id) { return; }
@@ -3405,7 +3405,7 @@
           title: 'No LLM provider key set',
           keyLabel: 'ANTHROPIC_API_KEY',
           desc: 'Compression, summarization, and graph extraction stay disabled until a key is provided.',
-          enable: 'export ANTHROPIC_API_KEY=sk-ant-...\n# then restart: npx @agentmemory/agentmemory',
+          enable: 'export ANTHROPIC_API_KEY=sk-ant-...\n# then restart: npx @agentcache/agentcache',
           docs: 'https://github.com/rohitg00/agentmemory#quick-start',
           dismissKey: '__provider_noop',
         });
@@ -3478,7 +3478,7 @@
           '### Steps to reproduce\n\n' +
           '1. \n2. \n3. \n'
         );
-        fbEl.href = 'https://github.com/rohitg00/agentmemory/issues/new?title=' +
+        fbEl.href = 'https://github.com/rohitg00/agentcache/issues/new?title=' +
           encodeURIComponent('[viewer] ') + '&body=' + body;
       }
     }
@@ -3727,7 +3727,7 @@
     // B4 -- Onboarding card (empty state detection)
     // ==========================================================================
     function maybeShowOnboarding(health, flags) {
-      if (safeStorage.getItem('agentmemory_onboarding_dismissed')) return;
+      if (safeStorage.getItem('agentcache_onboarding_dismissed')) return;
       if ((health.observationCount || 0) > 0 || (health.memoryCount || 0) > 0) return;
       var el = document.getElementById('view-folders');
       if (!el) return;
@@ -3748,20 +3748,20 @@
           '</div></div>';
       }
 
-      var secretSet = false; // AGENTMEMORY_SECRET status not exposed by flags endpoint
+      var secretSet = false; // AGENTCACHE_SECRET status not exposed by flags endpoint
       var geminiSet = !!(flags && flags.embeddingProvider && flags.embeddingProvider !== 'none');
 
       var card = document.createElement('div');
       card.className = 'onboarding-card';
       card.innerHTML =
-        '<h2>Welcome to agentmemory</h2>' +
-        '<p>No observations yet. Complete these steps to start recording agent memory.</p>' +
-        step(1, secretSet, 'Set AGENTMEMORY_SECRET (optional auth)',
-          'echo "AGENTMEMORY_SECRET=your-secret-here" >> ~/.agentmemory/.env') +
+        '<h2>Welcome to agentcache</h2>' +
+        '<p>No observations yet. Complete these steps to start recording agent cache.</p>' +
+        step(1, secretSet, 'Set AGENTCACHE_SECRET (optional auth)',
+          'echo "AGENTCACHE_SECRET=your-secret-here" >> ~/.agentcache/.env') +
         step(2, geminiSet, 'Add GEMINI_API_KEY for semantic search',
-          'echo "GEMINI_API_KEY=your-key" >> ~/.agentmemory/.env') +
-        step(3, false, 'Point your agent at agentmemory',
-          'curl -X POST http://localhost:3111/agentmemory/agent/observe \\\n' +
+          'echo "GEMINI_API_KEY=your-key" >> ~/.agentcache/.env') +
+        step(3, false, 'Point your agent at agentcache',
+          'curl -X POST http://localhost:3111/agentcache/agent/observe \\\n' +
           '  -H "Content-Type: application/json" \\\n' +
           '  -d \'{"folderPath":"/your/project","agentId":"kiro","text":"Hello",' +
           '"timestamp":"' + new Date().toISOString() + '"}\'') +
@@ -3774,7 +3774,7 @@
         });
       });
       card.querySelector('.onboarding-dismiss').addEventListener('click', function() {
-        safeStorage.setItem('agentmemory_onboarding_dismissed', '1');
+        safeStorage.setItem('agentcache_onboarding_dismissed', '1');
         card.remove();
       });
 
@@ -3789,7 +3789,7 @@
         await _origLoadFolders.apply(this, arguments);
         // After load, check health for onboarding card
         try {
-          var h = await apiFetchRaw('/agentmemory/health');
+          var h = await apiFetchRaw('/agentcache/health');
           var f = state.flagsConfig;
           maybeShowOnboarding(h, f);
         } catch(_) {}
@@ -3812,7 +3812,7 @@
         '<div class="skeleton skeleton-card"></div>' +
         '</div>';
       try {
-        var data = await apiFetch('/agentmemory/mcp/tools');
+        var data = await apiFetch('/agentcache/mcp/tools');
         var tools = data.tools || [];
         renderToolsTab(el, tools);
       } catch(err) {
@@ -3890,7 +3890,7 @@
           var _toolToken = getViewerToken();
           var _toolHeaders = { 'Content-Type': 'application/json' };
           if (_toolToken) _toolHeaders['Authorization'] = 'Bearer ' + _toolToken;
-          var rawRes = await fetch(REST + '/agentmemory/mcp/tools', {
+          var rawRes = await fetch(REST + '/agentcache/mcp/tools', {
             method: 'POST',
             headers: _toolHeaders,
             body: JSON.stringify({ name: name, arguments: args })

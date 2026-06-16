@@ -1,4 +1,4 @@
-# agentmemory-python — Architecture
+# agentcache-python — Architecture
 
 ## Overview
 
@@ -44,8 +44,8 @@ src/
 ├── viewer_helpers.py   make_viewer_response() — reads viewer/index.html,
 │                       injects nonce + version, sets CSP headers.
 │
-├── mcp_stdio.py        stdio MCP bridge: reads AGENTMEMORY_URL and
-│                       AGENTMEMORY_SECRET, proxies tool calls to the HTTP API.
+├── mcp_stdio.py        stdio MCP bridge: reads AGENTCACHE_URL and
+│                       AGENTCACHE_SECRET, proxies tool calls to the HTTP API.
 │
 └── viewer/
     └── index.html      Single-file HTML dashboard (no bundler).
@@ -55,7 +55,7 @@ src/
 
 ## KV Scope Layout
 
-All data lives in a single SQLite file (`~/.agentmemory/agentmemory.db`) in two tables:
+All data lives in a single SQLite file (`~/.agentcache/agentcache.db`) in two tables:
 
 - `kv_store(scope TEXT, key TEXT, value TEXT, PRIMARY KEY(scope, key))` — JSON values
 - `audit_log(id, ts, agent_id, message)` — write audit trail
@@ -120,7 +120,7 @@ If found, old memory is marked `isLatest=False` and new memory sets `parentId`.
 
 ## Authentication
 
-All endpoints except `/livez` check `AGENTMEMORY_SECRET` via timing-safe
+All endpoints except `/livez` check `AGENTCACHE_SECRET` via timing-safe
 `hmac.compare_digest` Bearer token comparison. No secret → no auth check.
 
 ---
@@ -138,7 +138,7 @@ Priority order (auto-selected at startup):
 
 1. `GeminiEmbeddingProvider` — if `GEMINI_API_KEY` or `GOOGLE_API_KEY` is set (768 dims)
 2. `OpenAIEmbeddingProvider` — if `OPENAI_API_KEY` is set (1536 dims)
-3. `SentenceTransformerProvider` — if `AGENTMEMORY_LOCAL_EMBEDDING_MODEL` is set
+3. `SentenceTransformerProvider` — if `AGENTCACHE_LOCAL_EMBEDDING_MODEL` is set
 4. BM25-only fallback
 
 Without an embedding provider, `HybridSearch` falls back to pure BM25.

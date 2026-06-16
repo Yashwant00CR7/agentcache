@@ -18,7 +18,9 @@ if __name__ == "__main__":
 
 
 def _load_env() -> None:
-    env_path = os.path.join(os.path.expanduser("~"), ".agentmemory", ".env")
+    env_path = os.path.join(os.path.expanduser("~"), ".agentcache", ".env")
+    if not os.path.exists(env_path):
+        env_path = os.path.join(os.path.expanduser("~"), ".agentmemory", ".env")
     if not os.path.exists(env_path):
         return
     try:
@@ -47,8 +49,8 @@ def create_app() -> Flask:
     global kv, embedding_provider, persistence
 
     # Check security credentials
-    if not os.getenv("AGENTMEMORY_SECRET"):
-        print("[security] WARNING: AGENTMEMORY_SECRET is not set! All API endpoints are publicly accessible without authentication.")
+    if not os.getenv("AGENTCACHE_SECRET") and not os.getenv("AGENTMEMORY_SECRET"):
+        print("[security] WARNING: AGENTCACHE_SECRET/AGENTMEMORY_SECRET is not set! All API endpoints are publicly accessible without authentication.")
 
     import search as search_mod
     import functions
@@ -59,10 +61,10 @@ def create_app() -> Flask:
     kv = StateKV()
 
     # 2. Embedding provider — auto-select by priority (D5.3):
-    #    GEMINI_API_KEY → OPENAI_API_KEY → AGENTMEMORY_LOCAL_EMBEDDING_MODEL → BM25-only
+    #    GEMINI_API_KEY → OPENAI_API_KEY → AGENTCACHE_LOCAL_EMBEDDING_MODEL → BM25-only
     api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
     openai_key = os.getenv("OPENAI_API_KEY")
-    local_model = os.getenv("AGENTMEMORY_LOCAL_EMBEDDING_MODEL")
+    local_model = os.getenv("AGENTCACHE_LOCAL_EMBEDDING_MODEL") or os.getenv("AGENTMEMORY_LOCAL_EMBEDDING_MODEL")
 
     if api_key:
         try:
@@ -118,7 +120,7 @@ def create_app() -> Flask:
 
     @sock.route("/stream/mem-live/viewer")
     def stream_viewer(ws):
-        secret = os.getenv("AGENTMEMORY_SECRET")
+        secret = os.getenv("AGENTCACHE_SECRET") or os.getenv("AGENTMEMORY_SECRET")
         if secret:
             token = request.args.get("token") or request.args.get("secret")
             if not token or not hmac.compare_digest(
@@ -150,6 +152,7 @@ def create_app() -> Flask:
 
     @flask_app.route("/")
     @flask_app.route("/viewer")
+    @flask_app.route("/agentcache/viewer")
     @flask_app.route("/agentmemory/viewer")
     def serve_viewer():
         try:
@@ -161,7 +164,7 @@ def create_app() -> Flask:
     def serve_favicon():
         return send_from_directory(os.path.join(_base_dir, "viewer"), "favicon.svg")
 
-    # 7. CORS after_request — D2.1: configurable via AGENTMEMORY_CORS_ORIGINS env var
+    # 7. CORS after_request — D2.1: configurable via AGENTCACHE_CORS_ORIGINS env var
     # Default allows localhost, 127.0.0.1, HuggingFace Spaces, vscode-webview://, chrome-extension://
     # Wildcard entries like "*.hf.space" match any subdomain via suffix check.
     _default_cors = (
@@ -169,7 +172,7 @@ def create_app() -> Flask:
         "https://huggingface.co,https://*.hf.space,"
         "vscode-webview://*,chrome-extension://*"
     )
-    _cors_origins_raw = os.getenv("AGENTMEMORY_CORS_ORIGINS", _default_cors)
+    _cors_origins_raw = os.getenv("AGENTCACHE_CORS_ORIGINS") or os.getenv("AGENTMEMORY_CORS_ORIGINS") or _default_cors
 
     def _parse_cors_origins(raw: str):
         """Return (exact_set, suffix_list) for efficient origin matching."""

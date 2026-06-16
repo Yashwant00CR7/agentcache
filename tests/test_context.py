@@ -18,7 +18,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 def _make_kv(tmp_path):
     from db import StateKV
-    os.environ.pop("AGENTMEMORY_SECRET", None)
+    os.environ.pop("AGENTCACHE_SECRET", None)
     return StateKV(db_path=str(tmp_path / "test.db"))
 
 
@@ -83,7 +83,7 @@ class TestContext:
         assert result["tokens"] <= budget + 50  # small headroom for header/footer
 
     def test_context_includes_xml_wrapper(self, tmp_path):
-        """Non-empty context should be wrapped in <agentmemory-context>."""
+        """Non-empty context should be wrapped in <agentcache-context>."""
         from functions import context, lesson_save
         kv = _make_kv(tmp_path)
         project = "/home/user/xml-test"
@@ -101,8 +101,8 @@ class TestContext:
         })
 
         if result["blocks"] > 0:
-            assert "<agentmemory-context" in result["context"]
-            assert "</agentmemory-context>" in result["context"]
+            assert "<agentcache-context" in result["context"]
+            assert "</agentcache-context>" in result["context"]
 
     def test_token_budget_env_var_respected(self, tmp_path, monkeypatch):
         """TOKEN_BUDGET env var should be used when no budget param given."""

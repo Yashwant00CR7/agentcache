@@ -48,14 +48,14 @@ class TestTimelineLimit:
     def test_limit_respected(self, tmp_path):
         kv = make_kv(tmp_path)
         for i in range(10):
-            add_obs(kv, timestamp=ts(i))
+            add_obs(kv, timestamp=ts(i), text=f"obs {i}")
         results = folder_timeline(kv, limit=5)
         assert len(results) == 5
 
     def test_default_limit_100(self, tmp_path):
         kv = make_kv(tmp_path)
         for i in range(150):
-            add_obs(kv, timestamp=ts(i))
+            add_obs(kv, timestamp=ts(i), text=f"obs {i}")
         results = folder_timeline(kv)
         assert len(results) == 100
 

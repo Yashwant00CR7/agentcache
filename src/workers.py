@@ -1,5 +1,5 @@
 """
-Background worker threads for agentmemory-python.
+Background worker threads for agentcache-python.
 
 Start all workers via start_background_workers(kv).
 Each worker runs as a daemon thread so it exits automatically when the process dies.

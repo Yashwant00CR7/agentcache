@@ -2,7 +2,7 @@
 src/storage/scopes.py — KV scope registry (A2.3).
 
 Copied from src/functions.py — do NOT delete the original (backward compat).
-The KV class defines all storage scope keys used across agentmemory-python.
+The KV class defines all storage scope keys used across agentcache-python.
 """
 
 

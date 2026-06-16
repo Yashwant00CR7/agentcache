@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Sync agentmemory data to/from a private HF Dataset repo.
+Sync agentcache data to/from a private HF Dataset repo.
 Usage:
   python3 sync.py restore   -- download DB from HF on startup
   python3 sync.py backup    -- upload DB to HF (called in loop)
@@ -24,13 +24,13 @@ except ImportError:
     sys.exit(0)
 
 HF_TOKEN = os.environ.get("HF_TOKEN", "")
-REPO_ID  = os.environ.get("AGENTMEMORY_DATASET_REPO", "Yash030/agentmemory-python-data")
-DATA_DIR = os.path.expanduser("~/.agentmemory")
-DB_PATH  = os.path.join(DATA_DIR, "agentmemory.db")
+REPO_ID  = os.environ.get("AGENTCACHE_DATASET_REPO") or os.environ.get("AGENTMEMORY_DATASET_REPO") or "Yash030/agentmemory-python-data"
+DATA_DIR = os.path.expanduser("~/.agentcache")
+DB_PATH  = os.path.join(DATA_DIR, "agentcache.db")
 
 # Only these paths are backed up/restored — everything else is ephemeral
 SYNC_FILES = [
-    "agentmemory.db",
+    "agentcache.db",
     ".hmac",
 ]
 SYNC_DIRS = [
@@ -232,7 +232,7 @@ def backup():
         return
 
     # Stage only the targeted files
-    staging = tempfile.mkdtemp(prefix="agentmemory_sync_")
+    staging = tempfile.mkdtemp(prefix="agentcache_sync_")
     try:
         for full, rel in targets:
             dest = os.path.join(staging, rel.replace("/", os.sep))

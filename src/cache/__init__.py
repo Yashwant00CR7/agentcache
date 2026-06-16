@@ -1,5 +1,5 @@
 """
-src/memory/ — Core business logic package for agentmemory-python.
+src/cache/ — Core business logic package for agentcache-python.
 
 Sub-modules:
   observe   — folder_observe(), observe(), build_synthetic_compression(), strip_private_data()

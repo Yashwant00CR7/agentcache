@@ -15,7 +15,7 @@ search_bp = Blueprint("search", __name__)
 
 def _check_auth():
     import hmac
-    secret = os.getenv("AGENTMEMORY_SECRET")
+    secret = os.getenv("AGENTCACHE_SECRET") or os.getenv("AGENTMEMORY_SECRET")
     if not secret:
         return None
     auth = request.headers.get("Authorization") or request.headers.get("authorization")
@@ -33,9 +33,10 @@ def _get_kv():
 
 
 # ---------------------------------------------------------------------------
-# POST /agentmemory/search
+# POST /agentcache/search
 # ---------------------------------------------------------------------------
 
+@search_bp.route("/agentcache/search", methods=["POST"])
 @search_bp.route("/agentmemory/search", methods=["POST"])
 def api_search():
     auth_err = _check_auth()
@@ -58,9 +59,10 @@ def api_search():
 
 
 # ---------------------------------------------------------------------------
-# POST /agentmemory/timeline
+# POST /agentcache/timeline
 # ---------------------------------------------------------------------------
 
+@search_bp.route("/agentcache/timeline", methods=["POST"])
 @search_bp.route("/agentmemory/timeline", methods=["POST"])
 def api_timeline():
     auth_err = _check_auth()

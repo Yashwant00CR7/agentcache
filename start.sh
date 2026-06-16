@@ -1,17 +1,17 @@
 #!/usr/bin/env bash
 # Note: no set -e — sync failures must not kill the container
 
-# Create agentmemory data directories
-mkdir -p /home/user/.agentmemory
+# Create agentcache data directories
+mkdir -p /home/user/.agentcache
 
 # =============================================================================
 # Persistent storage via HF Dataset repo
 # Secrets to set in HF Space settings:
 #   HF_TOKEN              — write access to the dataset repo
 #   GEMINI_API_KEY        — powers graph, embeddings, compression, crystals
-#   AGENTMEMORY_DATASET_REPO — optional override (default: Yash030/agentmemory-python-data)
+#   AGENTCACHE_DATASET_REPO — optional override (default: Yash030/agentmemory-python-data)
 # =============================================================================
-export AGENTMEMORY_DATASET_REPO="${AGENTMEMORY_DATASET_REPO:-Yash030/agentmemory-python-data}"
+export AGENTCACHE_DATASET_REPO="${AGENTCACHE_DATASET_REPO:-${AGENTMEMORY_DATASET_REPO:-Yash030/agentmemory-python-data}}"
 
 echo "[start] Restoring data from HF Dataset..."
 python3 /app/sync.py restore
@@ -25,32 +25,32 @@ python3 /app/sync.py restore
 ) &
 
 # Generate HMAC secret on first boot, persist it so it survives dataset restore
-HMAC_FILE="/home/user/.agentmemory/.hmac"
+HMAC_FILE="/home/user/.agentcache/.hmac"
 if [ ! -s "$HMAC_FILE" ]; then
   SECRET="$(openssl rand -hex 32)"
   printf '%s\n' "$SECRET" > "$HMAC_FILE"
   chmod 600 "$HMAC_FILE"
   echo "================================================================"
-  echo "agentmemory: generated HMAC secret on first boot"
-  echo "AGENTMEMORY_SECRET=$SECRET"
-  echo "Copy this to your Space secrets as AGENTMEMORY_SECRET."
+  echo "agentcache: generated HMAC secret on first boot"
+  echo "AGENTCACHE_SECRET=$SECRET"
+  echo "Copy this to your Space secrets as AGENTCACHE_SECRET."
   echo "It will not be printed again."
   echo "================================================================"
 fi
-export AGENTMEMORY_SECRET="${AGENTMEMORY_SECRET:-$(cat "$HMAC_FILE")}"
+export AGENTCACHE_SECRET="${AGENTCACHE_SECRET:-${AGENTMEMORY_SECRET:-$(cat "$HMAC_FILE")}}"
 
 # Write .env config for the daemon so it is loaded by src/app.py
-cat > /home/user/.agentmemory/.env <<EOF
+cat > /home/user/.agentcache/.env <<EOF
 GEMINI_API_KEY=${GEMINI_API_KEY}
-AGENTMEMORY_SECRET=${AGENTMEMORY_SECRET}
-AGENTMEMORY_URL=http://localhost:7860
+AGENTCACHE_SECRET=${AGENTCACHE_SECRET}
+AGENTCACHE_URL=http://localhost:7860
 III_ENGINE_URL=ws://localhost:49134
 GEMINI_MODEL=${GEMINI_MODEL:-gemini-2.5-flash}
 EMBEDDING_PROVIDER=gemini
 CONSOLIDATION_ENABLED=true
 GRAPH_EXTRACTION_ENABLED=true
-AGENTMEMORY_REFLECT=true
-AGENTMEMORY_AUTO_COMPRESS=true
+AGENTCACHE_REFLECT=true
+AGENTCACHE_AUTO_COMPRESS=true
 EOF
 
 # Set the port for Flask application to run on (Hugging Face Space expects 7860)
@@ -64,3 +64,4 @@ python3 src/app.py
 # Perform a final backup on shutdown
 echo "[start] Flask application exited. Performing final backup..."
 python3 /app/sync.py backup
+

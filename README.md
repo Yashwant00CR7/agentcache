@@ -1,5 +1,5 @@
 ---
-title: AgentMemory Python
+title: AgentCache Python
 emoji: 🧠
 colorFrom: blue
 colorTo: indigo
@@ -7,7 +7,7 @@ sdk: docker
 pinned: false
 ---
 
-<h1 align="center">agentmemory-python</h1>
+<h1 align="center">agentcache-python</h1>
 
 <p align="center">
   <strong>Persistent memory for AI coding agents — pure Python, zero external databases.</strong><br/>
@@ -49,14 +49,14 @@ pinned: false
 
 ## What Is This?
 
-**agentmemory-python** is a Python reimplementation of the [agentmemory](https://github.com/rohitg00/agentmemory) persistent memory server. It exposes a REST API, WebSocket stream, and MCP tools endpoint that AI coding agents use to store and retrieve session observations, long-term memories, lessons, and pinned memory slots.
+**agentcache-python** is a Python reimplementation of the [agentcache](https://github.com/rohitg00/agentcache) persistent memory server. It exposes a REST API, WebSocket stream, and MCP tools endpoint that AI coding agents use to store and retrieve session observations, long-term memories, lessons, and pinned memory slots.
 
 Key differences from the Node.js original:
 
 - **No Node.js or iii-engine** — runs with plain `python src/app.py`
 - **SQLite instead of Dolt** — single file, WAL mode, instant startup
 - **HuggingFace Space ready** — deploys in one click, data synced to an HF dataset repo
-- **Same REST + MCP wire format** — drop-in for any agent already wired to agentmemory
+- **Same REST + MCP wire format** — drop-in for any agent already wired to agentcache
 
 Your agent captures every tool call, stores them as observations, compresses them into searchable memory, and injects the right context at the start of every new session — automatically.
 
@@ -68,8 +68,8 @@ Your agent captures every tool call, stores them as observations, compresses the
 
 ```bash
 # Clone
-git clone https://github.com/Yash030/agentmemory-python.git
-cd agentmemory-python
+git clone https://github.com/Yash030/agentcache-python.git
+cd agentcache-python
 
 # Install dependencies (no build step)
 pip install -r requirements.txt
@@ -84,16 +84,16 @@ Server starts on **http://localhost:3111**. Open the viewer at http://localhost:
 
 ```bash
 # Health check
-curl http://localhost:3111/agentmemory/livez
+curl http://localhost:3111/agentcache/livez
 # {"status": "ok"}
 
 # Save a memory
-curl -X POST http://localhost:3111/agentmemory/remember \
+curl -X POST http://localhost:3111/agentcache/remember \
   -H "Content-Type: application/json" \
   -d '{"content": "JWT auth uses jose middleware in src/middleware/auth.ts", "concepts": ["auth", "jwt"]}'
 
 # Recall it
-curl -X POST http://localhost:3111/agentmemory/search \
+curl -X POST http://localhost:3111/agentcache/search \
   -H "Content-Type: application/json" \
   -d '{"query": "authentication middleware", "limit": 5}'
 ```
@@ -112,7 +112,7 @@ curl -X POST http://localhost:3111/agentmemory/search \
 | Hybrid BM25 + vector search | ✅ | Requires `GEMINI_API_KEY` |
 | 4-tier memory consolidation | ⚙️ | `CONSOLIDATION_ENABLED=true` + LLM key |
 | Knowledge graph extraction | ⚙️ | `GRAPH_EXTRACTION_ENABLED=true` + LLM key |
-| LLM observation compression | ⚙️ | `AGENTMEMORY_AUTO_COMPRESS=true` + LLM key |
+| LLM observation compression | ⚙️ | `AGENTCACHE_AUTO_COMPRESS=true` + LLM key |
 | Lessons with confidence decay | ✅ | Fingerprinted, auto-strengthen on repeat |
 | Memory slots (pinned context) | ✅ | CRUD + auto-reflect |
 | Session replay | ✅ | Full timeline in viewer |
@@ -135,18 +135,18 @@ Inspired by how human memory works — raw experience → compressed episodes �
 
 ## MCP Integration
 
-Wire agentmemory-python into your agent's MCP config. It speaks the same MCP protocol as the Node.js original.
+Wire agentcache-python into your agent's MCP config. It speaks the same MCP protocol as the Node.js original.
 
 ### Most agents (Cursor, Claude Desktop, Cline, Windsurf)
 
 ```json
 {
   "mcpServers": {
-    "agentmemory": {
+    "agentcache": {
       "command": "npx",
-      "args": ["-y", "@agentmemory/mcp"],
+      "args": ["-y", "@agentcache/mcp"],
       "env": {
-        "AGENTMEMORY_URL": "http://localhost:3111"
+        "AGENTCACHE_URL": "http://localhost:3111"
       }
     }
   }
@@ -158,16 +158,16 @@ Wire agentmemory-python into your agent's MCP config. It speaks the same MCP pro
 Paste this prompt and your agent will wire everything:
 
 ```
-Start agentmemory-python: run `python src/app.py` from the agentmemory-python directory.
+Start agentcache-python: run `python src/app.py` from the agentcache-python directory.
 Then add this MCP server to ~/.claude.json under mcpServers:
 {
-  "agentmemory": {
+  "agentcache": {
     "command": "npx",
-    "args": ["-y", "@agentmemory/mcp"],
-    "env": { "AGENTMEMORY_URL": "http://localhost:3111" }
+    "args": ["-y", "@agentcache/mcp"],
+    "env": { "AGENTCACHE_URL": "http://localhost:3111" }
   }
 }
-Verify with: curl http://localhost:3111/agentmemory/livez
+Verify with: curl http://localhost:3111/agentcache/livez
 Open the viewer at: http://localhost:3111/viewer
 ```
 
@@ -193,7 +193,7 @@ Open the viewer at: http://localhost:3111/viewer
 | `memory_forget` | Delete memory, session, or observations |
 | `memory_export` | Export all memory data as JSON |
 | `agent_observe` | Log agent execution observation |
-| `agent_remember` | Save agent memory to long-term storage |
+| `agent_remember` | Save agent cache to long-term storage |
 | `memory_antigravity_sync` | Sync Antigravity transcripts to memory |
 | `memory_antigravity_sync_all` | Master sync: transcript + crystallize + reflect |
 | `memory_slot_list` | List all pinned memory slots |
@@ -211,7 +211,7 @@ Open the viewer at: http://localhost:3111/viewer
 
 ## API Reference
 
-Base URL: `http://localhost:3111/agentmemory`
+Base URL: `http://localhost:3111/agentcache`
 
 ### Health
 
@@ -304,7 +304,7 @@ Base URL: `http://localhost:3111/agentmemory`
 
 ## Configuration
 
-Create `~/.agentmemory/.env` (no `export` prefix needed):
+Create `~/.agentcache/.env` (no `export` prefix needed):
 
 ```env
 # Server port
@@ -322,22 +322,22 @@ ANTHROPIC_API_KEY=your-anthropic-key
 # LLM-powered features (disabled by default — spend tokens)
 CONSOLIDATION_ENABLED=true
 GRAPH_EXTRACTION_ENABLED=true
-AGENTMEMORY_AUTO_COMPRESS=true
+AGENTCACHE_AUTO_COMPRESS=true
 
 # Context injection limits
 TOKEN_BUDGET=2000
 MAX_OBS_PER_SESSION=500
 
 # Auth — set to require Bearer token on all endpoints
-AGENTMEMORY_SECRET=your-secret
+AGENTCACHE_SECRET=your-secret
 
 # Agent scope isolation
 AGENT_ID=my-agent
-AGENTMEMORY_AGENT_SCOPE=isolated   # only see this agent's data
+AGENTCACHE_AGENT_SCOPE=isolated   # only see this agent's data
 
 # HuggingFace sync
 HF_TOKEN=your-hf-token
-AGENTMEMORY_DATASET_REPO=username/agentmemory-data
+AGENTCACHE_DATASET_REPO=username/agentcache-data
 ```
 
 ### Full Variable Reference
@@ -346,14 +346,14 @@ AGENTMEMORY_DATASET_REPO=username/agentmemory-data
 |----------|---------|---------|
 | `III_REST_PORT` / `PORT` | `3111` | API server port |
 | `GEMINI_API_KEY` / `GOOGLE_API_KEY` | — | Enables 768-dim vector search |
-| `AGENTMEMORY_SECRET` | — | Bearer token auth on all endpoints |
+| `AGENTCACHE_SECRET` | — | Bearer token auth on all endpoints |
 | `AGENT_ID` | — | Default agent ID for scope isolation |
-| `AGENTMEMORY_AGENT_SCOPE=isolated` | — | Filters data to current `AGENT_ID` |
+| `AGENTCACHE_AGENT_SCOPE=isolated` | — | Filters data to current `AGENT_ID` |
 | `MAX_OBS_PER_SESSION` | `500` | Hard cap on observations per session |
 | `TOKEN_BUDGET` | `2000` | Max tokens in compiled context |
 | `GRAPH_EXTRACTION_ENABLED` | `false` | Knowledge graph (needs LLM) |
 | `CONSOLIDATION_ENABLED` | `false` | Memory consolidation (needs LLM) |
-| `AGENTMEMORY_AUTO_COMPRESS` | `false` | LLM observation compression |
+| `AGENTCACHE_AUTO_COMPRESS` | `false` | LLM observation compression |
 
 ---
 
@@ -381,17 +381,17 @@ This project is designed to run as a HuggingFace Space. Data is stored in an HF 
 ### Setup
 
 1. Fork this repo as a HuggingFace Space (SDK: Docker)
-2. Create a dataset repo (e.g. `your-username/agentmemory-data`)
+2. Create a dataset repo (e.g. `your-username/agentcache-data`)
 3. Add Space secrets in the HF dashboard:
 
    | Secret | Value |
    |--------|-------|
    | `HF_TOKEN` | Your HF write token |
-   | `AGENTMEMORY_DATASET_REPO` | `your-username/agentmemory-data` |
-   | `AGENTMEMORY_SECRET` | A random secret (optional but recommended) |
+   | `AGENTCACHE_DATASET_REPO` | `your-username/agentcache-data` |
+   | `AGENTCACHE_SECRET` | A random secret (optional but recommended) |
    | `GEMINI_API_KEY` | Gemini key (optional, enables vector search) |
 
-4. The Space boots, restores `agentmemory.db` from the dataset repo, and starts the server
+4. The Space boots, restores `agentcache.db` from the dataset repo, and starts the server
 
 ### How sync works
 
@@ -403,7 +403,7 @@ python sync.py
 
 # Environment for sync
 HF_TOKEN=...
-AGENTMEMORY_DATASET_REPO=username/agentmemory-data
+AGENTCACHE_DATASET_REPO=username/agentcache-data
 ```
 
 ---
@@ -411,7 +411,7 @@ AGENTMEMORY_DATASET_REPO=username/agentmemory-data
 ## Architecture
 
 ```
-agentmemory-python/
+agentcache-python/
 ├── src/
 │   ├── app.py          Flask server — all endpoints, WebSocket broadcaster
 │   ├── db.py           SQLite StateKV — WAL mode, audit_log table
@@ -427,7 +427,7 @@ agentmemory-python/
 
 ### Database layout
 
-Two SQLite tables in `~/.agentmemory/agentmemory.db`:
+Two SQLite tables in `~/.agentcache/agentcache.db`:
 
 ```sql
 -- All data lives here, namespaced by scope
@@ -460,9 +460,9 @@ Query
 
 ---
 
-## vs Original agentmemory
+## vs Original agentcache
 
-| | agentmemory (Node.js) | agentmemory-python |
+| | agentcache (Node.js) | agentcache-python |
 |---|---|---|
 | Runtime | Node.js 20+ | Python 3.10+ |
 | Storage | Dolt SQL (git-versioned MySQL) | SQLite WAL (single file) |
@@ -473,7 +473,7 @@ Query
 | Deploy | npm, Docker, fly.io, Railway, Render | Docker, HuggingFace Spaces |
 | Cold boot | ~7s (iii engine warm-up) | <2s |
 | Database size | ~232MB (417 Dolt chunk files) | ~20MB (single `.db` file) |
-| Setup | `npm install -g @agentmemory/agentmemory` | `pip install -r requirements.txt` |
+| Setup | `npm install -g @agentcache/agentcache` | `pip install -r requirements.txt` |
 
 Choose the Python version for: simpler setup, HF Space deployment, single-file database, no Node.js, or Python ecosystem integration.
 

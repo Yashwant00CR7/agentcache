@@ -24,7 +24,7 @@ def _datetime_now_iso() -> str:
 def _check_auth():
     """Replicate the check_auth() pattern from app.py."""
     import hmac
-    secret = os.getenv("AGENTMEMORY_SECRET")
+    secret = os.getenv("AGENTCACHE_SECRET") or os.getenv("AGENTMEMORY_SECRET")
     if not secret:
         return None
     auth = request.headers.get("Authorization") or request.headers.get("authorization")
@@ -46,6 +46,7 @@ def _get_kv():
 # POST /agentmemory/observe  (legacy raw hook endpoint + auto-compat shim)
 # ---------------------------------------------------------------------------
 
+@observations_bp.route("/agentcache/observe", methods=["POST"])
 @observations_bp.route("/agentmemory/observe", methods=["POST"])
 def api_observe():
     auth_err = _check_auth()
@@ -63,6 +64,7 @@ def api_observe():
             body.get("folderPath")
             or body.get("cwd")
             or body.get("project")
+            or os.getenv("AGENTCACHE_CWD")
             or os.getenv("AGENTMEMORY_CWD")
             or "/unknown"
         )
@@ -114,6 +116,7 @@ def api_observe():
 # POST /agentmemory/agent/observe
 # ---------------------------------------------------------------------------
 
+@observations_bp.route("/agentcache/agent/observe", methods=["POST"])
 @observations_bp.route("/agentmemory/agent/observe", methods=["POST"])
 def api_agent_observe():
     auth_err = _check_auth()
@@ -161,6 +164,7 @@ def api_agent_observe():
 # GET /agentmemory/folders
 # ---------------------------------------------------------------------------
 
+@observations_bp.route("/agentcache/folders", methods=["GET"])
 @observations_bp.route("/agentmemory/folders", methods=["GET"])
 def api_folders():
     auth_err = _check_auth()
@@ -182,6 +186,7 @@ def api_folders():
 # GET /agentmemory/folder/observations
 # ---------------------------------------------------------------------------
 
+@observations_bp.route("/agentcache/folder/observations", methods=["GET"])
 @observations_bp.route("/agentmemory/folder/observations", methods=["GET"])
 def api_folder_observations():
     auth_err = _check_auth()
@@ -207,6 +212,7 @@ def api_folder_observations():
 # POST /agentmemory/session/start  (legacy compat shim → 200 no-op)
 # ---------------------------------------------------------------------------
 
+@observations_bp.route("/agentcache/session/start", methods=["POST"])
 @observations_bp.route("/agentmemory/session/start", methods=["POST"])
 def api_session_start():
     """Legacy session/start — clients in the wild still call this.
@@ -230,6 +236,7 @@ def api_session_start():
 # POST /agentmemory/session/end  (legacy compat shim → 200 no-op)
 # ---------------------------------------------------------------------------
 
+@observations_bp.route("/agentcache/session/end", methods=["POST"])
 @observations_bp.route("/agentmemory/session/end", methods=["POST"])
 def api_session_end():
     auth_err = _check_auth()
@@ -242,6 +249,7 @@ def api_session_end():
 # GET /agentmemory/observations  (legacy compat shim)
 # ---------------------------------------------------------------------------
 
+@observations_bp.route("/agentcache/folder/dedup", methods=["POST"])
 @observations_bp.route("/agentmemory/folder/dedup", methods=["POST"])
 def api_folder_dedup():
     """POST /agentmemory/folder/dedup — remove duplicate observations.
@@ -270,6 +278,7 @@ def api_folder_dedup():
 # GET /agentmemory/observations  (legacy compat shim)
 # ---------------------------------------------------------------------------
 
+@observations_bp.route("/agentcache/observations", methods=["GET"])
 @observations_bp.route("/agentmemory/observations", methods=["GET"])
 def api_observations_legacy():
     """Legacy /observations?sessionId=... shim.

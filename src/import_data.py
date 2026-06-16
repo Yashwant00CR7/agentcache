@@ -53,7 +53,7 @@ def import_old_data(old_db_path: str, kv: StateKV) -> bool:
             
     if count > 0:
         print("[import] Creating Dolt version commit...")
-        kv.commit_version("Import legacy AgentMemory database from Hugging Face", "system")
+        kv.commit_version("Import legacy AgentCache database from Hugging Face", "system")
 
     print(f"[import] Finished! Migrated {count} total records into Dolt SQL.")
     return True
@@ -61,8 +61,8 @@ def import_old_data(old_db_path: str, kv: StateKV) -> bool:
 
 if __name__ == "__main__":
     # Prioritize the restored HF data in the user's home folder, falling back to local workspace data
-    home_path = os.path.expanduser(os.path.join("~", ".agentmemory", "state_store.db"))
-    workspace_path = r"d:\Downloads\Projects\Other Projects\agentmemory\agentmemory\data\state_store.db"
+    home_path = os.path.expanduser(os.path.join("~", ".agentcache", "state_store.db"))
+    workspace_path = r"d:\Downloads\Projects\Other Projects\agentcache\agentcache\data\state_store.db"
     
     if os.path.exists(home_path):
         default_path = home_path

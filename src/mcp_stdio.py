@@ -13,11 +13,11 @@ import json
 import os
 import requests
 
-BASE = os.getenv("AGENTMEMORY_URL", "http://127.0.0.1:3111").rstrip("/")
-if not BASE.endswith("/agentmemory"):
-    BASE = f"{BASE}/agentmemory"
+BASE = (os.getenv("AGENTCACHE_URL") or os.getenv("AGENTMEMORY_URL") or "http://127.0.0.1:3111").rstrip("/")
+if not BASE.endswith("/agentcache") and not BASE.endswith("/agentmemory"):
+    BASE = f"{BASE}/agentcache"
 
-_secret = os.getenv("AGENTMEMORY_SECRET")
+_secret = os.getenv("AGENTCACHE_SECRET") or os.getenv("AGENTMEMORY_SECRET")
 
 
 def headers():
@@ -44,7 +44,7 @@ def handle(req):
             "result": {
                 "protocolVersion": "2024-11-05",
                 "capabilities": {"tools": {}},
-                "serverInfo": {"name": "agentmemory-local", "version": "0.9.8"}
+                "serverInfo": {"name": "agentcache-local", "version": "0.9.8"}
             }
         })
 

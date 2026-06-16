@@ -409,10 +409,10 @@ def query_audit(
 # Image Store System
 # =====================================================================
 
-IMAGES_DIR = os.path.join(os.path.expanduser("~"), ".agentmemory", "images")
+IMAGES_DIR = os.path.join(os.path.expanduser("~"), ".agentcache", "images")
 
 def get_max_bytes() -> int:
-    return int(os.getenv("AGENTMEMORY_IMAGE_STORE_MAX_BYTES", 500 * 1024 * 1024))
+    return int(os.getenv("AGENTCACHE_IMAGE_STORE_MAX_BYTES") or os.getenv("AGENTMEMORY_IMAGE_STORE_MAX_BYTES") or 500 * 1024 * 1024)
 
 def is_managed_image_path(file_path: str) -> bool:
     if not file_path:
@@ -468,7 +468,7 @@ def delete_image(file_path: Optional[str]) -> int:
             os.remove(file_path)
             return size
     except Exception as e:
-        print(f"[agentmemory] Failed to delete image context: {e}")
+        print(f"[agentcache] Failed to delete image context: {e}")
     return 0
 
 def touch_image(file_path: str) -> None:
@@ -680,16 +680,16 @@ def commit_if_enabled(kv: StateKV, message: str, agent_id: Optional[str]) -> Opt
 
 
 def is_agent_scope_isolated() -> bool:
-    return os.getenv("AGENTMEMORY_AGENT_SCOPE") == "isolated"
+    return (os.getenv("AGENTCACHE_AGENT_SCOPE") or os.getenv("AGENTMEMORY_AGENT_SCOPE")) == "isolated"
 
 def is_auto_compress_enabled() -> bool:
-    return os.getenv("AGENTMEMORY_AUTO_COMPRESS") == "true"
+    return (os.getenv("AGENTCACHE_AUTO_COMPRESS") or os.getenv("AGENTMEMORY_AUTO_COMPRESS")) == "true"
 
 def is_slots_enabled() -> bool:
-    return os.getenv("AGENTMEMORY_SLOTS") == "true"
+    return (os.getenv("AGENTCACHE_SLOTS") or os.getenv("AGENTMEMORY_SLOTS")) == "true"
 
 def is_reflect_enabled() -> bool:
-    return os.getenv("AGENTMEMORY_REFLECT") == "true"
+    return (os.getenv("AGENTCACHE_REFLECT") or os.getenv("AGENTMEMORY_REFLECT")) == "true"
 
 def is_graph_extraction_enabled() -> bool:
     return os.getenv("GRAPH_EXTRACTION_ENABLED") == "true"
@@ -1825,8 +1825,8 @@ def context(kv: StateKV, data: Dict[str, Any]) -> Dict[str, Any]:
 
     blocks.sort(key=lambda b: b.get("recency", 0), reverse=True)
 
-    header = f'<agentmemory-context project="{escape_xml_attr(project)}">'
-    footer = "</agentmemory-context>"
+    header = f'<agentcache-context project="{escape_xml_attr(project)}">'
+    footer = "</agentcache-context>"
     used_tokens = estimate_tokens(header) + estimate_tokens(footer)
 
     selected = []
@@ -1949,7 +1949,7 @@ def list_pinned_slots(kv: StateKV, project: Optional[str] = None) -> List[Dict[s
 def render_pinned_context(slots: List[Dict[str, Any]]) -> str:
     if not slots:
         return ""
-    lines = ["# agentmemory pinned slots", ""]
+    lines = ["# agentcache pinned slots", ""]
     for s in slots:
         lines.append(f"## {s['label']}")
         lines.append(s["content"].strip())
@@ -3006,7 +3006,7 @@ def health_check(kv: StateKV) -> Dict[str, Any]:
     db_size_bytes = 0
     wal_size_bytes = 0
     try:
-        sync_state_path = os.path.join(os.path.expanduser("~"), ".agentmemory", ".sync_state")
+        sync_state_path = os.path.join(os.path.expanduser("~"), ".agentcache", ".sync_state")
         if os.path.exists(sync_state_path):
             with open(sync_state_path, "r", encoding="utf-8") as _sf:
                 _sync = json.loads(_sf.read())

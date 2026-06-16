@@ -8,7 +8,7 @@ from typing import Dict, Any, List, Optional, TypeVar, Union
 
 T = TypeVar("T")
 
-DB_PATH = os.path.join(os.path.expanduser("~"), ".agentmemory", "agentmemory.db")
+DB_PATH = os.path.join(os.path.expanduser("~"), ".agentcache", "agentcache.db")
 
 
 class StateKV:

@@ -18,7 +18,7 @@ health_bp = Blueprint("health", __name__)
 
 def _check_auth():
     import hmac
-    secret = os.getenv("AGENTMEMORY_SECRET")
+    secret = os.getenv("AGENTCACHE_SECRET") or os.getenv("AGENTMEMORY_SECRET")
     if not secret:
         return None
     auth = request.headers.get("Authorization") or request.headers.get("authorization")
@@ -41,33 +41,36 @@ def _get_embedding_provider():
 
 
 # ---------------------------------------------------------------------------
-# GET /agentmemory/livez  (no auth required)
+# GET /agentcache/livez  (no auth required)
 # ---------------------------------------------------------------------------
 
+@health_bp.route("/agentcache/livez", methods=["GET"])
 @health_bp.route("/agentmemory/livez", methods=["GET"])
 def livez():
     port = int(os.getenv("III_REST_PORT", os.getenv("PORT", "3111")))
     return jsonify({
         "status": "ok",
-        "service": "agentmemory",
+        "service": "agentcache",
         "viewerPort": port,
         "viewerSkipped": False,
     })
 
 
 # ---------------------------------------------------------------------------
-# GET /agentmemory/health
+# GET /agentcache/health
 # ---------------------------------------------------------------------------
 
+@health_bp.route("/agentcache/health", methods=["GET"])
 @health_bp.route("/agentmemory/health", methods=["GET"])
 def health():
     return jsonify(functions.health_check(_get_kv()))
 
 
 # ---------------------------------------------------------------------------
-# GET /agentmemory/audit
+# GET /agentcache/audit
 # ---------------------------------------------------------------------------
 
+@health_bp.route("/agentcache/audit", methods=["GET"])
 @health_bp.route("/agentmemory/audit", methods=["GET"])
 def api_audit():
     auth_err = _check_auth()
@@ -81,9 +84,10 @@ def api_audit():
 
 
 # ---------------------------------------------------------------------------
-# GET /agentmemory/config/flags
+# GET /agentcache/config/flags
 # ---------------------------------------------------------------------------
 
+@health_bp.route("/agentcache/config/flags", methods=["GET"])
 @health_bp.route("/agentmemory/config/flags", methods=["GET"])
 def config_flags():
     auth_err = _check_auth()
@@ -118,14 +122,14 @@ def config_flags():
             "docsHref": "https://github.com/rohitg00/agentmemory#consolidation",
         },
         {
-            "key": "AGENTMEMORY_AUTO_COMPRESS",
+            "key": "AGENTCACHE_AUTO_COMPRESS",
             "label": "LLM-powered observation compression",
             "enabled": functions.is_auto_compress_enabled(),
             "default": False,
             "affects": ["Memories", "Timeline"],
             "needsLlm": True,
             "description": "Every observation is compressed by the LLM for richer summaries. OFF uses synthetic compression.",
-            "enableHow": "Set AGENTMEMORY_AUTO_COMPRESS=true.",
+            "enableHow": "Set AGENTCACHE_AUTO_COMPRESS=true.",
             "docsHref": "https://github.com/rohitg00/agentmemory/issues/138",
         },
     ]

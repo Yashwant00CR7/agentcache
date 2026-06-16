@@ -3,9 +3,9 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.backends.legacy:build"
 
 [project]
-name = "agentmemory"
+name = "agentcache"
 version = "0.9.8"
-description = "A Python REST + WebSocket + MCP memory server for AI agents, backed by SQLite"
+description = "A Python REST + WebSocket + MCP cache server for AI agents, backed by SQLite"
 readme = "README.md"
 license = { text = "MIT" }
 requires-python = ">=3.10"
@@ -28,7 +28,7 @@ local-embeddings = [
 ]
 
 [project.scripts]
-agentmemory = "src.cli:main"
+agentcache = "src.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["."]

@@ -10,6 +10,45 @@ The redesign eliminates sessions, lessons, slots, actions, crystals, and artefac
 
 ## Architecture
 
+### Implemented Module Layout
+
+```
+src/
+├── app.py              Thin Flask factory — create_app(), WebSocket, CORS
+├── workers.py          Background threads — index rebuild, auto-forget, SIGTERM handler
+├── cli.py              CLI entrypoint (agentmemory serve/migrate/export)
+├── connect.py          Client connection helper
+├── db.py               StateKV — SQLite WAL, per-thread connections, stats()
+├── functions.py        All canonical business logic (large; split planned)
+├── search.py           BM25 + VectorIndex + HybridSearch + 3 embedding providers
+├── viewer_helpers.py   Viewer HTML injection helper
+│
+├── routes/             Flask blueprints (A1 complete)
+│   ├── observations.py   /observe, /agent/observe, /folders, /folder/observations
+│   ├── memories.py       /remember, /agent/remember, /memories, /forget
+│   ├── search.py         /search, /timeline
+│   ├── graph.py          /graph, /graph/stats, /graph/query, /graph/build
+│   ├── health.py         /livez, /health, /audit, /config/flags
+│   ├── mcp.py            /mcp/tools GET+POST (12 active tools)
+│   └── migration.py      /migrate
+│
+├── memory/             Thin shim package re-exporting from functions.py (A2.1)
+│   ├── observe.py        folder_observe, observe, build_synthetic_compression, strip_private_data
+│   ├── remember.py       remember, forget, jaccard_similarity
+│   ├── context.py        context, export_data, rebuild_index
+│   ├── graph.py          folder_graph_build
+│   ├── timeline.py       folder_timeline, folder_search
+│   └── health.py         health_check, auto_forget
+│
+├── storage/            KV scope registry + path utilities (A2.3)
+│   ├── scopes.py         KV class (copy; canonical in functions.py)
+│   ├── paths.py          normalize_folder_path, validate_agent_id, generate_id, fingerprint_id
+│   └── images.py         save_image_to_disk, delete_image, touch_image
+│
+└── viewer/
+    └── index.html      Single-file HTML dashboard (4 tabs: Folders/Memories/Graph/Timeline)
+```
+
 ### High-Level System Diagram
 
 ```mermaid
@@ -20,7 +59,7 @@ graph TD
         A3[Cursor]
     end
 
-    subgraph MCP / REST API ["MCP / REST API (src/app.py)"]
+    subgraph "MCP / REST API (src/routes/)"
         T1[agent_observe]
         T2[memory_recall]
         T3[memory_save / agent_remember]
@@ -28,62 +67,70 @@ graph TD
         T5[memory_export]
         T6[memory_forget]
         T7[memory_diagnose]
+        T8[memory_folders]
+        T9[memory_folder_observations]
+        T10[memory_timeline]
     end
 
-    subgraph Business Logic ["Business Logic (src/functions.py)"]
+    subgraph "Business Logic (src/functions.py)"
         F1[folder_observe]
         F2[folder_search]
         F3[remember / forget]
         F4[folder_timeline]
         F5[folder_graph_build]
-        F6[health_check / export]
+        F6[health_check / export_data]
         F7[strip_private_data]
-        F8[IndexPersistence]
+        F8[IndexPersistence — debounced 5s]
     end
 
-    subgraph Storage ["Storage (src/db.py — SQLite KV)"]
+    subgraph "Storage (src/db.py — SQLite KV)"
         S1["mem:folders  (index)"]
-        S2["mem:folder:{path}:{agent}  (observations + metadata)"]
-        S3[mem:memories]
-        S4["mem:index:bm25:*  (sharded BM25)"]
-        S5[audit_log]
+        S2["mem:folder:{path}:{agent}  (observations)"]
+        S3["mem:foldermeta:{path}:{agent}  (metadata)"]
+        S4[mem:memories]
+        S5["mem:index:bm25:*  (sharded BM25)"]
+        S6["mem:obs_lookup  (O(1) hydration)"]
+        S7[audit_log]
     end
 
-    subgraph Search ["Search (src/search.py)"]
-        SR1[SearchIndex BM25]
-        SR2[VectorIndex cosine]
-        SR3[HybridSearch RRF]
+    subgraph "Search (src/search.py)"
+        SR1[SearchIndex BM25+stemmer+synonyms]
+        SR2[VectorIndex cosine sim]
+        SR3[HybridSearch RRF k=60]
+        EP1[GeminiEmbeddingProvider 768d]
+        EP2[OpenAIEmbeddingProvider 1536d]
+        EP3[SentenceTransformerProvider variable]
     end
 
-    subgraph Viewer ["Viewer (src/viewer/index.html)"]
+    subgraph "Viewer (src/viewer/index.html)"
         V1[Folders tab]
         V2[Memories tab]
         V3[Graph tab]
         V4[Timeline tab]
     end
 
-    A1 & A2 & A3 --> T1 & T2 & T3 & T4 & T5 & T6 & T7
+    A1 & A2 & A3 --> T1 & T2 & T3 & T4 & T5 & T6 & T7 & T8 & T9 & T10
     T1 --> F1
     T2 & T4 --> F2
     T3 --> F3
     T5 --> F6
     T6 --> F3
     T7 --> F6
+    T8 & T9 --> S1 & S2
+    T10 --> F4
 
     F1 --> F7
-    F1 --> S2
+    F1 --> S2 & S3 & S1 & S6
     F1 --> SR1 & SR2
-    F1 --> S1
-    F3 --> S3
+    F3 --> S4
     F2 --> SR3
     SR1 & SR2 --> SR3
-    F8 --> S4
+    EP1 & EP2 & EP3 --> SR2
+    F8 --> S5
     SR1 & SR2 --> F8
 
-    F4 --> S2
-    F5 --> S1 & S2 & S3
-
-    S2 & S3 & S4 & S5 --> Storage
+    F4 --> S1 & S2
+    F5 --> S1 & S2 & S4
 
     Viewer --> T2 & T4
     F1 -.->|WebSocket broadcast| Viewer
@@ -150,26 +197,28 @@ sequenceDiagram
 
 ## Components and Interfaces
 
-### Component 1: KV Scope Registry (src/functions.py — `KV` class)
+### Component 1: KV Scope Registry (src/functions.py + src/storage/scopes.py — `KV` class)
 
-**Purpose**: Single source of truth for all KV scope names.
+**Purpose**: Single source of truth for all KV scope names. Defined in `src/functions.py` (canonical) and mirrored to `src/storage/scopes.py` (A2.3).
 
-**New scopes (replaces session-based scopes):**
+**Active scopes:**
 
 ```python
 class KV:
-    # Folder memory index — stores list of all known folder_paths
+    # Folder memory index — key = "{folder_path}:{agent_id}", value = FolderIndexEntry
     folders = "mem:folders"
 
-    # Per-(folder, agent) observations list
-    # key = obs_id, value = observation dict
+    # O(1) observation hydration index — key = obs_id, value = {folderPath, agentId}
+    obs_lookup = "mem:obs_lookup"
+
+    # Per-(folder, agent) observations — key = obs_id, value = FolderObservation
     @staticmethod
     def folder_obs(folder_path: str, agent_id: str) -> str:
         safe_path = folder_path.replace("\\", "/").strip("/")
         safe_agent = agent_id.strip()
         return f"mem:folder:{safe_path}:{safe_agent}"
 
-    # Per-(folder, agent) metadata (last_updated, summary, obs_count)
+    # Per-(folder, agent) metadata — key = "meta", value = FolderMeta
     @staticmethod
     def folder_meta(folder_path: str, agent_id: str) -> str:
         safe_path = folder_path.replace("\\", "/").strip("/")
@@ -179,16 +228,33 @@ class KV:
     # Global long-term memories (unchanged)
     memories = "mem:memories"
 
-    # BM25 index shards (unchanged)
+    # BM25 index shards (sharded, 2MB chunks)
     bm25Index = "mem:index:bm25"
 
-    # Audit scope (unchanged)
+    # Audit log
     audit = "mem:audit"
+
+    # Graph edges (repurposed for folder graph)
+    relations = "mem:relations"
+
+    # Legacy scopes (read-only — for migration only)
+    sessions = "mem:sessions"
+
+    @staticmethod
+    def observations(session_id: str) -> str:
+        return f"mem:obs:{session_id}"
+
+    # Legacy (retained for backward compat code paths)
+    summaries = "mem:summaries"
+    profiles = "mem:profiles"
+    slots = "mem:slots"
+    imageRefs = "mem:image-refs"
+    globalSlots = "mem:global-slots"
 ```
 
-**Scopes removed**: `sessions`, `obs:{session_id}`, `lessons`, `slots`, `slots:global`, `slots:{project}`, `actions`, `action-edges`, `crystals`, `sketches`, `facets`, `sentinels`, `signals`, `checkpoints`, `routines`, `routine-runs`, `profiles`, `summaries`, `semantic`, `procedural`, `commits`, `leases`, `mesh`, `recent-searches`, `claude-bridge`, `insights`, `retention`, `access`, `image-refs`
+**Notable addition**: `obs_lookup = "mem:obs_lookup"` — an O(1) reverse-lookup index that maps `obs_id → {folderPath, agentId}`, enabling fast hydration during search without scanning all folder scopes. Backfilled on startup via `backfill_obs_lookup_if_needed()`.
 
-**Scopes kept**: `memories`, `index:bm25:*`, `audit`, `relations` (repurposed for folder graph edges)
+**Scopes fully removed from active use**: `lessons`, `actions`, `action-edges`, `crystals`, `sketches`, `facets`, `sentinels`, `signals`, `checkpoints`, `routines`, `routine-runs`, `semantic`, `procedural`, `commits`, `leases`, `mesh`, `recent-searches`, `claude-bridge`, `insights`, `retention`, `access`
 
 ---
 
@@ -797,32 +863,62 @@ END
 
 ---
 
-## MCP Tools: Kept, Renamed, and Dropped
+## MCP Tools: Implemented
 
-### Kept / Repurposed (same tool name, redirected to folder storage)
+The server exposes **12 MCP tools** via `GET /agentmemory/mcp/tools` and `POST /agentmemory/mcp/tools`.
 
-| Tool | New Behavior |
-|------|-------------|
-| `agent_observe` | Required: `folderPath`, `agentId`, `text`. Logs to `(folder_path, agent_id)` scope. `sessionId` accepted but ignored. |
-| `memory_recall` | Searches across all folder observations + global memories via BM25+vector. Optional `folderPath` / `agentId` filters. |
-| `memory_save` | Unchanged — saves to global memories |
-| `agent_remember` | Unchanged — saves to global memories |
-| `memory_smart_search` | Same as `memory_recall` (hybrid search) |
-| `memory_export` | Exports folders + observations + memories in v2 format |
-| `memory_forget` | Accepts `memoryId` (global) OR `folderPath+agentId` (folder observations) |
-| `memory_diagnose` | Returns folder/agent/observation counts instead of session counts |
+### Active Tools
 
-### New Tools
+| Tool | Description | Notes |
+|------|-------------|-------|
+| `agent_observe` | Log observation to a `(folderPath, agentId)` pair | Required: `folderPath`, `agentId`, `text`. Legacy `sessionId`/`cwd`/`project` accepted as fallback. |
+| `agent_remember` | Save to global long-term memory | Unchanged |
+| `memory_recall` | BM25+vector search across folder obs + global memories | Optional `folderPath`/`agentId` filters |
+| `memory_smart_search` | Alias for `memory_recall` (hybrid search) | Same implementation |
+| `memory_save` | Explicit save to global memory | Unchanged |
+| `memory_export` | Export all data as JSON v2 format | `{folders: [...], memories: [...], version: "2.0"}` |
+| `memory_forget` | Delete memory or folder pair | Accepts `memoryId` OR `folderPath+agentId` |
+| `memory_diagnose` | Health check — folder/agent/obs/memory counts | Replaces session-based counts |
+| `memory_folders` | List all `(folder, agent)` pairs | Returns sorted by `lastUpdated` |
+| `memory_folder_observations` | Get observations for a specific pair | Required: `folderPath`, `agentId` |
+| `memory_timeline` | Folder activity feed | Optional `folderPath`, `agentId`, `limit`, `before`, `after` |
 
-| Tool | Description |
-|------|-------------|
-| `memory_folders` | List all (folder, agent) pairs with obsCount and lastUpdated |
-| `memory_folder_observations` | Get observations for a specific `(folderPath, agentId)` pair |
-| `memory_timeline` | Folder activity feed — observations sorted by time, filterable by folderPath/agentId |
+### Removed Tools (from original session-based model)
 
-### Dropped Tools (removed from schema)
+`memory_sessions`, `memory_sessions_list`, `memory_observations` (session-based), `memory_profile`, `memory_lessons`, `memory_lesson_save`, `memory_lesson_recall`, `memory_lesson_search`, `memory_consolidate`, `memory_reflect`, `memory_crystallize`, `memory_slot_list`, `memory_slot_get`, `memory_slot_create`, `memory_slot_append`, `memory_slot_replace`, `memory_slot_delete`, `memory_action_create`, `memory_action_update`, `memory_frontier`, `memory_antigravity_sync`, `memory_antigravity_sync_all`
 
-`memory_sessions`, `memory_sessions_list`, `memory_observations` (old session-based version), `memory_profile`, `memory_lessons`, `memory_lesson_save`, `memory_lesson_recall`, `memory_lesson_search`, `memory_consolidate`, `memory_reflect`, `memory_crystallize`, `memory_slot_list`, `memory_slot_get`, `memory_slot_create`, `memory_slot_append`, `memory_slot_replace`, `memory_slot_delete`, `memory_action_create`, `memory_action_update`, `memory_frontier`, `memory_antigravity_sync`, `memory_antigravity_sync_all`
+---
+
+## REST Endpoints: Implemented
+
+### Active Endpoints
+
+| Method | Path | Blueprint | Description |
+|--------|------|-----------|-------------|
+| POST | `/agentmemory/observe` | observations | Legacy compat shim — maps to folder_observe |
+| POST | `/agentmemory/agent/observe` | observations | Folder observation ingest (strict) |
+| GET | `/agentmemory/folders` | observations | List all (folder, agent) pairs |
+| GET | `/agentmemory/folder/observations` | observations | Observations for a pair |
+| POST | `/agentmemory/session/start` | observations | Legacy compat no-op → returns synthetic session ID |
+| POST | `/agentmemory/session/end` | observations | Legacy compat no-op |
+| GET | `/agentmemory/observations` | observations | Legacy compat reads from `mem:obs:{sessionId}` |
+| POST | `/agentmemory/remember` | memories | Save global memory |
+| POST | `/agentmemory/agent/remember` | memories | Save global memory (agent-scoped variant) |
+| GET | `/agentmemory/memories` | memories | List global memories |
+| POST | `/agentmemory/forget` | memories | Delete memory / folder pair |
+| POST | `/agentmemory/search` | search | BM25+vector hybrid search |
+| POST | `/agentmemory/timeline` | search | Folder activity feed |
+| GET | `/agentmemory/graph` | graph | Graph nodes+edges |
+| GET | `/agentmemory/graph/stats` | graph | Node/edge count |
+| POST | `/agentmemory/graph/query` | graph | Reserved (returns empty) |
+| POST | `/agentmemory/graph/build` | graph | Trigger consolidation if enabled |
+| GET | `/agentmemory/livez` | health | Liveness probe (no auth) |
+| GET | `/agentmemory/health` | health | Full health check |
+| GET | `/agentmemory/audit` | health | Audit log |
+| GET | `/agentmemory/config/flags` | health | Feature flags + provider info |
+| GET | `/agentmemory/mcp/tools` | mcp | MCP tool schemas |
+| POST | `/agentmemory/mcp/tools` | mcp | MCP tool dispatch |
+| POST | `/agentmemory/migrate` | migration | Session → folder migration |
 
 ---
 

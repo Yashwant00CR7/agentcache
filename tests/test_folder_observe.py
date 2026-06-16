@@ -70,8 +70,8 @@ class TestFolderObserveSuccess:
 
     def test_obs_count_incremented(self, tmp_path):
         kv = make_kv(tmp_path)
-        folder_observe(kv, base_payload())
-        folder_observe(kv, base_payload())
+        folder_observe(kv, base_payload(text="First observation"))
+        folder_observe(kv, base_payload(text="Second observation"))
         fp = 'home/user/projects/myapp'
         meta = kv.get(KV.folder_meta(fp, 'kiro'), 'meta')
         assert meta is not None
@@ -99,10 +99,10 @@ class TestFolderObserveCap:
     def test_cap_enforced(self, tmp_path, monkeypatch):
         monkeypatch.setenv('MAX_OBS_PER_FOLDER', '3')
         kv = make_kv(tmp_path)
-        for _ in range(3):
-            folder_observe(kv, base_payload())
+        for i in range(3):
+            folder_observe(kv, base_payload(text=f"observation {i}"))
         with pytest.raises(ValueError, match='limit'):
-            folder_observe(kv, base_payload())
+            folder_observe(kv, base_payload(text="observation 4"))
 
 
 class TestFolderObservePairIsolation:

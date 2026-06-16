@@ -18,7 +18,7 @@ graph_bp = Blueprint("graph", __name__)
 
 def _check_auth():
     import hmac
-    secret = os.getenv("AGENTMEMORY_SECRET")
+    secret = os.getenv("AGENTCACHE_SECRET") or os.getenv("AGENTMEMORY_SECRET")
     if not secret:
         return None
     auth = request.headers.get("Authorization") or request.headers.get("authorization")
@@ -36,9 +36,10 @@ def _get_kv():
 
 
 # ---------------------------------------------------------------------------
-# GET /agentmemory/graph
+# GET /agentcache/graph
 # ---------------------------------------------------------------------------
 
+@graph_bp.route("/agentcache/graph", methods=["GET"])
 @graph_bp.route("/agentmemory/graph", methods=["GET"])
 def api_graph():
     auth_err = _check_auth()
@@ -49,9 +50,10 @@ def api_graph():
 
 
 # ---------------------------------------------------------------------------
-# GET /agentmemory/graph/stats
+# GET /agentcache/graph/stats
 # ---------------------------------------------------------------------------
 
+@graph_bp.route("/agentcache/graph/stats", methods=["GET"])
 @graph_bp.route("/agentmemory/graph/stats", methods=["GET"])
 def api_graph_stats():
     auth_err = _check_auth()
@@ -67,9 +69,10 @@ def api_graph_stats():
 
 
 # ---------------------------------------------------------------------------
-# POST /agentmemory/graph/query
+# POST /agentcache/graph/query
 # ---------------------------------------------------------------------------
 
+@graph_bp.route("/agentcache/graph/query", methods=["POST"])
 @graph_bp.route("/agentmemory/graph/query", methods=["POST"])
 def api_graph_query():
     auth_err = _check_auth()
@@ -84,9 +87,10 @@ def api_graph_query():
 
 
 # ---------------------------------------------------------------------------
-# POST /agentmemory/graph/build
+# POST /agentcache/graph/build
 # ---------------------------------------------------------------------------
 
+@graph_bp.route("/agentcache/graph/build", methods=["POST"])
 @graph_bp.route("/agentmemory/graph/build", methods=["POST"])
 def api_graph_build():
     auth_err = _check_auth()

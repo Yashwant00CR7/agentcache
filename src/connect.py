@@ -124,22 +124,22 @@ class ClaudeCodeAdapter:
         next_cfg = existing.copy()
         servers = next_cfg.get("mcpServers", {})
 
-        already_has = "agentmemory" in servers
+        already_has = "agentcache" in servers
         if already_has and not args.force:
             print(f"[OK] Claude Code already wired in {claude_json}")
         else:
             if args.dry_run:
-                print(f"[dry-run] Would write mcpServers.agentmemory in {claude_json}")
+                print(f"[dry-run] Would write mcpServers.agentcache in {claude_json}")
             else:
                 backup = backup_file(claude_json, "claude-code")
                 if backup:
                     print(f"Backed up configuration to {backup}")
                 
-                env = {"AGENTMEMORY_URL": os.environ.get("AGENTMEMORY_URL", "http://localhost:3111")}
-                secret = os.environ.get("AGENTMEMORY_SECRET")
+                env = {"AGENTCACHE_URL": os.environ.get("AGENTCACHE_URL") or os.environ.get("AGENTMEMORY_URL") or "http://localhost:3111"}
+                secret = os.environ.get("AGENTCACHE_SECRET") or os.environ.get("AGENTMEMORY_SECRET")
                 if secret:
-                    env["AGENTMEMORY_SECRET"] = secret
-                servers["agentmemory"] = {
+                    env["AGENTCACHE_SECRET"] = secret
+                servers["agentcache"] = {
                     "command": sys.executable,
                     "args": [mcp_stdio_path],
                     "env": env
@@ -179,17 +179,17 @@ class CodexAdapter:
         codex_toml = os.path.join(get_home_dir(), ".codex", "config.toml")
         mcp_stdio_path = get_mcp_stdio_path()
 
-        url = os.environ.get("AGENTMEMORY_URL", "http://localhost:3111")
-        secret = os.environ.get("AGENTMEMORY_SECRET")
+        url = os.environ.get("AGENTCACHE_URL") or os.environ.get("AGENTMEMORY_URL") or "http://localhost:3111"
+        secret = os.environ.get("AGENTCACHE_SECRET") or os.environ.get("AGENTMEMORY_SECRET")
         toml_block = f"""
-[mcp_servers.agentmemory]
+[mcp_servers.agentcache]
 command = "{sys.executable.replace('\\', '/')}"
 args = ["{mcp_stdio_path.replace('\\', '/')}"]
-[mcp_servers.agentmemory.env]
-AGENTMEMORY_URL = "{url}"
+[mcp_servers.agentcache.env]
+AGENTCACHE_URL = "{url}"
 """
         if secret:
-            toml_block += f'AGENTMEMORY_SECRET = "{secret}"\n'
+            toml_block += f'AGENTCACHE_SECRET = "{secret}"\n'
 
         exists = os.path.exists(codex_toml)
         current = ""
@@ -197,12 +197,12 @@ AGENTMEMORY_URL = "{url}"
             with open(codex_toml, "r", encoding="utf-8") as f:
                 current = f.read()
 
-        wired = "[mcp_servers.agentmemory]" in current
+        wired = "[mcp_servers.agentcache]" in current
         if wired and not args.force:
             print(f"[OK] Codex CLI already wired in {codex_toml}")
         else:
             if args.dry_run:
-                print(f"[dry-run] Would write [mcp_servers.agentmemory] block to {codex_toml}")
+                print(f"[dry-run] Would write [mcp_servers.agentcache] block to {codex_toml}")
             else:
                 backup = backup_file(codex_toml, "codex", "toml")
                 if backup:
@@ -216,10 +216,10 @@ AGENTMEMORY_URL = "{url}"
                     skipping = False
                     for line in lines:
                         trimmed = line.strip()
-                        if trimmed == "[mcp_servers.agentmemory]" or trimmed == "[mcp_servers.agentmemory.env]":
+                        if trimmed == "[mcp_servers.agentcache]" or trimmed == "[mcp_servers.agentcache.env]":
                             skipping = True
                             continue
-                        if skipping and trimmed.startswith("[") and trimmed != "[mcp_servers.agentmemory.env]":
+                        if skipping and trimmed.startswith("[") and trimmed != "[mcp_servers.agentcache.env]":
                             skipping = False
                         if not skipping:
                             out.append(line)
@@ -258,7 +258,7 @@ class HermesAdapter:
         return os.path.exists(hermes_dir)
 
     def install(self, args):
-        dest_dir = os.path.join(get_home_dir(), ".hermes", "plugins", "agentmemory")
+        dest_dir = os.path.join(get_home_dir(), ".hermes", "plugins", "agentcache")
         src_dir = os.path.dirname(os.path.abspath(__file__))
         project_root = os.path.dirname(src_dir)
         hermes_src = os.path.join(project_root, "integrations", "hermes")
@@ -277,14 +277,14 @@ class HermesAdapter:
                 shutil.rmtree(dest_dir)
             
             shutil.copytree(hermes_src, dest_dir)
-            print(f"[OK] Copied Hermes memory provider plugin to {dest_dir}")
+            print(f"[OK] Copied Hermes cache provider plugin to {dest_dir}")
             print("To finish configuration, add to ~/.hermes/config.yaml:")
             print("  mcp_servers:")
-            print("    agentmemory:")
+            print("    agentcache:")
             print("      command: python")
             print(f'      args: ["{get_mcp_stdio_path()}"]')
-            print("  memory:")
-            print("    provider: agentmemory")
+            print("  cache:")
+            print("    provider: agentcache")
 
 class AntigravityAdapter:
     name = "antigravity"
@@ -310,22 +310,22 @@ class AntigravityAdapter:
         next_cfg = existing.copy()
         servers = next_cfg.get("mcpServers", {})
 
-        already_has = "agentmemory" in servers
+        already_has = "agentcache" in servers
         if already_has and not args.force:
             print(f"[OK] Antigravity already wired in {mcp_config_path}")
         else:
             if args.dry_run:
-                print(f"[dry-run] Would write mcpServers.agentmemory in {mcp_config_path}")
+                print(f"[dry-run] Would write mcpServers.agentcache in {mcp_config_path}")
             else:
                 backup = backup_file(mcp_config_path, "antigravity")
                 if backup:
                     print(f"Backed up config to {backup}")
                 
-                env = {"AGENTMEMORY_URL": os.environ.get("AGENTMEMORY_URL", "http://localhost:3111")}
-                secret = os.environ.get("AGENTMEMORY_SECRET")
+                env = {"AGENTCACHE_URL": os.environ.get("AGENTCACHE_URL") or os.environ.get("AGENTMEMORY_URL") or "http://localhost:3111"}
+                secret = os.environ.get("AGENTCACHE_SECRET") or os.environ.get("AGENTMEMORY_SECRET")
                 if secret:
-                    env["AGENTMEMORY_SECRET"] = secret
-                servers["agentmemory"] = {
+                    env["AGENTCACHE_SECRET"] = secret
+                servers["agentcache"] = {
                     "command": sys.executable,
                     "args": [mcp_stdio_path],
                     "env": env
@@ -350,22 +350,22 @@ class KiroAdapter:
         next_cfg = existing.copy()
         servers = next_cfg.get("mcpServers", {})
 
-        already_has = "agentmemory" in servers
+        already_has = "agentcache" in servers
         if already_has and not args.force:
             print(f"[OK] Kiro already wired in {mcp_config_path}")
         else:
             if args.dry_run:
-                print(f"[dry-run] Would write mcpServers.agentmemory in {mcp_config_path}")
+                print(f"[dry-run] Would write mcpServers.agentcache in {mcp_config_path}")
             else:
                 backup = backup_file(mcp_config_path, "kiro")
                 if backup:
                     print(f"Backed up config to {backup}")
                 
-                env = {"AGENTMEMORY_URL": os.environ.get("AGENTMEMORY_URL", "http://localhost:3111")}
-                secret = os.environ.get("AGENTMEMORY_SECRET")
+                env = {"AGENTCACHE_URL": os.environ.get("AGENTCACHE_URL") or os.environ.get("AGENTMEMORY_URL") or "http://localhost:3111"}
+                secret = os.environ.get("AGENTCACHE_SECRET") or os.environ.get("AGENTMEMORY_SECRET")
                 if secret:
-                    env["AGENTMEMORY_SECRET"] = secret
-                servers["agentmemory"] = {
+                    env["AGENTCACHE_SECRET"] = secret
+                servers["agentcache"] = {
                     "command": sys.executable,
                     "args": [mcp_stdio_path],
                     "env": env
@@ -383,26 +383,26 @@ class RulesGeneratorAdapter:
         return True
 
     def install(self, args):
-        rule_content = """# Agent Memory Rules
+        rule_content = """# Agent Cache Rules
 
-This workspace is integrated with long-term semantic memory via `agentmemory-python`.
-You must act as your own memory manager by calling the memory MCP tools at critical boundaries.
+This workspace is integrated with long-term semantic memory via `agentcache-python`.
+You must act as your own cache manager by calling the cache MCP tools at critical boundaries.
 
 ## Rules & Workflow
 
 1. **Initial Search (Prefetch Context)**:
-   At the start of every session or new task, immediately call `memory_smart_search` with terms related to the current objective. This retrieves past architecture patterns, preferences, bug fixes, or lessons.
-   - Example: `memory_smart_search(query="jwt token rotation logic")`
+   At the start of every session or new task, immediately call `cache_smart_search` with terms related to the current objective. This retrieves past architecture patterns, preferences, bug fixes, or lessons.
+   - Example: `cache_smart_search(query="jwt token rotation logic")`
 
 2. **Lessons & Insights Capture**:
    When you successfully debug a complex error, discover an undocumented requirement, or establish a convention, persist it:
-   - Call `memory_lesson_save` to record lessons that improve your coding capabilities. Duplicate saves strengthen confidence scores.
-   - Call `memory_save` to save long-term structural facts. Always extract 2-5 specific lowercased tags (e.g. `auth-flow`, `refresh-token`) as concepts.
+   - Call `cache_lesson_save` to record lessons that improve your coding capabilities. Duplicate saves strengthen confidence scores.
+   - Call `cache_save` to save long-term structural facts. Always extract 2-5 specific lowercased tags (e.g. `auth-flow`, `refresh-token`) as concepts.
 
 3. **Checklist Before Ending**:
    Before stating a task is complete:
    - Reflect on whether any lessons learned should be saved.
-   - Call `memory_reflect` to automatically distribute observations into slots if needed.
+   - Call `cache_reflect` to automatically distribute observations into slots if needed.
 """
         cwd = os.getcwd()
         
@@ -435,7 +435,7 @@ ADAPTERS = [
 ]
 
 def main():
-    parser = argparse.ArgumentParser(description="Wired agentmemory MCP and Hooks into client agents.")
+    parser = argparse.ArgumentParser(description="Wired agentcache MCP and Hooks into client agents.")
     parser.add_argument("agent", nargs="?", choices=[a.name for a in ADAPTERS], help="Specify target agent.")
     parser.add_argument("--with-hooks", action="store_true", help="Install global workspace hook execution blocks (Claude/Codex).")
     parser.add_argument("--dry-run", action="store_true", help="Log proposed configuration modifications without writing.")

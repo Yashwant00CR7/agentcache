@@ -23,14 +23,14 @@ def make_viewer_response(base_dir: str):
 
     nonce = base64.urlsafe_b64encode(secrets.token_bytes(16)).decode("utf-8").rstrip("=")
 
-    # D2.2: Never embed the raw AGENTMEMORY_SECRET in page source.
+    # D2.2: Never embed the raw AGENTCACHE_SECRET in page source.
     # Replace the placeholder with an empty string — the viewer authenticates
     # via the Authorization header set programmatically after load.
     html = (
         template
-        .replace("__AGENTMEMORY_VIEWER_NONCE__", nonce)
-        .replace("__AGENTMEMORY_VERSION__", "0.9.8")
-        .replace("__AGENTMEMORY_AUTO_TOKEN__", "")
+        .replace("__AGENTCACHE_VIEWER_NONCE__", nonce)
+        .replace("__AGENTCACHE_VERSION__", "0.9.8")
+        .replace("__AGENTCACHE_AUTO_TOKEN__", "")
     )
 
     csp = "; ".join([

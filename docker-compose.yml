@@ -22,8 +22,8 @@ services:
     # refactored to register as a sandboxed worker.
     #
     # Override per-shell or via .env file:
-    #   AGENTMEMORY_III_VERSION=0.11.7 docker compose up
-    image: iiidev/iii:${AGENTMEMORY_III_VERSION:-0.11.2}
+    #   AGENTCACHE_III_VERSION=0.11.7 docker compose up
+    image: iiidev/iii:${AGENTCACHE_III_VERSION:-${AGENTMEMORY_III_VERSION:-0.11.2}}
     user: "65532:65532"
     depends_on:
       iii-init:

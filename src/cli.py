@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """
-agentmemory CLI entrypoint.
+agentcache CLI entrypoint.
 
 Commands:
-  agentmemory serve [--port PORT] [--host HOST]
-  agentmemory migrate [--dry-run]
-  agentmemory export [--output FILE]
+  agentcache serve [--port PORT] [--host HOST]
+  agentcache migrate [--dry-run]
+  agentcache export [--output FILE]
 """
 
 import argparse
@@ -20,7 +20,7 @@ def cmd_serve(args) -> None:
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
     from app import create_app
     flask_app = create_app()
-    print(f"[cli] Starting agentmemory on {args.host}:{args.port}")
+    print(f"[cli] Starting agentcache on {args.host}:{args.port}")
     flask_app.run(host=args.host, port=args.port, debug=False)
 
 
@@ -67,13 +67,13 @@ def cmd_export(args) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        prog="agentmemory",
-        description="agentmemory — AI agent memory server",
+        prog="agentcache",
+        description="agentcache — AI agent cache server",
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     # serve
-    serve_parser = subparsers.add_parser("serve", help="Start the memory server")
+    serve_parser = subparsers.add_parser("serve", help="Start the cache server")
     serve_parser.add_argument("--port", type=int, default=int(os.getenv("III_REST_PORT", "3111")))
     serve_parser.add_argument("--host", default="0.0.0.0")
 
