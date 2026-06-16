@@ -1515,6 +1515,12 @@ def remember(kv: StateKV, data: Dict[str, Any]) -> Dict[str, Any]:
     # Commit to Dolt
     commit_if_enabled(kv, f"Remember: {new_mem.get('title', '')}", new_mem.get("agentId"))
 
+    # Broadcast memory created
+    broadcast_stream({
+        "type": "memory_created",
+        "data": new_mem,
+    })
+
     return {"success": True, "memory": new_mem}
 
 
@@ -1559,6 +1565,11 @@ def forget(kv: StateKV, data: Dict[str, Any]) -> Dict[str, Any]:
             _vector_index.remove(memory_id)
         deleted_mem_ids.append(memory_id)
         deleted += 1
+        # Broadcast memory deleted
+        broadcast_stream({
+            "type": "memory_deleted",
+            "memoryId": memory_id,
+        })
 
     # ------------------------------------------------------------------
     # Path 2 & 3: folder-based deletion (REQ-030, REQ-031, REQ-032, REQ-033)
@@ -1580,12 +1591,17 @@ def forget(kv: StateKV, data: Dict[str, Any]) -> Dict[str, Any]:
             # ----------------------------------------------------------
             partial_deleted = 0
             for oid in obs_ids:
+                obs = kv.get(obs_scope, oid)
                 existed = kv.delete(obs_scope, oid)
                 if existed:
                     kv.delete(KV.obs_lookup, oid)
                     _bm25_index.remove(oid)
                     if _vector_index:
                         _vector_index.remove(oid)
+                    if obs and isinstance(obs, dict) and obs.get("text"):
+                        fp_text = obs["text"][:4000]
+                        dedup_fp = hashlib.sha256(fp_text.strip().lower().encode("utf-8")).hexdigest()
+                        kv.delete(KV.obs_dedup(fp, aid), dedup_fp)
                     deleted_obs_ids.append(oid)
                     partial_deleted += 1
                     deleted += 1
@@ -1602,6 +1618,15 @@ def forget(kv: StateKV, data: Dict[str, Any]) -> Dict[str, Any]:
                     if index_entry and isinstance(index_entry, dict):
                         index_entry["obsCount"] = meta["obsCount"]
                         kv.set(KV.folders, index_key, index_entry)
+
+            # Broadcast observations deleted
+            if deleted_obs_ids:
+                broadcast_stream({
+                    "type": "observations_deleted",
+                    "folderPath": fp,
+                    "agentId": aid,
+                    "observationIds": deleted_obs_ids,
+                })
         else:
             # ----------------------------------------------------------
             # Path 2: full pair deletion (REQ-030, REQ-032)
@@ -1623,6 +1648,19 @@ def forget(kv: StateKV, data: Dict[str, Any]) -> Dict[str, Any]:
 
             # Remove from global folders index
             kv.delete(KV.folders, index_key)
+
+            # Clear dedup entries
+            dedup_scope = KV.obs_dedup(fp, aid)
+            for item in kv.list(dedup_scope):
+                if isinstance(item, dict) and item.get("id"):
+                    kv.delete(dedup_scope, item["id"])
+
+            # Broadcast folder pair deleted
+            broadcast_stream({
+                "type": "folder_deleted",
+                "folderPath": fp,
+                "agentId": aid,
+            })
 
     # ------------------------------------------------------------------
     # Legacy: session-based deletion (unchanged)

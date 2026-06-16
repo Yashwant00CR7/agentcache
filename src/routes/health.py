@@ -9,7 +9,7 @@ Handles:
 """
 
 import os
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, Response
 import functions
 from functions import query_audit
 
@@ -38,6 +38,31 @@ def _get_kv():
 def _get_embedding_provider():
     import app as app_module
     return app_module.embedding_provider
+
+
+# ---------------------------------------------------------------------------
+# GET /auth.md  (no auth required)
+# ---------------------------------------------------------------------------
+
+@health_bp.route("/auth.md", methods=["GET"])
+def auth_docs():
+    """Serve the agent onboarding documentation in Markdown format."""
+    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    auth_md_path = os.path.join(base_dir, "auth.md")
+
+    if os.path.exists(auth_md_path):
+        try:
+            with open(auth_md_path, "r", encoding="utf-8") as f:
+                content = f.read()
+            return Response(
+                content,
+                mimetype="text/markdown",
+                headers={"Content-Type": "text/markdown; charset=utf-8"}
+            )
+        except Exception as e:
+            return jsonify({"error": f"failed to read auth.md: {e}"}), 500
+
+    return jsonify({"error": "auth.md not found"}), 404
 
 
 # ---------------------------------------------------------------------------

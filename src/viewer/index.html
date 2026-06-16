@@ -2934,6 +2934,41 @@
       cards.insertBefore(div.firstChild, cards.firstChild);
     }
 
+    function prependFolderObservationCard(o) {
+      var list = document.getElementById('obs-list');
+      if (!list) return;
+      var div = document.createElement('div');
+      var ts = o.timestamp ? new Date(o.timestamp).toLocaleString() : '';
+      var typeColor = {'file_edit':'var(--blue)','command_run':'var(--orange)','search':'var(--green)','error':'var(--red)','conversation':'var(--purple)'}[o.type] || 'var(--ink-muted)';
+      var html = '';
+      html += '<div class="obs-detail-card" data-obs-id="' + esc(o.id) + '" style="border:1px solid var(--border-light);border-radius:4px;padding:12px 16px;margin-bottom:8px;background:var(--bg);display:flex;gap:10px;align-items:flex-start;">';
+      // checkbox
+      html += '<label style="padding-top:2px;cursor:pointer;flex-shrink:0;">';
+      html += '<input type="checkbox" class="obs-checkbox" data-obs-id="' + esc(o.id) + '" style="accent-color:var(--ink);">';
+      html += '</label>';
+      // content
+      html += '<div style="flex:1;min-width:0;">';
+      html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap;">';
+      html += '<span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:' + typeColor + ';background:var(--bg-subtle);padding:2px 7px;border-radius:3px;">' + esc(o.type || 'other') + '</span>';
+      html += '<span style="font-size:11px;color:var(--ink-muted);font-family:var(--font-mono);">' + esc(ts) + '</span>';
+      html += '<span style="flex:1;"></span>';
+      html += '<button class="btn btn-danger" data-action="delete-obs" data-obs-id="' + esc(o.id) + '" data-folder-path="' + esc(_folderDetailFp) + '" data-agent-id="' + esc(_folderDetailAid) + '" style="font-size:9px;padding:2px 8px;">Delete</button>';
+      html += '</div>';
+      if (o.title) html += '<div style="font-weight:600;font-size:14px;color:var(--ink);margin-bottom:4px;">' + esc(o.title) + '</div>';
+      if (o.text) html += '<div style="font-size:13px;color:var(--ink-secondary);line-height:1.5;white-space:pre-wrap;">' + esc(o.text.length > 300 ? o.text.slice(0, 300) + '\u2026' : o.text) + '</div>';
+      html += '</div>';
+      html += '</div>';
+      div.innerHTML = html;
+      list.insertBefore(div.firstChild, list.firstChild);
+      
+      // Update count in header
+      var remaining = document.querySelectorAll('.obs-detail-card').length;
+      var countEl = document.querySelector('#folder-detail-root span[style*="ink-muted"]');
+      if (countEl) countEl.textContent = remaining + ' observation' + (remaining !== 1 ? 's' : '');
+
+      _wireFolderDetailCheckboxes();
+    }
+
     function updateFolderBadge(folderPath, agentId) {
       var rows = document.querySelectorAll('.folder-row');
       rows.forEach(function(row) {
@@ -3252,6 +3287,55 @@
               }
               if (state.activeTab === 'folders') {
                 updateFolderBadge(msg.folderPath, msg.agentId);
+                if (_folderDetailFp === msg.folderPath && _folderDetailAid === msg.agentId) {
+                  prependFolderObservationCard(msg.data || {});
+                }
+              }
+            } else if (msg.type === 'memory_created' || msg.type === 'memory_deleted') {
+              if (state.activeTab === 'memories') {
+                state.memories.loaded = false;
+                loadMemories();
+              }
+            } else if (msg.type === 'folder_deleted') {
+              if (state.activeTab === 'folders') {
+                if (_folderDetailFp === msg.folderPath && _folderDetailAid === msg.agentId) {
+                  loadFolders(); // go back
+                } else {
+                  var row = document.querySelector('.folder-row[data-folder="' + esc(msg.folderPath) + '"][data-agent="' + esc(msg.agentId) + '"]');
+                  if (row) row.remove();
+                }
+              }
+            } else if (msg.type === 'observations_deleted') {
+              if (state.activeTab === 'timeline') {
+                var oids = new Set(msg.observationIds || []);
+                state.timeline.observations = state.timeline.observations.filter(function(o) {
+                  return !oids.has(o.id);
+                });
+                renderObservations();
+              }
+              if (state.activeTab === 'folders') {
+                if (_folderDetailFp === msg.folderPath && _folderDetailAid === msg.agentId) {
+                  var oids = new Set(msg.observationIds || []);
+                  oids.forEach(function(oid) {
+                    var card = document.querySelector('.obs-detail-card[data-obs-id="' + oid + '"]');
+                    if (card) card.remove();
+                    _selectedObsIds.delete(oid);
+                  });
+                  var remaining = document.querySelectorAll('.obs-detail-card').length;
+                  var countEl = document.querySelector('#folder-detail-root span[style*="ink-muted"]');
+                  if (countEl) countEl.textContent = remaining + ' observation' + (remaining !== 1 ? 's' : '');
+                } else {
+                  var rows = document.querySelectorAll('.folder-row');
+                  rows.forEach(function(row) {
+                    if (row.dataset.folder === msg.folderPath && row.dataset.agent === msg.agentId) {
+                      var countCell = row.querySelector('td:nth-child(3)');
+                      if (countCell) {
+                        var cur = parseInt(countCell.textContent) || 0;
+                        countCell.textContent = Math.max(0, cur - (msg.observationIds || []).length);
+                      }
+                    }
+                  });
+                }
               }
             } else if (msg.type === 'raw_observation' || msg.type === 'compressed_observation') {
               if (msg.data && msg.data.observation) {
