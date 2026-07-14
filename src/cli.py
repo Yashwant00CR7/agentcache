@@ -65,6 +65,13 @@ def cmd_export(args) -> None:
         print(output)
 
 
+def cmd_connect(args) -> None:
+    """Connect/wire MCP and hooks to client agents."""
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    from connect import run_connect
+    run_connect(args)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         prog="agentcache",
@@ -85,6 +92,14 @@ def main() -> None:
     export_parser = subparsers.add_parser("export", help="Export all data as JSON")
     export_parser.add_argument("--output", "-o", help="Output file path (default: stdout)")
 
+    # connect
+    connect_parser = subparsers.add_parser("connect", help="Connect/wire MCP and hooks to client agents")
+    connect_parser.add_argument("agent", nargs="?", help="Specify target agent (antigravity, claude-code, kiro, etc.)")
+    connect_parser.add_argument("--with-hooks", action="store_true", help="Install global workspace hook execution blocks (Claude/Codex).")
+    connect_parser.add_argument("--dry-run", action="store_true", help="Log proposed configuration modifications without writing.")
+    connect_parser.add_argument("--force", action="store_true", help="Overwrite existing configuration settings.")
+    connect_parser.add_argument("--all", action="store_true", help="Attempt connection to all detected agents.")
+
     args = parser.parse_args()
 
     if args.command == "serve":
@@ -93,6 +108,8 @@ def main() -> None:
         cmd_migrate(args)
     elif args.command == "export":
         cmd_export(args)
+    elif args.command == "connect":
+        cmd_connect(args)
 
 
 if __name__ == "__main__":

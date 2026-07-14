@@ -56,41 +56,12 @@ def api_observe():
     body = {}
     try:
         body = request.get_json(force=True) or {}
-
-        # Compat shim: accept both folder-based and legacy session-based payloads.
-        # Old clients send sessionId/project/cwd + data{tool_input/output}
-        # New clients send folderPath/agentId/text
-        folder_path = (
-            body.get("folderPath")
-            or body.get("cwd")
-            or body.get("project")
-            or os.getenv("AGENTCACHE_CWD")
-            or os.getenv("AGENTMEMORY_CWD")
-            or "/unknown"
-        )
-        agent_id = (
-            body.get("agentId")
-            or body.get("sessionId")
-            or functions.get_agent_id()
-            or os.getenv("AGENT_ID")
-            or "agent"
-        )
-
-        # Build text from whichever field the client used
+        folder_path = body.get("folderPath")
+        agent_id = body.get("agentId")
         text = body.get("text") or body.get("content") or ""
-        if not text:
-            # Legacy clients put content in a nested 'data' dict
-            data = body.get("data")
-            if isinstance(data, dict):
-                parts = [str(v) for k, v in data.items()
-                         if v and k in ("tool_input", "tool_output", "prompt",
-                                        "response", "tool_name", "content")]
-                text = " | ".join(parts) if parts else str(data)
-            elif isinstance(data, str):
-                text = data
-        if not text:
-            # Last resort: use hookType as a minimal marker so we don't 400
-            text = body.get("hookType") or "observation"
+
+        if not folder_path or not agent_id or not text:
+            return jsonify({"error": "folderPath, agentId, and text are required"}), 400
 
         payload = {
             "folderPath": folder_path,

@@ -299,40 +299,92 @@ class AntigravityAdapter:
         else:
             return os.path.join(get_home_dir(), ".config", "Antigravity", "User")
 
+    def get_gemini_mcp_dir(self):
+        return os.path.join(get_home_dir(), ".gemini", "antigravity", "mcp", "agentcache")
+
     def detect(self):
-        return os.path.exists(self.get_user_dir())
+        gemini_parent = os.path.dirname(os.path.dirname(self.get_gemini_mcp_dir()))
+        return os.path.exists(gemini_parent) or os.path.exists(self.get_user_dir())
+
+    def install_gemini_schemas(self, args):
+        gemini_mcp_dir = self.get_gemini_mcp_dir()
+        if args.dry_run:
+            print(f"[dry-run] Would create directory {gemini_mcp_dir} and write tool schema JSON files.")
+            return
+
+        os.makedirs(gemini_mcp_dir, exist_ok=True)
+        try:
+            # Dynamic import to avoid circular dependency
+            try:
+                from routes.mcp import get_mcp_tools_schemas
+            except ImportError:
+                try:
+                    from src.routes.mcp import get_mcp_tools_schemas
+                except ImportError:
+                    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+                    from routes.mcp import get_mcp_tools_schemas
+
+            tools = get_mcp_tools_schemas()
+        except Exception as e:
+            print(f"[FAIL] Could not load tool schemas: {e}")
+            return
+
+        for tool in tools:
+            tool_name = tool["name"]
+            schema = {
+                "name": tool_name,
+                "description": tool.get("description", ""),
+                "parameters": tool.get("inputSchema", {})
+            }
+            tool_file_path = os.path.join(gemini_mcp_dir, f"{tool_name}.json")
+            
+            if os.path.exists(tool_file_path) and not args.force:
+                continue
+            
+            with open(tool_file_path, "w", encoding="utf-8") as f:
+                json.dump(schema, f, indent=2)
+                f.write("\n")
+        print(f"[OK] Installed {len(tools)} tool schemas to {gemini_mcp_dir}")
 
     def install(self, args):
-        mcp_config_path = os.path.join(self.get_user_dir(), "mcp_config.json")
-        mcp_stdio_path = get_mcp_stdio_path()
+        # 1. Install tool schemas under ~/.gemini/antigravity/mcp/agentcache
+        gemini_parent = os.path.dirname(os.path.dirname(self.get_gemini_mcp_dir()))
+        if os.path.exists(gemini_parent) or args.force:
+            self.install_gemini_schemas(args)
 
-        existing = read_json_safe(mcp_config_path)
-        next_cfg = existing.copy()
-        servers = next_cfg.get("mcpServers", {})
+        # 2. Wire the VS Code/User AppData client config if present
+        user_dir = self.get_user_dir()
+        if os.path.exists(user_dir) or args.force:
+            mcp_config_path = os.path.join(user_dir, "mcp_config.json")
+            mcp_stdio_path = get_mcp_stdio_path()
 
-        already_has = "agentcache" in servers
-        if already_has and not args.force:
-            print(f"[OK] Antigravity already wired in {mcp_config_path}")
-        else:
-            if args.dry_run:
-                print(f"[dry-run] Would write mcpServers.agentcache in {mcp_config_path}")
+            existing = read_json_safe(mcp_config_path)
+            next_cfg = existing.copy()
+            servers = next_cfg.get("mcpServers", {})
+
+            already_has = "agentcache" in servers
+            if already_has and not args.force:
+                print(f"[OK] Antigravity VS Code client already wired in {mcp_config_path}")
             else:
-                backup = backup_file(mcp_config_path, "antigravity")
-                if backup:
-                    print(f"Backed up config to {backup}")
-                
-                env = {"AGENTCACHE_URL": os.environ.get("AGENTCACHE_URL") or os.environ.get("AGENTMEMORY_URL") or "http://localhost:3111"}
-                secret = os.environ.get("AGENTCACHE_SECRET") or os.environ.get("AGENTMEMORY_SECRET")
-                if secret:
-                    env["AGENTCACHE_SECRET"] = secret
-                servers["agentcache"] = {
-                    "command": sys.executable,
-                    "args": [mcp_stdio_path],
-                    "env": env
-                }
-                next_cfg["mcpServers"] = servers
-                write_json_atomic(mcp_config_path, next_cfg)
-                print(f"[OK] Wired Antigravity MCP config in {mcp_config_path}")
+                if args.dry_run:
+                    print(f"[dry-run] Would write mcpServers.agentcache in {mcp_config_path}")
+                else:
+                    backup = backup_file(mcp_config_path, "antigravity")
+                    if backup:
+                        print(f"Backed up config to {backup}")
+                    
+                    env = {"AGENTCACHE_URL": os.environ.get("AGENTCACHE_URL") or os.environ.get("AGENTMEMORY_URL") or "http://localhost:3111"}
+                    secret = os.environ.get("AGENTCACHE_SECRET") or os.environ.get("AGENTMEMORY_SECRET")
+                    if secret:
+                        env["AGENTCACHE_SECRET"] = secret
+                    servers["agentcache"] = {
+                        "command": sys.executable,
+                        "args": [mcp_stdio_path],
+                        "env": env
+                    }
+                    next_cfg["mcpServers"] = servers
+                    write_json_atomic(mcp_config_path, next_cfg)
+                    print(f"[OK] Wired Antigravity VS Code client MCP config in {mcp_config_path}")
 
 class KiroAdapter:
     name = "kiro"
@@ -373,6 +425,54 @@ class KiroAdapter:
                 next_cfg["mcpServers"] = servers
                 write_json_atomic(mcp_config_path, next_cfg)
                 print(f"[OK] Wired Kiro MCP config in {mcp_config_path}")
+
+class VSCodeAdapter:
+    name = "vscode"
+    display_name = "VS Code"
+
+    def get_user_config_path(self):
+        if sys.platform == "darwin":
+            return os.path.join(get_home_dir(), "Library", "Application Support", "Code", "User", "mcp.json")
+        elif sys.platform == "win32":
+            appdata = get_appdata_dir()
+            return os.path.join(appdata, "Code", "User", "mcp.json")
+        else:
+            return os.path.join(get_home_dir(), ".config", "Code", "User", "mcp.json")
+
+    def detect(self):
+        return os.path.exists(os.path.dirname(self.get_user_config_path()))
+
+    def install(self, args):
+        mcp_config_path = self.get_user_config_path()
+        mcp_stdio_path = get_mcp_stdio_path()
+
+        existing = read_json_safe(mcp_config_path)
+        next_cfg = existing.copy()
+        servers = next_cfg.get("servers", {})
+
+        already_has = "agentcache" in servers
+        if already_has and not args.force:
+            print(f"[OK] VS Code already wired in {mcp_config_path}")
+        else:
+            if args.dry_run:
+                print(f"[dry-run] Would write servers.agentcache in {mcp_config_path}")
+            else:
+                backup = backup_file(mcp_config_path, "vscode")
+                if backup:
+                    print(f"Backed up config to {backup}")
+                
+                env = {"AGENTCACHE_URL": os.environ.get("AGENTCACHE_URL") or os.environ.get("AGENTMEMORY_URL") or "http://localhost:3111"}
+                secret = os.environ.get("AGENTCACHE_SECRET") or os.environ.get("AGENTMEMORY_SECRET")
+                if secret:
+                    env["AGENTCACHE_SECRET"] = secret
+                servers["agentcache"] = {
+                    "command": sys.executable,
+                    "args": [mcp_stdio_path],
+                    "env": env
+                }
+                next_cfg["servers"] = servers
+                write_json_atomic(mcp_config_path, next_cfg)
+                print(f"[OK] Wired VS Code MCP config in {mcp_config_path}")
 
 class RulesGeneratorAdapter:
     name = "cursor"
@@ -431,12 +531,62 @@ ADAPTERS = [
     HermesAdapter(),
     AntigravityAdapter(),
     KiroAdapter(),
+    VSCodeAdapter(),
     RulesGeneratorAdapter()
 ]
 
+def map_agent_alias(name: str) -> str:
+    if not name:
+        return name
+    name = name.lower().strip()
+    if name in ("antigravity", "/anti-gravity", "anti-gravity", "/antigravity", "antigravity"):
+        return "antigravity"
+    if name in ("claude", "claude-code", "claudecode", "claude code"):
+        return "claude-code"
+    if name in ("kiro", "keyro"):
+        return "kiro"
+    if name in ("vscode", "vs-code", "visual-studio-code", "vs code"):
+        return "vscode"
+    return name
+
+def run_connect(args):
+    # Normalize/Map target agent alias if provided
+    agent_name = getattr(args, "agent", None)
+    if agent_name:
+        agent_name = map_agent_alias(agent_name)
+        setattr(args, "agent", agent_name)
+
+    valid_names = [a.name for a in ADAPTERS]
+    if agent_name and agent_name not in valid_names:
+        print(f"[FAIL] Unknown agent: {agent_name}. Supported agents: {', '.join(valid_names)}")
+        sys.exit(1)
+
+    targets = []
+    if getattr(args, "all", False):
+        targets = [a for a in ADAPTERS if a.detect() and a.name != "cursor"]
+    else:
+        matched = [a for a in ADAPTERS if a.name == agent_name]
+        if matched:
+            targets = matched
+
+    if not targets:
+        print("No agents detected or matched target.")
+        sys.exit(1)
+
+    for target in targets:
+        if not target.detect() and not getattr(args, "force", False):
+            print(f"[FAIL] {target.display_name} not detected on this system. (Use --force to install anyway)")
+            continue
+        
+        print(f"Wiring {target.display_name}...")
+        try:
+            target.install(args)
+        except Exception as e:
+            print(f"[FAIL] Failed to install {target.display_name}: {e}")
+
 def main():
     parser = argparse.ArgumentParser(description="Wired agentcache MCP and Hooks into client agents.")
-    parser.add_argument("agent", nargs="?", choices=[a.name for a in ADAPTERS], help="Specify target agent.")
+    parser.add_argument("agent", nargs="?", help="Specify target agent (antigravity, claude-code, kiro, etc.).")
     parser.add_argument("--with-hooks", action="store_true", help="Install global workspace hook execution blocks (Claude/Codex).")
     parser.add_argument("--dry-run", action="store_true", help="Log proposed configuration modifications without writing.")
     parser.add_argument("--force", action="store_true", help="Overwrite existing configuration settings.")
@@ -451,28 +601,7 @@ def main():
             print(f"  - {a.name:15} ({a.display_name})")
         sys.exit(0)
 
-    targets = []
-    if args.all:
-        targets = [a for a in ADAPTERS if a.detect() and a.name != "cursor"]
-    else:
-        matched = [a for a in ADAPTERS if a.name == args.agent]
-        if matched:
-            targets = matched
-
-    if not targets:
-        print("No agents detected or matched target.")
-        sys.exit(1)
-
-    for target in targets:
-        if not target.detect() and not args.force:
-            print(f"[FAIL] {target.display_name} not detected on this system. (Use --force to install anyway)")
-            continue
-        
-        print(f"Wiring {target.display_name}...")
-        try:
-            target.install(args)
-        except Exception as e:
-            print(f"[FAIL] Failed to install {target.display_name}: {e}")
+    run_connect(args)
 
 if __name__ == "__main__":
     main()

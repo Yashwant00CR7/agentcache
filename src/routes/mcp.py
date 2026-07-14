@@ -52,14 +52,8 @@ def _parse_mcp_list_arg(arg_val):
 # GET /agentcache/mcp/tools
 # ---------------------------------------------------------------------------
 
-@mcp_bp.route("/agentcache/mcp/tools", methods=["GET"])
-@mcp_bp.route("/agentmemory/mcp/tools", methods=["GET"])
-def mcp_tools_list():
-    auth_err = _check_auth()
-    if auth_err:
-        return auth_err
-
-    tools = [
+def get_mcp_tools_schemas():
+    return [
         {
             "name": "cache_recall",
             "description": "Search past folder observations and global memories. Use when you need to recall what happened in a folder.",
@@ -230,6 +224,15 @@ def mcp_tools_list():
             },
         },
     ]
+
+@mcp_bp.route("/agentcache/mcp/tools", methods=["GET"])
+@mcp_bp.route("/agentmemory/mcp/tools", methods=["GET"])
+def mcp_tools_list():
+    auth_err = _check_auth()
+    if auth_err:
+        return auth_err
+
+    tools = get_mcp_tools_schemas()
     return jsonify({"tools": tools}), 200
 
 

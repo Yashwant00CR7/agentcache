@@ -1,0 +1,36 @@
+# agentcache Test Automation Configuration File (.tml)
+
+[project]
+name = "agentcache"
+description = "A Python REST + WebSocket + MCP cache server for AI agents, backed by SQLite"
+version = "0.9.8"
+
+[ci_cd]
+platform = "GitHub Actions"
+workflow_path = ".github/workflows/automation.yml"
+trigger_on = ["push", "pull_request", "workflow_dispatch", "schedule"]
+
+[environments]
+python_versions = ["3.10", "3.11", "3.12"]
+primary_os = "ubuntu-latest"
+alternative_os = "windows-latest" # Recommended for testing Windows file locks/paths
+
+[test_matrix]
+enable_linting = true
+enable_unit_tests = true
+enable_property_tests = true
+enable_build_verification = true
+
+[commands]
+install_deps = "pip install -e \".[dev]\""
+lint = "python -m pip install ruff && ruff check src/ tests/"
+format = "ruff format --check src/ tests/"
+pytest_unit = "pytest tests/ --ignore=tests/test_properties.py -v --tb=short"
+pytest_properties = "pytest tests/test_properties.py -v --tb=short"
+build_package = "pip install build && python -m build"
+
+[embedding_providers_mocked]
+# During automated test execution, embedding APIs are mocked to avoid cost/network issues.
+openai = "MOCKED"
+gemini = "MOCKED"
+sentence_transformers = "MOCKED"
