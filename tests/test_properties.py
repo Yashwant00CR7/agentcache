@@ -7,6 +7,7 @@ All 8 properties from the spec.
 Note: Each property test creates a fresh isolated SQLite DB per hypothesis
 example using a shared counter, avoiding state accumulation between examples.
 """
+
 import sys
 import os
 import datetime
@@ -19,13 +20,14 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 try:
     from hypothesis import given, settings, assume, HealthCheck
     from hypothesis import strategies as st
+
     HYPOTHESIS_AVAILABLE = True
 except ImportError:
     HYPOTHESIS_AVAILABLE = False
 
 pytestmark = pytest.mark.skipif(
     not HYPOTHESIS_AVAILABLE,
-    reason="hypothesis not installed — run: pip install hypothesis"
+    reason="hypothesis not installed — run: pip install hypothesis",
 )
 
 # ---------------------------------------------------------------------------
@@ -38,6 +40,7 @@ _counter = [0]
 def _fresh_kv():
     """Create a brand-new isolated StateKV in a temp directory."""
     from db import StateKV
+
     os.environ.pop("AGENTCACHE_SECRET", None)
     _counter[0] += 1
     d = tempfile.mkdtemp(prefix=f"agmem_prop_{_counter[0]}_")
@@ -76,6 +79,7 @@ def _safe_text():
 # Two distinct (folderPath, agentId) pairs never share observations.
 # ---------------------------------------------------------------------------
 
+
 @settings(max_examples=50, deadline=None)
 @given(
     path1=_safe_path(),
@@ -88,9 +92,12 @@ def test_property_1_pair_isolation(path1, agent1, path2, agent2, text):
     assume((path1, agent1) != (path2, agent2))
 
     from functions import folder_observe, KV
+
     kv = _fresh_kv()
 
-    folder_observe(kv, {"folderPath": path1, "agentId": agent1, "text": text, "timestamp": _now()})
+    folder_observe(
+        kv, {"folderPath": path1, "agentId": agent1, "text": text, "timestamp": _now()}
+    )
 
     scope1 = KV.folder_obs(path1, agent1)
     scope2 = KV.folder_obs(path2, agent2)
@@ -106,6 +113,7 @@ def test_property_1_pair_isolation(path1, agent1, path2, agent2, text):
 # meta.obsCount == len(kv.list(folder_obs_scope))
 # ---------------------------------------------------------------------------
 
+
 @settings(max_examples=50, deadline=None)
 @given(
     path=_safe_path(),
@@ -114,10 +122,14 @@ def test_property_1_pair_isolation(path1, agent1, path2, agent2, text):
 )
 def test_property_2_obs_count_consistency(path, agent, texts):
     from functions import folder_observe, KV
+
     kv = _fresh_kv()
 
     for text in texts:
-        folder_observe(kv, {"folderPath": path, "agentId": agent, "text": text, "timestamp": _now()})
+        folder_observe(
+            kv,
+            {"folderPath": path, "agentId": agent, "text": text, "timestamp": _now()},
+        )
 
     meta_scope = KV.folder_meta(path, agent)
     meta = kv.get(meta_scope, "meta")
@@ -132,6 +144,7 @@ def test_property_2_obs_count_consistency(path, agent, texts):
 # Every written pair has a KV.folders entry.
 # ---------------------------------------------------------------------------
 
+
 @settings(max_examples=50, deadline=None)
 @given(
     path=_safe_path(),
@@ -140,17 +153,22 @@ def test_property_2_obs_count_consistency(path, agent, texts):
 )
 def test_property_3_index_coverage(path, agent, text):
     from functions import folder_observe, KV
+
     kv = _fresh_kv()
 
-    folder_observe(kv, {"folderPath": path, "agentId": agent, "text": text, "timestamp": _now()})
+    folder_observe(
+        kv, {"folderPath": path, "agentId": agent, "text": text, "timestamp": _now()}
+    )
 
     index_entries = kv.list(KV.folders)
     normalized_path = path.replace("\\", "/").strip("/")
     normalized_agent = agent.strip()
 
     matching = [
-        e for e in index_entries
-        if e.get("folderPath") == normalized_path and e.get("agentId") == normalized_agent
+        e
+        for e in index_entries
+        if e.get("folderPath") == normalized_path
+        and e.get("agentId") == normalized_agent
     ]
     assert len(matching) >= 1
 
@@ -160,6 +178,7 @@ def test_property_3_index_coverage(path, agent, text):
 # No stored obs text contains raw secrets after folder_observe().
 # ---------------------------------------------------------------------------
 
+
 @settings(max_examples=30, deadline=None)
 @given(
     path=_safe_path(),
@@ -168,16 +187,20 @@ def test_property_3_index_coverage(path, agent, text):
 )
 def test_property_4_privacy_invariant(path, agent, prefix):
     from functions import folder_observe, KV
+
     kv = _fresh_kv()
 
     secret_text = f"My api_key = sk-proj-{prefix}abc123def456ghi789jkl012 in production"
 
-    folder_observe(kv, {
-        "folderPath": path,
-        "agentId": agent,
-        "text": secret_text,
-        "timestamp": _now(),
-    })
+    folder_observe(
+        kv,
+        {
+            "folderPath": path,
+            "agentId": agent,
+            "text": secret_text,
+            "timestamp": _now(),
+        },
+    )
 
     obs_list = kv.list(KV.folder_obs(path, agent))
     for obs in obs_list:
@@ -190,6 +213,7 @@ def test_property_4_privacy_invariant(path, agent, prefix):
 # folder_timeline() always returns results sorted newest-first.
 # ---------------------------------------------------------------------------
 
+
 @settings(max_examples=40, deadline=None)
 @given(
     path=_safe_path(),
@@ -198,17 +222,21 @@ def test_property_4_privacy_invariant(path, agent, prefix):
 )
 def test_property_5_timeline_ordering(path, agent, n):
     from functions import folder_observe, folder_timeline
+
     kv = _fresh_kv()
 
     base_ts = datetime.datetime(2025, 1, 1, 0, 0, 0)
     for i in range(n):
         ts = (base_ts + datetime.timedelta(minutes=i)).isoformat() + "Z"
-        folder_observe(kv, {
-            "folderPath": path,
-            "agentId": agent,
-            "text": f"Observation number {i}",
-            "timestamp": ts,
-        })
+        folder_observe(
+            kv,
+            {
+                "folderPath": path,
+                "agentId": agent,
+                "text": f"Observation number {i}",
+                "timestamp": ts,
+            },
+        )
 
     results = folder_timeline(kv, limit=100, folder_path=path, agent_id=agent)
     timestamps = [r["timestamp"] for r in results]
@@ -220,6 +248,7 @@ def test_property_5_timeline_ordering(path, agent, n):
 # After forget({folderPath, agentId}), all three scopes are empty.
 # ---------------------------------------------------------------------------
 
+
 @settings(max_examples=40, deadline=None)
 @given(
     path=_safe_path(),
@@ -228,10 +257,14 @@ def test_property_5_timeline_ordering(path, agent, n):
 )
 def test_property_6_forget_completeness(path, agent, texts):
     from functions import folder_observe, forget, KV
+
     kv = _fresh_kv()
 
     for text in texts:
-        folder_observe(kv, {"folderPath": path, "agentId": agent, "text": text, "timestamp": _now()})
+        folder_observe(
+            kv,
+            {"folderPath": path, "agentId": agent, "text": text, "timestamp": _now()},
+        )
 
     assert len(kv.list(KV.folder_obs(path, agent))) > 0
 
@@ -251,7 +284,10 @@ def test_property_6_forget_completeness(path, agent, texts):
 # Superseded memories have parentId; at least one memory is always latest.
 # ---------------------------------------------------------------------------
 
-@settings(max_examples=30, suppress_health_check=[HealthCheck.filter_too_much], deadline=None)
+
+@settings(
+    max_examples=30, suppress_health_check=[HealthCheck.filter_too_much], deadline=None
+)
 @given(
     base_content=st.text(
         alphabet="abcdefghijklmnopqrstuvwxyz ",
@@ -262,6 +298,7 @@ def test_property_6_forget_completeness(path, agent, texts):
 )
 def test_property_7_memory_version_uniqueness(base_content, n_variants):
     from functions import remember, KV
+
     kv = _fresh_kv()
 
     for i in range(n_variants):
@@ -271,8 +308,8 @@ def test_property_7_memory_version_uniqueness(base_content, n_variants):
     all_mems = kv.list(KV.memories)
 
     # Build sets for validation
-    all_ids = {m["id"] for m in all_mems}
-    superseded_ids = {m["id"] for m in all_mems if m.get("isLatest") is False}
+    {m["id"] for m in all_mems}
+    {m["id"] for m in all_mems if m.get("isLatest") is False}
     # Every superseded memory must be referenced by exactly one newer memory via parentId
     for m in all_mems:
         pid = m.get("parentId")
@@ -280,7 +317,9 @@ def test_property_7_memory_version_uniqueness(base_content, n_variants):
             # The parentId must point to a memory that exists and is marked isLatest=False
             parent = next((x for x in all_mems if x["id"] == pid), None)
             assert parent is not None, f"parentId {pid} not found in memories"
-            assert parent.get("isLatest") is False, "Parent of superseding memory must be isLatest=False"
+            assert parent.get("isLatest") is False, (
+                "Parent of superseding memory must be isLatest=False"
+            )
 
     # At least one memory must be latest
     latest_count = sum(1 for m in all_mems if m.get("isLatest") is True)
@@ -292,6 +331,7 @@ def test_property_7_memory_version_uniqueness(base_content, n_variants):
 # normalize(normalize(p)) == normalize(p) for all valid inputs.
 # ---------------------------------------------------------------------------
 
+
 @settings(max_examples=100, deadline=None)
 @given(
     path=st.text(
@@ -302,6 +342,7 @@ def test_property_7_memory_version_uniqueness(base_content, n_variants):
 )
 def test_property_8_path_normalization_idempotency(path):
     from functions import normalize_folder_path
+
     try:
         normalized_once = normalize_folder_path(path)
         normalized_twice = normalize_folder_path(normalized_once)

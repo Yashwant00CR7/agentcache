@@ -18,6 +18,7 @@ health_bp = Blueprint("health", __name__)
 
 def _check_auth():
     import hmac
+
     secret = os.getenv("AGENTCACHE_SECRET") or os.getenv("AGENTMEMORY_SECRET")
     if not secret:
         return None
@@ -32,17 +33,20 @@ def _check_auth():
 
 def _get_kv():
     import app as app_module
+
     return app_module.kv
 
 
 def _get_embedding_provider():
     import app as app_module
+
     return app_module.embedding_provider
 
 
 # ---------------------------------------------------------------------------
 # GET /auth.md  (no auth required)
 # ---------------------------------------------------------------------------
+
 
 @health_bp.route("/auth.md", methods=["GET"])
 def auth_docs():
@@ -57,7 +61,7 @@ def auth_docs():
             return Response(
                 content,
                 mimetype="text/markdown",
-                headers={"Content-Type": "text/markdown; charset=utf-8"}
+                headers={"Content-Type": "text/markdown; charset=utf-8"},
             )
         except Exception as e:
             return jsonify({"error": f"failed to read auth.md: {e}"}), 500
@@ -69,21 +73,25 @@ def auth_docs():
 # GET /agentcache/livez  (no auth required)
 # ---------------------------------------------------------------------------
 
+
 @health_bp.route("/agentcache/livez", methods=["GET"])
 @health_bp.route("/agentmemory/livez", methods=["GET"])
 def livez():
     port = int(os.getenv("III_REST_PORT", os.getenv("PORT", "3111")))
-    return jsonify({
-        "status": "ok",
-        "service": "agentcache",
-        "viewerPort": port,
-        "viewerSkipped": False,
-    })
+    return jsonify(
+        {
+            "status": "ok",
+            "service": "agentcache",
+            "viewerPort": port,
+            "viewerSkipped": False,
+        }
+    )
 
 
 # ---------------------------------------------------------------------------
 # GET /agentcache/health
 # ---------------------------------------------------------------------------
+
 
 @health_bp.route("/agentcache/health", methods=["GET"])
 @health_bp.route("/agentmemory/health", methods=["GET"])
@@ -94,6 +102,7 @@ def health():
 # ---------------------------------------------------------------------------
 # GET /agentcache/audit
 # ---------------------------------------------------------------------------
+
 
 @health_bp.route("/agentcache/audit", methods=["GET"])
 @health_bp.route("/agentmemory/audit", methods=["GET"])
@@ -111,6 +120,7 @@ def api_audit():
 # ---------------------------------------------------------------------------
 # GET /agentcache/config/flags
 # ---------------------------------------------------------------------------
+
 
 @health_bp.route("/agentcache/config/flags", methods=["GET"])
 @health_bp.route("/agentmemory/config/flags", methods=["GET"])
@@ -158,9 +168,11 @@ def config_flags():
             "docsHref": "https://github.com/rohitg00/agentmemory/issues/138",
         },
     ]
-    return jsonify({
-        "version": "0.9.8",
-        "provider": provider_kind,
-        "embeddingProvider": embedding_prov,
-        "flags": flags,
-    })
+    return jsonify(
+        {
+            "version": "0.9.8",
+            "provider": provider_kind,
+            "embeddingProvider": embedding_prov,
+            "flags": flags,
+        }
+    )

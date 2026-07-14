@@ -133,7 +133,9 @@ def start_background_workers(kv) -> None:
 
     if index_empty or not index_in_sync:
         reason = "empty" if index_empty else "out of sync"
-        print(f"[persistence] Search index is {reason}. Rebuilding in background thread...")
+        print(
+            f"[persistence] Search index is {reason}. Rebuilding in background thread..."
+        )
         t_rebuild = threading.Thread(
             target=_rebuild_index,
             args=(kv,),

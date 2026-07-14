@@ -3,6 +3,7 @@ tests/test_auth.py
 
 Tests for the /auth.md agent onboarding route.
 """
+
 import sys
 import os
 import pytest
@@ -18,6 +19,7 @@ def flask_app(tmp_path_factory):
     os.environ.pop("AGENTMEMORY_SECRET", None)
 
     from db import StateKV
+
     original_init = StateKV.__init__
 
     def patched_init(self, db_path_arg=None, **kwargs):
@@ -25,6 +27,7 @@ def flask_app(tmp_path_factory):
 
     StateKV.__init__ = patched_init
     import app as app_module
+
     flask_application = app_module.create_app()
     StateKV.__init__ = original_init
     flask_application.config["TESTING"] = True

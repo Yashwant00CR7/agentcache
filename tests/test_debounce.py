@@ -4,15 +4,14 @@ Tests:
 - 100 rapid schedule_save() calls result in exactly 1 save() call.
 - flush() triggers immediate save without waiting for debounce timer.
 """
+
 import sys
 import os
 import time
-import threading
 import unittest.mock as mock
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
-import pytest
 from db import StateKV
 from search import SearchIndex, VectorIndex
 from functions import IndexPersistence
@@ -22,7 +21,7 @@ FAST_DEBOUNCE = 0.05
 
 
 def make_kv(tmp_path):
-    return StateKV(db_path=str(tmp_path / 'test_debounce.db'))
+    return StateKV(db_path=str(tmp_path / "test_debounce.db"))
 
 
 class TestDebounce:
@@ -43,7 +42,7 @@ class TestDebounce:
             save_call_count[0] += 1
             original_save()
 
-        with mock.patch.object(persistence, 'save', side_effect=counting_save):
+        with mock.patch.object(persistence, "save", side_effect=counting_save):
             for _ in range(100):
                 persistence.schedule_save()
             # Wait for the debounce timer to fire (2× debounce window is plenty)
@@ -60,15 +59,17 @@ class TestDebounce:
         vector = VectorIndex()
 
         # Add a doc so the index is dirty
-        bm25.add({
-            'id': 'obs_test1',
-            'sessionId': 'sess1',
-            'title': 'hello world',
-            'facts': [],
-            'concepts': [],
-            'files': [],
-            'type': 'other',
-        })
+        bm25.add(
+            {
+                "id": "obs_test1",
+                "sessionId": "sess1",
+                "title": "hello world",
+                "facts": [],
+                "concepts": [],
+                "files": [],
+                "type": "other",
+            }
+        )
 
         persistence = IndexPersistence(kv, bm25, vector)
         persistence.DEBOUNCE_SECONDS = FAST_DEBOUNCE
@@ -80,7 +81,7 @@ class TestDebounce:
             save_call_count[0] += 1
             original_save()
 
-        with mock.patch.object(persistence, 'save', side_effect=counting_save):
+        with mock.patch.object(persistence, "save", side_effect=counting_save):
             for _ in range(100):
                 persistence.schedule_save()
             time.sleep(FAST_DEBOUNCE * 4)
@@ -103,7 +104,7 @@ class TestDebounce:
             save_call_count[0] += 1
             original_save()
 
-        with mock.patch.object(persistence, 'save', side_effect=counting_save):
+        with mock.patch.object(persistence, "save", side_effect=counting_save):
             persistence.schedule_save()
             # Timer is set but hasn't fired yet (60s window)
             assert save_call_count[0] == 0, "save() should not have been called yet"
@@ -130,7 +131,7 @@ class TestDebounce:
             save_call_count[0] += 1
             original_save()
 
-        with mock.patch.object(persistence, 'save', side_effect=counting_save):
+        with mock.patch.object(persistence, "save", side_effect=counting_save):
             persistence.flush()
 
         assert save_call_count[0] == 1
@@ -151,7 +152,7 @@ class TestDebounce:
             save_call_count[0] += 1
             original_save()
 
-        with mock.patch.object(persistence, 'save', side_effect=counting_save):
+        with mock.patch.object(persistence, "save", side_effect=counting_save):
             # First burst
             for _ in range(10):
                 persistence.schedule_save()

@@ -34,4 +34,6 @@ def folder_search(
     agent_id: Optional[str] = None,
 ) -> List[Dict[str, Any]]:
     """BM25 + vector hybrid search across folder observations and global memories."""
-    return _fn.folder_search(kv, query, limit, folder_path=folder_path, agent_id=agent_id)
+    return _fn.folder_search(
+        kv, query, limit, folder_path=folder_path, agent_id=agent_id
+    )

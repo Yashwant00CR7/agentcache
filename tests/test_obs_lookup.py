@@ -1,26 +1,32 @@
 """Unit tests for observation lookup index, backfill, and index sync validation."""
+
 import sys
 import os
-import pytest
 import datetime
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 from db import StateKV
 import functions
-from functions import folder_observe, folder_search, forget, backfill_obs_lookup_if_needed, verify_index_sync_on_boot, KV
+from functions import (
+    folder_observe,
+    forget,
+    backfill_obs_lookup_if_needed,
+    verify_index_sync_on_boot,
+    KV,
+)
 
 
 def make_kv(tmp_path):
-    db_path = os.path.join(str(tmp_path), 'test_obs_lookup.db')
+    db_path = os.path.join(str(tmp_path), "test_obs_lookup.db")
     return StateKV(db_path=db_path)
 
 
 def base_payload(folder="/home/user/proj", agent="kiro", text="Test observation"):
     return {
-        'folderPath': folder,
-        'agentId': agent,
-        'text': text,
-        'timestamp': datetime.datetime.utcnow().isoformat() + 'Z',
+        "folderPath": folder,
+        "agentId": agent,
+        "text": text,
+        "timestamp": datetime.datetime.utcnow().isoformat() + "Z",
     }
 
 
@@ -28,32 +34,35 @@ class TestObsLookupFlows:
     def test_lookup_added_on_observe(self, tmp_path):
         kv = make_kv(tmp_path)
         res = folder_observe(kv, base_payload())
-        obs_id = res['observationId']
+        obs_id = res["observationId"]
 
         # Verify entry in KV.obs_lookup
         lookup = kv.get(KV.obs_lookup, obs_id)
         assert lookup is not None
-        assert lookup['folderPath'] == 'home/user/proj'
-        assert lookup['agentId'] == 'kiro'
+        assert lookup["folderPath"] == "home/user/proj"
+        assert lookup["agentId"] == "kiro"
 
     def test_lookup_deleted_on_forget(self, tmp_path):
         kv = make_kv(tmp_path)
         res = folder_observe(kv, base_payload())
-        obs_id = res['observationId']
+        obs_id = res["observationId"]
 
         # Confirm it exists
         assert kv.get(KV.obs_lookup, obs_id) is not None
 
         # Delete it using forget
-        forget(kv, {
-            "folderPath": "/home/user/proj",
-            "agentId": "kiro",
-            "observationIds": [obs_id],
-        })
+        forget(
+            kv,
+            {
+                "folderPath": "/home/user/proj",
+                "agentId": "kiro",
+                "observationIds": [obs_id],
+            },
+        )
 
         # Confirm it is gone from both stores
         assert kv.get(KV.obs_lookup, obs_id) is None
-        assert kv.get(KV.folder_obs('home/user/proj', 'kiro'), obs_id) is None
+        assert kv.get(KV.folder_obs("home/user/proj", "kiro"), obs_id) is None
 
     def test_backfill_populates_missing_lookups(self, tmp_path):
         kv = make_kv(tmp_path)
@@ -61,8 +70,8 @@ class TestObsLookupFlows:
         # Ingest observations
         res1 = folder_observe(kv, base_payload(text="First"))
         res2 = folder_observe(kv, base_payload(text="Second"))
-        obs1 = res1['observationId']
-        obs2 = res2['observationId']
+        obs1 = res1["observationId"]
+        obs2 = res2["observationId"]
 
         # Manually clear the lookup index (simulating legacy data)
         kv.delete(KV.obs_lookup, obs1)
@@ -78,8 +87,8 @@ class TestObsLookupFlows:
         lookup2 = kv.get(KV.obs_lookup, obs2)
         assert lookup1 is not None
         assert lookup2 is not None
-        assert lookup1['folderPath'] == 'home/user/proj'
-        assert lookup2['folderPath'] == 'home/user/proj'
+        assert lookup1["folderPath"] == "home/user/proj"
+        assert lookup2["folderPath"] == "home/user/proj"
 
     def test_verify_index_sync_detects_mismatch(self, tmp_path):
         kv = make_kv(tmp_path)
@@ -91,7 +100,7 @@ class TestObsLookupFlows:
 
         # Ingest one observation
         res = folder_observe(kv, base_payload())
-        obs_id = res['observationId']
+        obs_id = res["observationId"]
 
         # BM25 size should be 1
         assert functions._bm25_index.size == 1

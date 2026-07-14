@@ -18,6 +18,7 @@ mcp_bp = Blueprint("mcp", __name__)
 
 def _check_auth():
     import hmac
+
     secret = os.getenv("AGENTCACHE_SECRET") or os.getenv("AGENTMEMORY_SECRET")
     if not secret:
         return None
@@ -32,6 +33,7 @@ def _check_auth():
 
 def _get_kv():
     import app as app_module
+
     return app_module.kv
 
 
@@ -52,14 +54,9 @@ def _parse_mcp_list_arg(arg_val):
 # GET /agentcache/mcp/tools
 # ---------------------------------------------------------------------------
 
-@mcp_bp.route("/agentcache/mcp/tools", methods=["GET"])
-@mcp_bp.route("/agentmemory/mcp/tools", methods=["GET"])
-def mcp_tools_list():
-    auth_err = _check_auth()
-    if auth_err:
-        return auth_err
 
-    tools = [
+def get_mcp_tools_schemas():
+    return [
         {
             "name": "cache_recall",
             "description": "Search past folder observations and global memories. Use when you need to recall what happened in a folder.",
@@ -67,9 +64,18 @@ def mcp_tools_list():
                 "type": "object",
                 "properties": {
                     "query": {"type": "string", "description": "Search query keywords"},
-                    "limit": {"type": "number", "description": "Max results to return (default 10)"},
-                    "folderPath": {"type": "string", "description": "Filter to a specific folder path (optional)"},
-                    "agentId": {"type": "string", "description": "Filter to a specific agent ID (optional)"},
+                    "limit": {
+                        "type": "number",
+                        "description": "Max results to return (default 10)",
+                    },
+                    "folderPath": {
+                        "type": "string",
+                        "description": "Filter to a specific folder path (optional)",
+                    },
+                    "agentId": {
+                        "type": "string",
+                        "description": "Filter to a specific agent ID (optional)",
+                    },
                 },
                 "required": ["query"],
             },
@@ -81,9 +87,18 @@ def mcp_tools_list():
                 "type": "object",
                 "properties": {
                     "query": {"type": "string", "description": "Search query"},
-                    "limit": {"type": "number", "description": "Max results (default 10)"},
-                    "folderPath": {"type": "string", "description": "Filter to a specific folder path (optional)"},
-                    "agentId": {"type": "string", "description": "Filter to a specific agent ID (optional)"},
+                    "limit": {
+                        "type": "number",
+                        "description": "Max results (default 10)",
+                    },
+                    "folderPath": {
+                        "type": "string",
+                        "description": "Filter to a specific folder path (optional)",
+                    },
+                    "agentId": {
+                        "type": "string",
+                        "description": "Filter to a specific agent ID (optional)",
+                    },
                 },
                 "required": ["query"],
             },
@@ -94,21 +109,44 @@ def mcp_tools_list():
             "inputSchema": {
                 "type": "object",
                 "properties": {
-                    "content": {"type": "string", "description": "The insight or decision to remember"},
-                    "type": {"type": "string", "description": "Memory type: pattern, preference, architecture, bug, workflow, or fact"},
+                    "content": {
+                        "type": "string",
+                        "description": "The insight or decision to remember",
+                    },
+                    "type": {
+                        "type": "string",
+                        "description": "Memory type: pattern, preference, architecture, bug, workflow, or fact",
+                    },
                     "concepts": {
                         "oneOf": [
-                            {"type": "string", "description": "Comma-separated key concepts"},
-                            {"type": "array", "items": {"type": "string"}, "description": "List of key concepts"},
+                            {
+                                "type": "string",
+                                "description": "Comma-separated key concepts",
+                            },
+                            {
+                                "type": "array",
+                                "items": {"type": "string"},
+                                "description": "List of key concepts",
+                            },
                         ]
                     },
                     "files": {
                         "oneOf": [
-                            {"type": "string", "description": "Comma-separated relevant file paths"},
-                            {"type": "array", "items": {"type": "string"}, "description": "List of relevant file paths"},
+                            {
+                                "type": "string",
+                                "description": "Comma-separated relevant file paths",
+                            },
+                            {
+                                "type": "array",
+                                "items": {"type": "string"},
+                                "description": "List of relevant file paths",
+                            },
                         ]
                     },
-                    "project": {"type": "string", "description": "Canonical project identifier"},
+                    "project": {
+                        "type": "string",
+                        "description": "Canonical project identifier",
+                    },
                 },
                 "required": ["content"],
             },
@@ -124,12 +162,24 @@ def mcp_tools_list():
             "inputSchema": {
                 "type": "object",
                 "properties": {
-                    "memoryId": {"type": "string", "description": "Memory ID to delete"},
-                    "folderPath": {"type": "string", "description": "Folder path to delete observations from"},
-                    "agentId": {"type": "string", "description": "Agent ID to delete observations for"},
+                    "memoryId": {
+                        "type": "string",
+                        "description": "Memory ID to delete",
+                    },
+                    "folderPath": {
+                        "type": "string",
+                        "description": "Folder path to delete observations from",
+                    },
+                    "agentId": {
+                        "type": "string",
+                        "description": "Agent ID to delete observations for",
+                    },
                     "observationIds": {
                         "oneOf": [
-                            {"type": "string", "description": "Comma-separated observation IDs to delete"},
+                            {
+                                "type": "string",
+                                "description": "Comma-separated observation IDs to delete",
+                            },
                             {"type": "array", "items": {"type": "string"}},
                         ]
                     },
@@ -147,16 +197,28 @@ def mcp_tools_list():
             "inputSchema": {
                 "type": "object",
                 "properties": {
-                    "folderPath": {"type": "string", "description": "Absolute path of the working directory"},
-                    "agentId": {"type": "string", "description": "Identity of the agent (e.g. 'kiro', 'claude')"},
+                    "folderPath": {
+                        "type": "string",
+                        "description": "Absolute path of the working directory",
+                    },
+                    "agentId": {
+                        "type": "string",
+                        "description": "Identity of the agent (e.g. 'kiro', 'claude')",
+                    },
                     "text": {"type": "string", "description": "Observation content"},
-                    "timestamp": {"type": "string", "description": "ISO 8601 UTC timestamp (defaults to now)"},
+                    "timestamp": {
+                        "type": "string",
+                        "description": "ISO 8601 UTC timestamp (defaults to now)",
+                    },
                     "type": {"type": "string", "description": "Observation type"},
                     "title": {"type": "string", "description": "Short title"},
                     "concepts": {"type": "array", "items": {"type": "string"}},
                     "files": {"type": "array", "items": {"type": "string"}},
                     "importance": {"type": "integer", "description": "1-10"},
-                    "sessionId": {"type": "string", "description": "Deprecated — ignored"},
+                    "sessionId": {
+                        "type": "string",
+                        "description": "Deprecated — ignored",
+                    },
                 },
                 "required": ["folderPath", "agentId", "text"],
             },
@@ -167,19 +229,37 @@ def mcp_tools_list():
             "inputSchema": {
                 "type": "object",
                 "properties": {
-                    "agentId": {"type": "string", "description": "ID/Name of the agent (optional)"},
-                    "content": {"type": "string", "description": "The memory content/insight"},
-                    "project": {"type": "string", "description": "Canonical project path/identifier"},
-                    "type": {"type": "string", "description": "Memory type: fact, preference, bug, workflow, architecture"},
+                    "agentId": {
+                        "type": "string",
+                        "description": "ID/Name of the agent (optional)",
+                    },
+                    "content": {
+                        "type": "string",
+                        "description": "The memory content/insight",
+                    },
+                    "project": {
+                        "type": "string",
+                        "description": "Canonical project path/identifier",
+                    },
+                    "type": {
+                        "type": "string",
+                        "description": "Memory type: fact, preference, bug, workflow, architecture",
+                    },
                     "concepts": {
                         "oneOf": [
-                            {"type": "string", "description": "Comma-separated key concepts"},
+                            {
+                                "type": "string",
+                                "description": "Comma-separated key concepts",
+                            },
                             {"type": "array", "items": {"type": "string"}},
                         ]
                     },
                     "files": {
                         "oneOf": [
-                            {"type": "string", "description": "Comma-separated relevant file paths"},
+                            {
+                                "type": "string",
+                                "description": "Comma-separated relevant file paths",
+                            },
                             {"type": "array", "items": {"type": "string"}},
                         ]
                     },
@@ -210,11 +290,26 @@ def mcp_tools_list():
             "inputSchema": {
                 "type": "object",
                 "properties": {
-                    "folderPath": {"type": "string", "description": "Filter by folder path (optional)"},
-                    "agentId": {"type": "string", "description": "Filter by agent ID (optional)"},
-                    "limit": {"type": "integer", "description": "Max results (default 100)"},
-                    "before": {"type": "string", "description": "ISO timestamp upper bound (optional)"},
-                    "after": {"type": "string", "description": "ISO timestamp lower bound (optional)"},
+                    "folderPath": {
+                        "type": "string",
+                        "description": "Filter by folder path (optional)",
+                    },
+                    "agentId": {
+                        "type": "string",
+                        "description": "Filter by agent ID (optional)",
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "description": "Max results (default 100)",
+                    },
+                    "before": {
+                        "type": "string",
+                        "description": "ISO timestamp upper bound (optional)",
+                    },
+                    "after": {
+                        "type": "string",
+                        "description": "ISO timestamp lower bound (optional)",
+                    },
                 },
             },
         },
@@ -224,18 +319,35 @@ def mcp_tools_list():
             "inputSchema": {
                 "type": "object",
                 "properties": {
-                    "folderPath": {"type": "string", "description": "Folder path to deduplicate (optional — omit for all pairs)"},
-                    "agentId": {"type": "string", "description": "Agent ID to deduplicate (optional — omit for all pairs)"},
+                    "folderPath": {
+                        "type": "string",
+                        "description": "Folder path to deduplicate (optional — omit for all pairs)",
+                    },
+                    "agentId": {
+                        "type": "string",
+                        "description": "Agent ID to deduplicate (optional — omit for all pairs)",
+                    },
                 },
             },
         },
     ]
+
+
+@mcp_bp.route("/agentcache/mcp/tools", methods=["GET"])
+@mcp_bp.route("/agentmemory/mcp/tools", methods=["GET"])
+def mcp_tools_list():
+    auth_err = _check_auth()
+    if auth_err:
+        return auth_err
+
+    tools = get_mcp_tools_schemas()
     return jsonify({"tools": tools}), 200
 
 
 # ---------------------------------------------------------------------------
 # POST /agentcache/mcp/tools
 # ---------------------------------------------------------------------------
+
 
 @mcp_bp.route("/agentcache/mcp/tools", methods=["POST"])
 @mcp_bp.route("/agentmemory/mcp/tools", methods=["POST"])
@@ -264,9 +376,13 @@ def mcp_tools_call():
                 current_aid = functions.get_agent_id()
                 if current_aid:
                     if agent_id and agent_id != current_aid:
-                        return jsonify({"error": "Unauthorized: Agent scope is isolated"}), 403
+                        return jsonify(
+                            {"error": "Unauthorized: Agent scope is isolated"}
+                        ), 403
                     agent_id = current_aid
-            res = functions.folder_search(kv, q, limit, folder_path=folder_path, agent_id=agent_id)
+            res = functions.folder_search(
+                kv, q, limit, folder_path=folder_path, agent_id=agent_id
+            )
             text_out = json.dumps(res, indent=2)
 
         elif name in ("cache_save", "memory_save"):
@@ -274,13 +390,16 @@ def mcp_tools_call():
             concepts = _parse_mcp_list_arg(args.get("concepts"))
             files = _parse_mcp_list_arg(args.get("files"))
             project = args.get("project")
-            res = functions.remember(kv, {
-                "content": content,
-                "type": args.get("type") or "fact",
-                "concepts": concepts,
-                "files": files,
-                "project": project,
-            })
+            res = functions.remember(
+                kv,
+                {
+                    "content": content,
+                    "type": args.get("type") or "fact",
+                    "concepts": concepts,
+                    "files": files,
+                    "project": project,
+                },
+            )
             text_out = json.dumps(res)
 
         elif name in ("cache_smart_search", "memory_smart_search"):
@@ -292,9 +411,13 @@ def mcp_tools_call():
                 current_aid = functions.get_agent_id()
                 if current_aid:
                     if agent_id and agent_id != current_aid:
-                        return jsonify({"error": "Unauthorized: Agent scope is isolated"}), 403
+                        return jsonify(
+                            {"error": "Unauthorized: Agent scope is isolated"}
+                        ), 403
                     agent_id = current_aid
-            res = functions.folder_search(kv, q, limit, folder_path=folder_path, agent_id=agent_id)
+            res = functions.folder_search(
+                kv, q, limit, folder_path=folder_path, agent_id=agent_id
+            )
             text_out = json.dumps(res, indent=2)
 
         elif name in ("cache_diagnose", "memory_diagnose"):
@@ -303,12 +426,15 @@ def mcp_tools_call():
 
         elif name in ("cache_forget", "memory_forget"):
             obs_ids = _parse_mcp_list_arg(args.get("observationIds"))
-            res = functions.forget(kv, {
-                "memoryId": args.get("memoryId"),
-                "folderPath": args.get("folderPath"),
-                "agentId": args.get("agentId"),
-                "observationIds": obs_ids,
-            })
+            res = functions.forget(
+                kv,
+                {
+                    "memoryId": args.get("memoryId"),
+                    "folderPath": args.get("folderPath"),
+                    "agentId": args.get("agentId"),
+                    "observationIds": obs_ids,
+                },
+            )
             text_out = json.dumps(res, indent=2)
 
         elif name in ("cache_export", "memory_export"):
@@ -343,7 +469,9 @@ def mcp_tools_call():
                 current_aid = functions.get_agent_id()
                 if current_aid:
                     if agent_id and agent_id != current_aid:
-                        return jsonify({"error": "Unauthorized: Agent scope is isolated"}), 403
+                        return jsonify(
+                            {"error": "Unauthorized: Agent scope is isolated"}
+                        ), 403
                     agent_id = current_aid
 
             if not text:
@@ -376,7 +504,9 @@ def mcp_tools_call():
                 current_aid = functions.get_agent_id()
                 if current_aid:
                     if agent_id and agent_id != current_aid:
-                        return jsonify({"error": "Unauthorized: Agent scope is isolated"}), 403
+                        return jsonify(
+                            {"error": "Unauthorized: Agent scope is isolated"}
+                        ), 403
                     agent_id = current_aid
 
             if not content:
@@ -412,7 +542,9 @@ def mcp_tools_call():
             if functions.is_agent_scope_isolated():
                 current_aid = functions.get_agent_id()
                 if current_aid and aid != current_aid:
-                    return jsonify({"error": "Unauthorized: Agent scope is isolated"}), 403
+                    return jsonify(
+                        {"error": "Unauthorized: Agent scope is isolated"}
+                    ), 403
             obs = sorted(
                 kv.list(KV.folder_obs(fp, aid)),
                 key=lambda x: x.get("timestamp", ""),
@@ -426,7 +558,9 @@ def mcp_tools_call():
                 current_aid = functions.get_agent_id()
                 if current_aid:
                     if request_aid and request_aid != current_aid:
-                        return jsonify({"error": "Unauthorized: Agent scope is isolated"}), 403
+                        return jsonify(
+                            {"error": "Unauthorized: Agent scope is isolated"}
+                        ), 403
                     request_aid = current_aid
             res = functions.folder_timeline(
                 kv,

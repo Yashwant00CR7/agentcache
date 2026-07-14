@@ -15,6 +15,7 @@ search_bp = Blueprint("search", __name__)
 
 def _check_auth():
     import hmac
+
     secret = os.getenv("AGENTCACHE_SECRET") or os.getenv("AGENTMEMORY_SECRET")
     if not secret:
         return None
@@ -29,12 +30,14 @@ def _check_auth():
 
 def _get_kv():
     import app as app_module
+
     return app_module.kv
 
 
 # ---------------------------------------------------------------------------
 # POST /agentcache/search
 # ---------------------------------------------------------------------------
+
 
 @search_bp.route("/agentcache/search", methods=["POST"])
 @search_bp.route("/agentmemory/search", methods=["POST"])
@@ -52,7 +55,9 @@ def api_search():
         folder_path = body.get("folderPath")
         agent_id = body.get("agentId")
 
-        res = functions.folder_search(_get_kv(), query, limit, folder_path=folder_path, agent_id=agent_id)
+        res = functions.folder_search(
+            _get_kv(), query, limit, folder_path=folder_path, agent_id=agent_id
+        )
         return jsonify(res), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 400
@@ -61,6 +66,7 @@ def api_search():
 # ---------------------------------------------------------------------------
 # POST /agentcache/timeline
 # ---------------------------------------------------------------------------
+
 
 @search_bp.route("/agentcache/timeline", methods=["POST"])
 @search_bp.route("/agentmemory/timeline", methods=["POST"])
@@ -76,7 +82,9 @@ def api_timeline():
         limit = body.get("limit") or 100
         before = body.get("before")
         after = body.get("after")
-        result = functions.folder_timeline(_get_kv(), limit, folder_path, agent_id, before, after)
+        result = functions.folder_timeline(
+            _get_kv(), limit, folder_path, agent_id, before, after
+        )
         return jsonify({"observations": result}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 400

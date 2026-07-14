@@ -4,7 +4,7 @@ import sqlite3
 import threading
 import time
 import atexit
-from typing import Dict, Any, List, Optional, TypeVar, Union
+from typing import Dict, Any, List, Optional, TypeVar
 
 T = TypeVar("T")
 
@@ -118,7 +118,9 @@ class StateKV:
                         PRIMARY KEY (scope, key)
                     )
                 """)
-                conn.execute("CREATE INDEX IF NOT EXISTS idx_kv_scope ON kv_store(scope)")
+                conn.execute(
+                    "CREATE INDEX IF NOT EXISTS idx_kv_scope ON kv_store(scope)"
+                )
                 conn.execute("""
                     CREATE TABLE IF NOT EXISTS audit_log (
                         id        INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -144,8 +146,7 @@ class StateKV:
         try:
             conn = self._get_conn()
             row = conn.execute(
-                "SELECT value FROM kv_store WHERE scope = ? AND key = ?",
-                (scope, key)
+                "SELECT value FROM kv_store WHERE scope = ? AND key = ?", (scope, key)
             ).fetchone()
             if row:
                 val = json.loads(row["value"])
@@ -163,7 +164,7 @@ class StateKV:
                 conn = self._get_conn()
                 conn.execute(
                     "INSERT OR REPLACE INTO kv_store (scope, key, value) VALUES (?, ?, ?)",
-                    (scope, key, json.dumps(value))
+                    (scope, key, json.dumps(value)),
                 )
                 conn.commit()
                 return value
@@ -176,8 +177,7 @@ class StateKV:
             try:
                 conn = self._get_conn()
                 cur = conn.execute(
-                    "DELETE FROM kv_store WHERE scope = ? AND key = ?",
-                    (scope, key)
+                    "DELETE FROM kv_store WHERE scope = ? AND key = ?", (scope, key)
                 )
                 conn.commit()
                 return cur.rowcount > 0
@@ -189,8 +189,7 @@ class StateKV:
         try:
             conn = self._get_conn()
             rows = conn.execute(
-                "SELECT key, value FROM kv_store WHERE scope = ?",
-                (scope,)
+                "SELECT key, value FROM kv_store WHERE scope = ?", (scope,)
             ).fetchall()
             results = []
             for r in rows:
@@ -209,7 +208,7 @@ class StateKV:
                 conn = self._get_conn()
                 row = conn.execute(
                     "SELECT value FROM kv_store WHERE scope = ? AND key = ?",
-                    (scope, key)
+                    (scope, key),
                 ).fetchone()
                 obj = json.loads(row["value"]) if row else {}
                 if not isinstance(obj, dict):
@@ -249,7 +248,7 @@ class StateKV:
 
                 conn.execute(
                     "INSERT OR REPLACE INTO kv_store (scope, key, value) VALUES (?, ?, ?)",
-                    (scope, key, json.dumps(obj))
+                    (scope, key, json.dumps(obj)),
                 )
                 conn.commit()
                 return obj
@@ -265,7 +264,7 @@ class StateKV:
                 conn = self._get_conn()
                 cur = conn.execute(
                     "INSERT INTO audit_log (ts, agent_id, message) VALUES (?, ?, ?)",
-                    (int(time.time() * 1000), author, message)
+                    (int(time.time() * 1000), author, message),
                 )
                 conn.commit()
                 row_id = str(cur.lastrowid)
@@ -280,7 +279,7 @@ class StateKV:
             conn = self._get_conn()
             rows = conn.execute(
                 "SELECT id, ts, agent_id, message FROM audit_log ORDER BY ts DESC LIMIT ?",
-                (limit,)
+                (limit,),
             ).fetchall()
             return [dict(r) for r in rows]
         except Exception as e:

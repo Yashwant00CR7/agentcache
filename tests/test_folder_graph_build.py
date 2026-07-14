@@ -1,7 +1,7 @@
 """Unit tests for folderColor() and folder_graph_build() — REQ-023–REQ-028."""
+
 import os
 import sys
-import tempfile
 
 import pytest
 
@@ -14,6 +14,7 @@ from functions import KV, folder_graph_build, folder_color as folderColor
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture()
 def kv(tmp_path):
@@ -35,12 +36,16 @@ def _write_pair(
 
     # Write folders index entry
     index_key = f"{folder_path}:{agent_id}"
-    kv.set(KV.folders, index_key, {
-        "folderPath": folder_path,
-        "agentId": agent_id,
-        "obsCount": count,
-        "lastUpdated": "2025-01-15T12:00:00.000Z",
-    })
+    kv.set(
+        KV.folders,
+        index_key,
+        {
+            "folderPath": folder_path,
+            "agentId": agent_id,
+            "obsCount": count,
+            "lastUpdated": "2025-01-15T12:00:00.000Z",
+        },
+    )
 
     # Write observation objects if text supplied
     for i, text in enumerate(obs_texts):
@@ -64,6 +69,7 @@ def _write_pair(
 # Tests — folderColor helper
 # ---------------------------------------------------------------------------
 
+
 def test_folder_color_returns_hsl_string():
     """folderColor should return a string matching hsl(...) format."""
     color = folderColor("projects/alpha")
@@ -79,7 +85,9 @@ def test_folder_color_deterministic():
 def test_folder_color_different_paths_produce_different_colors():
     """Different paths should (almost always) produce different colors."""
     # Use very distinct paths to ensure hash difference
-    assert folderColor("projects/alpha") != folderColor("projects/omega-completely-different")
+    assert folderColor("projects/alpha") != folderColor(
+        "projects/omega-completely-different"
+    )
 
 
 def test_folder_color_hsl_values_in_range():
@@ -90,8 +98,8 @@ def test_folder_color_hsl_values_in_range():
     parts = [p.strip().rstrip("%") for p in inner.split(",")]
     hue, sat, lig = int(parts[0]), int(parts[1]), int(parts[2])
     assert 0 <= hue < 360
-    assert 55 <= sat <= 79   # 55 + (h % 25)
-    assert 38 <= lig <= 51   # 38 + (h % 14)
+    assert 55 <= sat <= 79  # 55 + (h % 25)
+    assert 38 <= lig <= 51  # 38 + (h % 14)
 
 
 def test_folder_color_empty_string():
@@ -104,6 +112,7 @@ def test_folder_color_empty_string():
 # Tests — empty KV returns empty graph (REQ-023)
 # ---------------------------------------------------------------------------
 
+
 def test_empty_kv_returns_empty_graph(kv):
     """Empty KV returns {nodes: [], edges: []}."""
     result = folder_graph_build(kv)
@@ -113,6 +122,7 @@ def test_empty_kv_returns_empty_graph(kv):
 # ---------------------------------------------------------------------------
 # Tests — node construction (REQ-023, REQ-024)
 # ---------------------------------------------------------------------------
+
 
 def test_one_node_per_unique_folder_path(kv):
     """Two agents in the same folder produce a single node (REQ-023)."""
@@ -205,6 +215,7 @@ def test_node_color_is_hsl(kv):
 # Tests — same-parent edges (REQ-025)
 # ---------------------------------------------------------------------------
 
+
 def test_same_parent_edge_created(kv):
     """Two folders with the same parent get a same-parent edge."""
     _write_pair(kv, "projects/alpha", "kiro")
@@ -244,10 +255,12 @@ def test_same_parent_edge_only_for_sharing_pairs(kv):
 # Tests — cross-reference edges (REQ-026)
 # ---------------------------------------------------------------------------
 
+
 def test_cross_ref_edge_when_obs_mentions_other_folder(kv):
     """A cross-ref edge is created when folder A's obs text mentions folder B's path."""
-    _write_pair(kv, "projects/alpha", "kiro",
-                obs_texts=["I worked on projects/beta today"])
+    _write_pair(
+        kv, "projects/alpha", "kiro", obs_texts=["I worked on projects/beta today"]
+    )
     _write_pair(kv, "projects/beta", "kiro", obs_texts=["nothing"])
 
     result = folder_graph_build(kv)
@@ -269,8 +282,7 @@ def test_no_cross_ref_edge_when_no_mention(kv):
 
 def test_cross_ref_edge_from_title_mention(kv):
     """Cross-ref edges are also detected via obs titles."""
-    _write_pair(kv, "projects/alpha", "kiro",
-                obs_texts=["some text"])
+    _write_pair(kv, "projects/alpha", "kiro", obs_texts=["some text"])
     # Manually insert obs with a title that mentions the other folder
     obs = {
         "id": "obs_special",
@@ -296,6 +308,7 @@ def test_cross_ref_edge_from_title_mention(kv):
 # ---------------------------------------------------------------------------
 # Tests — agent-shared edges (REQ-027)
 # ---------------------------------------------------------------------------
+
 
 def test_agent_shared_edge_created(kv):
     """Two folders with a common agent get an agent-shared edge."""
@@ -336,12 +349,11 @@ def test_agent_shared_edge_with_partial_overlap(kv):
 # Tests — edge deduplication (REQ-028)
 # ---------------------------------------------------------------------------
 
+
 def test_no_duplicate_edges(kv):
     """No two edges share the same (source, target, type) pair."""
-    _write_pair(kv, "projects/alpha", "kiro",
-                obs_texts=["mentions projects/beta"])
-    _write_pair(kv, "projects/beta", "kiro",
-                obs_texts=["mentions projects/alpha"])
+    _write_pair(kv, "projects/alpha", "kiro", obs_texts=["mentions projects/beta"])
+    _write_pair(kv, "projects/beta", "kiro", obs_texts=["mentions projects/alpha"])
 
     result = folder_graph_build(kv)
     seen = set()
@@ -354,10 +366,12 @@ def test_no_duplicate_edges(kv):
 def test_ab_and_ba_treated_as_same_edge(kv):
     """(a, b, type) and (b, a, type) are considered the same edge."""
     # Both folders reference each other — should produce only one cross-ref edge
-    _write_pair(kv, "projects/alpha", "kiro",
-                obs_texts=["See also projects/beta for details"])
-    _write_pair(kv, "projects/beta", "kiro",
-                obs_texts=["Related to projects/alpha work"])
+    _write_pair(
+        kv, "projects/alpha", "kiro", obs_texts=["See also projects/beta for details"]
+    )
+    _write_pair(
+        kv, "projects/beta", "kiro", obs_texts=["Related to projects/alpha work"]
+    )
 
     result = folder_graph_build(kv)
     cross_edges = [e for e in result["edges"] if e["type"] == "cross-ref"]
@@ -381,6 +395,7 @@ def test_same_parent_and_agent_shared_are_separate_edge_types(kv):
 # ---------------------------------------------------------------------------
 # Tests — return structure
 # ---------------------------------------------------------------------------
+
 
 def test_return_has_nodes_and_edges_keys(kv):
     """Result always has 'nodes' and 'edges' keys."""
@@ -413,8 +428,7 @@ def test_single_folder_produces_no_edges(kv):
 
 def test_edge_types_are_valid(kv):
     """All edge types are one of the three valid values."""
-    _write_pair(kv, "projects/alpha", "kiro",
-                obs_texts=["mentions projects/beta"])
+    _write_pair(kv, "projects/alpha", "kiro", obs_texts=["mentions projects/beta"])
     _write_pair(kv, "projects/beta", "kiro")
 
     result = folder_graph_build(kv)

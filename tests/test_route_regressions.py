@@ -8,6 +8,7 @@ src/routes/{observations, memories, search, graph, health, mcp, migration}.py.
 Tests use the Flask test client — no running server required.
 The AGENTCACHE_SECRET env var is NOT set so all auth checks pass through.
 """
+
 import sys
 import os
 import json
@@ -22,6 +23,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture(scope="module")
 def flask_app(tmp_path_factory):
@@ -42,6 +44,7 @@ def flask_app(tmp_path_factory):
     os.environ.pop("AGENTMEMORY_SECRET", None)
 
     import app as app_module
+
     os.environ.pop("AGENTCACHE_SECRET", None)
     os.environ.pop("AGENTMEMORY_SECRET", None)
     from db import StateKV
@@ -70,6 +73,7 @@ def client(flask_app):
 # Helper
 # ---------------------------------------------------------------------------
 
+
 def _now_iso() -> str:
     return datetime.datetime.utcnow().isoformat() + "Z"
 
@@ -89,6 +93,7 @@ def _post_json(client, url, payload):
 #   GET /agentcache/audit
 #   GET /agentcache/config/flags
 # ===========================================================================
+
 
 class TestHealthBlueprint:
     def test_livez_no_auth_required(self, client):
@@ -135,6 +140,7 @@ class TestHealthBlueprint:
 #   GET  /agentcache/folder/observations
 # ===========================================================================
 
+
 class TestObservationsBlueprint:
     def test_agent_observe_valid_payload(self, client):
         """POST /agent/observe with valid payload returns 201 with observationId."""
@@ -158,25 +164,37 @@ class TestObservationsBlueprint:
 
     def test_agent_observe_missing_agent_id_returns_400(self, client):
         """POST /agent/observe missing agentId returns 400."""
-        payload = {"folderPath": "/home/user/proj", "text": "some work", "timestamp": _now_iso()}
+        payload = {
+            "folderPath": "/home/user/proj",
+            "text": "some work",
+            "timestamp": _now_iso(),
+        }
         resp = _post_json(client, "/agentcache/agent/observe", payload)
         assert resp.status_code == 400
 
     def test_agent_observe_missing_text_returns_400(self, client):
         """POST /agent/observe missing text returns 400."""
-        payload = {"folderPath": "/home/user/proj", "agentId": "kiro", "timestamp": _now_iso()}
+        payload = {
+            "folderPath": "/home/user/proj",
+            "agentId": "kiro",
+            "timestamp": _now_iso(),
+        }
         resp = _post_json(client, "/agentcache/agent/observe", payload)
         assert resp.status_code == 400
 
     def test_folders_list_returns_200(self, client):
         """GET /folders returns 200 with a folders list."""
         # Seed at least one observation first
-        _post_json(client, "/agentcache/agent/observe", {
-            "folderPath": "/home/user/proj-folders-test",
-            "agentId": "kiro",
-            "text": "Folders test observation",
-            "timestamp": _now_iso(),
-        })
+        _post_json(
+            client,
+            "/agentcache/agent/observe",
+            {
+                "folderPath": "/home/user/proj-folders-test",
+                "agentId": "kiro",
+                "text": "Folders test observation",
+                "timestamp": _now_iso(),
+            },
+        )
         resp = client.get("/agentcache/folders")
         assert resp.status_code == 200
         data = resp.get_json()
@@ -187,13 +205,19 @@ class TestObservationsBlueprint:
         """GET /folder/observations with valid params returns 200."""
         # Seed an observation first
         fp = "/home/user/proj-obs-test"
-        _post_json(client, "/agentcache/agent/observe", {
-            "folderPath": fp,
-            "agentId": "kiro",
-            "text": "Obs for folder/observations test",
-            "timestamp": _now_iso(),
-        })
-        resp = client.get("/agentcache/folder/observations?folderPath=home/user/proj-obs-test&agentId=kiro")
+        _post_json(
+            client,
+            "/agentcache/agent/observe",
+            {
+                "folderPath": fp,
+                "agentId": "kiro",
+                "text": "Obs for folder/observations test",
+                "timestamp": _now_iso(),
+            },
+        )
+        resp = client.get(
+            "/agentcache/folder/observations?folderPath=home/user/proj-obs-test&agentId=kiro"
+        )
         assert resp.status_code == 200
         data = resp.get_json()
         assert "observations" in data
@@ -223,6 +247,7 @@ class TestObservationsBlueprint:
 #   GET  /agentcache/memories
 #   POST /agentcache/forget
 # ===========================================================================
+
 
 class TestMemoriesBlueprint:
     def test_remember_valid_payload(self, client):
@@ -273,10 +298,14 @@ class TestMemoriesBlueprint:
     def test_forget_memory_by_id(self, client):
         """POST /forget with memoryId deletes a global memory."""
         # Create a memory first
-        create_resp = _post_json(client, "/agentcache/remember", {
-            "content": "This memory will be forgotten",
-            "type": "fact",
-        })
+        create_resp = _post_json(
+            client,
+            "/agentcache/remember",
+            {
+                "content": "This memory will be forgotten",
+                "type": "fact",
+            },
+        )
         mem_id = create_resp.get_json()["memory"]["id"]
         # Forget it
         resp = _post_json(client, "/agentcache/forget", {"memoryId": mem_id})
@@ -288,16 +317,24 @@ class TestMemoriesBlueprint:
         """POST /forget with folderPath+agentId clears folder observations."""
         # Seed an observation
         fp = "/home/user/proj-to-forget"
-        _post_json(client, "/agentcache/agent/observe", {
-            "folderPath": fp,
-            "agentId": "kiro",
-            "text": "Some work that will be forgotten",
-            "timestamp": _now_iso(),
-        })
-        resp = _post_json(client, "/agentcache/forget", {
-            "folderPath": fp,
-            "agentId": "kiro",
-        })
+        _post_json(
+            client,
+            "/agentcache/agent/observe",
+            {
+                "folderPath": fp,
+                "agentId": "kiro",
+                "text": "Some work that will be forgotten",
+                "timestamp": _now_iso(),
+            },
+        )
+        resp = _post_json(
+            client,
+            "/agentcache/forget",
+            {
+                "folderPath": fp,
+                "agentId": "kiro",
+            },
+        )
         assert resp.status_code == 200
         data = resp.get_json()
         assert "deleted" in data
@@ -310,16 +347,21 @@ class TestMemoriesBlueprint:
 #   POST /agentcache/timeline
 # ===========================================================================
 
+
 class TestSearchBlueprint:
     def test_search_with_query_returns_200(self, client):
         """POST /search with a query returns 200."""
         # Seed something searchable first
-        _post_json(client, "/agentcache/agent/observe", {
-            "folderPath": "/home/user/proj-search-test",
-            "agentId": "kiro",
-            "text": "Implemented authentication middleware for the app",
-            "timestamp": _now_iso(),
-        })
+        _post_json(
+            client,
+            "/agentcache/agent/observe",
+            {
+                "folderPath": "/home/user/proj-search-test",
+                "agentId": "kiro",
+                "text": "Implemented authentication middleware for the app",
+                "timestamp": _now_iso(),
+            },
+        )
         resp = _post_json(client, "/agentcache/search", {"query": "authentication"})
         assert resp.status_code == 200
 
@@ -330,11 +372,15 @@ class TestSearchBlueprint:
 
     def test_search_with_folder_filter(self, client):
         """POST /search with folderPath filter returns 200."""
-        resp = _post_json(client, "/agentcache/search", {
-            "query": "test",
-            "folderPath": "/home/user/proj-search-test",
-            "agentId": "kiro",
-        })
+        resp = _post_json(
+            client,
+            "/agentcache/search",
+            {
+                "query": "test",
+                "folderPath": "/home/user/proj-search-test",
+                "agentId": "kiro",
+            },
+        )
         assert resp.status_code == 200
 
     def test_timeline_returns_200(self, client):
@@ -347,11 +393,15 @@ class TestSearchBlueprint:
 
     def test_timeline_with_filters_returns_200(self, client):
         """POST /timeline with folder/agent filters returns 200."""
-        resp = _post_json(client, "/agentcache/timeline", {
-            "folderPath": "/home/user/proj-search-test",
-            "agentId": "kiro",
-            "limit": 10,
-        })
+        resp = _post_json(
+            client,
+            "/agentcache/timeline",
+            {
+                "folderPath": "/home/user/proj-search-test",
+                "agentId": "kiro",
+                "limit": 10,
+            },
+        )
         assert resp.status_code == 200
 
     def test_timeline_results_sorted_descending(self, client):
@@ -360,13 +410,24 @@ class TestSearchBlueprint:
         # Seed observations with distinct timestamps
         for i in range(3):
             ts = datetime.datetime(2025, 6, 1, 10, i, 0).isoformat() + "Z"
-            _post_json(client, "/agentcache/agent/observe", {
-                "folderPath": fp, "agentId": "kiro",
-                "text": f"Observation {i}", "timestamp": ts,
-            })
-        resp = _post_json(client, "/agentcache/timeline", {
-            "folderPath": fp, "agentId": "kiro",
-        })
+            _post_json(
+                client,
+                "/agentcache/agent/observe",
+                {
+                    "folderPath": fp,
+                    "agentId": "kiro",
+                    "text": f"Observation {i}",
+                    "timestamp": ts,
+                },
+            )
+        resp = _post_json(
+            client,
+            "/agentcache/timeline",
+            {
+                "folderPath": fp,
+                "agentId": "kiro",
+            },
+        )
         assert resp.status_code == 200
         data = resp.get_json()
         timestamps = [o["timestamp"] for o in data["observations"]]
@@ -380,6 +441,7 @@ class TestSearchBlueprint:
 #   POST /agentcache/graph/query
 #   POST /agentcache/graph/build
 # ===========================================================================
+
 
 class TestGraphBlueprint:
     def test_graph_returns_200(self, client):
@@ -411,12 +473,16 @@ class TestGraphBlueprint:
     def test_graph_nodes_have_required_fields(self, client):
         """Graph nodes contain id, label, folderPath, agentIds, obsCount, color (REQ-024)."""
         # Seed some data
-        _post_json(client, "/agentcache/agent/observe", {
-            "folderPath": "/home/user/proj-graph-check",
-            "agentId": "kiro",
-            "text": "Graph node field check",
-            "timestamp": _now_iso(),
-        })
+        _post_json(
+            client,
+            "/agentcache/agent/observe",
+            {
+                "folderPath": "/home/user/proj-graph-check",
+                "agentId": "kiro",
+                "text": "Graph node field check",
+                "timestamp": _now_iso(),
+            },
+        )
         resp = client.get("/agentcache/graph")
         data = resp.get_json()
         if data["nodes"]:
@@ -430,6 +496,7 @@ class TestGraphBlueprint:
 #   GET  /agentcache/mcp/tools
 #   POST /agentcache/mcp/tools
 # ===========================================================================
+
 
 class TestMcpBlueprint:
     def test_mcp_tools_list_returns_200(self, client):
@@ -458,8 +525,9 @@ class TestMcpBlueprint:
             "cache_folder_observations",
             "cache_timeline",
         }
-        assert required_tools.issubset(tool_names), \
+        assert required_tools.issubset(tool_names), (
             f"Missing tools: {required_tools - tool_names}"
+        )
 
     def test_mcp_tool_call_agent_observe(self, client):
         """POST /mcp/tools agent_observe returns 200."""
@@ -479,18 +547,26 @@ class TestMcpBlueprint:
 
     def test_mcp_tool_call_cache_recall(self, client):
         """POST /mcp/tools cache_recall returns 200."""
-        resp = _post_json(client, "/agentcache/mcp/tools", {
-            "name": "cache_recall",
-            "arguments": {"query": "authentication"},
-        })
+        resp = _post_json(
+            client,
+            "/agentcache/mcp/tools",
+            {
+                "name": "cache_recall",
+                "arguments": {"query": "authentication"},
+            },
+        )
         assert resp.status_code == 200
 
     def test_mcp_tool_call_cache_diagnose(self, client):
         """POST /mcp/tools cache_diagnose returns folderCount etc."""
-        resp = _post_json(client, "/agentcache/mcp/tools", {
-            "name": "cache_diagnose",
-            "arguments": {},
-        })
+        resp = _post_json(
+            client,
+            "/agentcache/mcp/tools",
+            {
+                "name": "cache_diagnose",
+                "arguments": {},
+            },
+        )
         assert resp.status_code == 200
         data = resp.get_json()
         result = json.loads(data["content"][0]["text"])
@@ -499,26 +575,38 @@ class TestMcpBlueprint:
 
     def test_mcp_tool_call_cache_folders(self, client):
         """POST /mcp/tools cache_folders returns list."""
-        resp = _post_json(client, "/agentcache/mcp/tools", {
-            "name": "cache_folders",
-            "arguments": {},
-        })
+        resp = _post_json(
+            client,
+            "/agentcache/mcp/tools",
+            {
+                "name": "cache_folders",
+                "arguments": {},
+            },
+        )
         assert resp.status_code == 200
 
     def test_mcp_tool_call_cache_timeline(self, client):
         """POST /mcp/tools cache_timeline returns list."""
-        resp = _post_json(client, "/agentcache/mcp/tools", {
-            "name": "cache_timeline",
-            "arguments": {"limit": 10},
-        })
+        resp = _post_json(
+            client,
+            "/agentcache/mcp/tools",
+            {
+                "name": "cache_timeline",
+                "arguments": {"limit": 10},
+            },
+        )
         assert resp.status_code == 200
 
     def test_mcp_tool_unknown_name_returns_400(self, client):
         """POST /mcp/tools with unknown tool name returns 400."""
-        resp = _post_json(client, "/agentcache/mcp/tools", {
-            "name": "nonexistent_tool_xyz",
-            "arguments": {},
-        })
+        resp = _post_json(
+            client,
+            "/agentcache/mcp/tools",
+            {
+                "name": "nonexistent_tool_xyz",
+                "arguments": {},
+            },
+        )
         assert resp.status_code == 400
 
     def test_mcp_tool_missing_name_returns_400(self, client):
@@ -531,6 +619,7 @@ class TestMcpBlueprint:
 # Blueprint 7: migration.py
 #   POST /agentcache/migrate
 # ===========================================================================
+
 
 class TestMigrationBlueprint:
     def test_migrate_dry_run_returns_200(self, client):
@@ -551,6 +640,7 @@ class TestMigrationBlueprint:
 # ===========================================================================
 # Blueprint registration completeness
 # ===========================================================================
+
 
 class TestBlueprintRegistration:
     def test_all_expected_endpoints_registered(self, flask_app):

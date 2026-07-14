@@ -14,6 +14,7 @@ migration_bp = Blueprint("migration", __name__)
 
 def _check_auth():
     import hmac
+
     secret = os.getenv("AGENTCACHE_SECRET") or os.getenv("AGENTMEMORY_SECRET")
     if not secret:
         return None
@@ -28,12 +29,14 @@ def _check_auth():
 
 def _get_kv():
     import app as app_module
+
     return app_module.kv
 
 
 # ---------------------------------------------------------------------------
 # POST /agentcache/migrate
 # ---------------------------------------------------------------------------
+
 
 @migration_bp.route("/agentcache/migrate", methods=["POST"])
 @migration_bp.route("/agentmemory/migrate", methods=["POST"])

@@ -9,7 +9,7 @@ import os
 import sys
 import json
 import hmac
-from flask import Flask, request, make_response, send_from_directory
+from flask import Flask, request, send_from_directory
 from flask_sock import Sock
 
 # Prevent double-import of app when run directly as __main__
@@ -50,7 +50,9 @@ def create_app() -> Flask:
 
     # Check security credentials
     if not os.getenv("AGENTCACHE_SECRET") and not os.getenv("AGENTMEMORY_SECRET"):
-        print("[security] WARNING: AGENTCACHE_SECRET/AGENTMEMORY_SECRET is not set! All API endpoints are publicly accessible without authentication.")
+        print(
+            "[security] WARNING: AGENTCACHE_SECRET/AGENTMEMORY_SECRET is not set! All API endpoints are publicly accessible without authentication."
+        )
 
     import search as search_mod
     import functions
@@ -64,27 +66,35 @@ def create_app() -> Flask:
     #    GEMINI_API_KEY → OPENAI_API_KEY → AGENTCACHE_LOCAL_EMBEDDING_MODEL → BM25-only
     api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
     openai_key = os.getenv("OPENAI_API_KEY")
-    local_model = os.getenv("AGENTCACHE_LOCAL_EMBEDDING_MODEL") or os.getenv("AGENTMEMORY_LOCAL_EMBEDDING_MODEL")
+    local_model = os.getenv("AGENTCACHE_LOCAL_EMBEDDING_MODEL") or os.getenv(
+        "AGENTMEMORY_LOCAL_EMBEDDING_MODEL"
+    )
 
     if api_key:
         try:
             embedding_provider = search_mod.GeminiEmbeddingProvider(api_key)
             functions.set_embedding_provider(embedding_provider)
-            print(f"[search] Embedding provider active: gemini ({embedding_provider.dimensions} dims)")
+            print(
+                f"[search] Embedding provider active: gemini ({embedding_provider.dimensions} dims)"
+            )
         except Exception as e:
             print(f"[search] Error initialising Gemini embedding provider: {e}")
     elif openai_key:
         try:
             embedding_provider = search_mod.OpenAIEmbeddingProvider(openai_key)
             functions.set_embedding_provider(embedding_provider)
-            print(f"[search] Embedding provider active: openai ({embedding_provider.dimensions} dims)")
+            print(
+                f"[search] Embedding provider active: openai ({embedding_provider.dimensions} dims)"
+            )
         except Exception as e:
             print(f"[search] Error initialising OpenAI embedding provider: {e}")
     elif local_model:
         try:
             embedding_provider = search_mod.SentenceTransformerProvider(local_model)
             functions.set_embedding_provider(embedding_provider)
-            print(f"[search] Embedding provider active: sentence-transformers/{local_model} ({embedding_provider.dimensions} dims)")
+            print(
+                f"[search] Embedding provider active: sentence-transformers/{local_model} ({embedding_provider.dimensions} dims)"
+            )
         except ImportError as e:
             print(f"[search] sentence-transformers not installed: {e}")
         except Exception as e:
@@ -95,11 +105,15 @@ def create_app() -> Flask:
     # 3. Index persistence — use embedding_provider variable set above
     has_vector = embedding_provider is not None
     persistence = functions.IndexPersistence(
-        kv, functions._bm25_index, functions._vector_index if has_vector else None,
+        kv,
+        functions._bm25_index,
+        functions._vector_index if has_vector else None,
     )
     functions.set_index_persistence(persistence)
     loaded = persistence.load()
-    print(f"[persistence] Load results: BM25={loaded['bm25']}, Vector={loaded['vector']}")
+    print(
+        f"[persistence] Load results: BM25={loaded['bm25']}, Vector={loaded['vector']}"
+    )
 
     # Backfill coordinate lookup index if missing/incomplete
     try:
@@ -110,8 +124,12 @@ def create_app() -> Flask:
     # 4. Flask app + blueprints
     flask_app = Flask(__name__)
     from werkzeug.middleware.proxy_fix import ProxyFix
-    flask_app.wsgi_app = ProxyFix(flask_app.wsgi_app, x_proto=1, x_host=1, x_port=1, x_prefix=1)
+
+    flask_app.wsgi_app = ProxyFix(
+        flask_app.wsgi_app, x_proto=1, x_host=1, x_port=1, x_prefix=1
+    )
     from routes import register_blueprints
+
     register_blueprints(flask_app)
 
     # 5. WebSocket broadcaster
@@ -172,7 +190,11 @@ def create_app() -> Flask:
         "https://huggingface.co,https://*.hf.space,"
         "vscode-webview://*,chrome-extension://*"
     )
-    _cors_origins_raw = os.getenv("AGENTCACHE_CORS_ORIGINS") or os.getenv("AGENTMEMORY_CORS_ORIGINS") or _default_cors
+    _cors_origins_raw = (
+        os.getenv("AGENTCACHE_CORS_ORIGINS")
+        or os.getenv("AGENTMEMORY_CORS_ORIGINS")
+        or _default_cors
+    )
 
     def _parse_cors_origins(raw: str):
         """Return (exact_set, suffix_list) for efficient origin matching."""
@@ -183,7 +205,7 @@ def create_app() -> Flask:
                 continue
             if entry.startswith("*."):
                 # *.hf.space → match anything ending with .hf.space
-                suffixes.append(entry[1:].lower())   # keep the leading dot: ".hf.space"
+                suffixes.append(entry[1:].lower())  # keep the leading dot: ".hf.space"
             elif "*" in entry:
                 # generic prefix wildcard: strip trailing * and treat as prefix
                 suffixes.append(("prefix:", entry.rstrip("*").lower()))
@@ -211,8 +233,12 @@ def create_app() -> Flask:
         if origin and _origin_allowed(origin):
             response.headers["Access-Control-Allow-Origin"] = origin
             response.headers["Access-Control-Allow-Credentials"] = "true"
-        response.headers.add("Access-Control-Allow-Headers", "Content-Type, Authorization")
-        response.headers.add("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+        response.headers.add(
+            "Access-Control-Allow-Headers", "Content-Type, Authorization"
+        )
+        response.headers.add(
+            "Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS"
+        )
         return response
 
     # Handle CORS preflight OPTIONS requests globally
@@ -226,13 +252,18 @@ def create_app() -> Flask:
                 resp = _FlaskResponse("", status=204)
                 resp.headers["Access-Control-Allow-Origin"] = origin
                 resp.headers["Access-Control-Allow-Credentials"] = "true"
-                resp.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
-                resp.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
+                resp.headers["Access-Control-Allow-Headers"] = (
+                    "Content-Type, Authorization"
+                )
+                resp.headers["Access-Control-Allow-Methods"] = (
+                    "GET, POST, PUT, DELETE, OPTIONS"
+                )
                 resp.headers["Access-Control-Max-Age"] = "86400"
                 return resp
 
     # 8. Background workers
     from workers import start_background_workers
+
     start_background_workers(kv)
 
     return flask_app

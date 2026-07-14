@@ -8,12 +8,17 @@ Usage: python mcp_stdio.py
 Antigravity sync functions have been moved to examples/antigravity_sync.py (D1.3).
 All tool calls are proxied to the HTTP API.
 """
+
 import sys
 import json
 import os
 import requests
 
-BASE = (os.getenv("AGENTCACHE_URL") or os.getenv("AGENTMEMORY_URL") or "http://127.0.0.1:3111").rstrip("/")
+BASE = (
+    os.getenv("AGENTCACHE_URL")
+    or os.getenv("AGENTMEMORY_URL")
+    or "http://127.0.0.1:3111"
+).rstrip("/")
 if not BASE.endswith("/agentcache") and not BASE.endswith("/agentmemory"):
     BASE = f"{BASE}/agentcache"
 
@@ -39,14 +44,17 @@ def handle(req):
     params = req.get("params") or {}
 
     if method == "initialize":
-        send({
-            "jsonrpc": "2.0", "id": req_id,
-            "result": {
-                "protocolVersion": "2024-11-05",
-                "capabilities": {"tools": {}},
-                "serverInfo": {"name": "agentcache-local", "version": "0.9.8"}
+        send(
+            {
+                "jsonrpc": "2.0",
+                "id": req_id,
+                "result": {
+                    "protocolVersion": "2024-11-05",
+                    "capabilities": {"tools": {}},
+                    "serverInfo": {"name": "agentcache-local", "version": "0.9.8"},
+                },
             }
-        })
+        )
 
     elif method == "initialized":
         pass  # notification — no response
@@ -60,8 +68,16 @@ def handle(req):
             tools = r.json().get("tools", [])
             send({"jsonrpc": "2.0", "id": req_id, "result": {"tools": tools}})
         except Exception as e:
-            send({"jsonrpc": "2.0", "id": req_id,
-                  "error": {"code": -32000, "message": f"agentmemory unreachable: {e}"}})
+            send(
+                {
+                    "jsonrpc": "2.0",
+                    "id": req_id,
+                    "error": {
+                        "code": -32000,
+                        "message": f"agentmemory unreachable: {e}",
+                    },
+                }
+            )
 
     elif method == "tools/call":
         name = params.get("name")
@@ -79,12 +95,22 @@ def handle(req):
                 result = {"content": [{"type": "text", "text": json.dumps(result)}]}
             send({"jsonrpc": "2.0", "id": req_id, "result": result})
         except Exception as e:
-            send({"jsonrpc": "2.0", "id": req_id,
-                  "error": {"code": -32000, "message": str(e)}})
+            send(
+                {
+                    "jsonrpc": "2.0",
+                    "id": req_id,
+                    "error": {"code": -32000, "message": str(e)},
+                }
+            )
 
     elif req_id is not None:
-        send({"jsonrpc": "2.0", "id": req_id,
-              "error": {"code": -32601, "message": "Method not found"}})
+        send(
+            {
+                "jsonrpc": "2.0",
+                "id": req_id,
+                "error": {"code": -32601, "message": "Method not found"},
+            }
+        )
 
 
 def main():
@@ -101,8 +127,13 @@ def main():
         except Exception as e:
             req_id = req.get("id") if isinstance(req, dict) else None
             if req_id is not None:
-                send({"jsonrpc": "2.0", "id": req_id,
-                      "error": {"code": -32603, "message": f"Internal error: {e}"}})
+                send(
+                    {
+                        "jsonrpc": "2.0",
+                        "id": req_id,
+                        "error": {"code": -32603, "message": f"Internal error: {e}"},
+                    }
+                )
 
 
 if __name__ == "__main__":

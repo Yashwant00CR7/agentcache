@@ -12,21 +12,45 @@ from typing import Dict, Any, List, Optional, Tuple, Set
 # =====================================================================
 
 step2map = {
-    "ational": "ate", "tional": "tion", "enci": "ence", "anci": "ance",
-    "izer": "ize", "iser": "ise", "abli": "able", "alli": "al",
-    "entli": "ent", "eli": "e", "ousli": "ous", "ization": "ize",
-    "isation": "ise", "ation": "ate", "ator": "ate", "alism": "al",
-    "iveness": "ive", "fulness": "ful", "ousness": "ous", "aliti": "al",
-    "iviti": "ive", "biliti": "ble",
+    "ational": "ate",
+    "tional": "tion",
+    "enci": "ence",
+    "anci": "ance",
+    "izer": "ize",
+    "iser": "ise",
+    "abli": "able",
+    "alli": "al",
+    "entli": "ent",
+    "eli": "e",
+    "ousli": "ous",
+    "ization": "ize",
+    "isation": "ise",
+    "ation": "ate",
+    "ator": "ate",
+    "alism": "al",
+    "iveness": "ive",
+    "fulness": "ful",
+    "ousness": "ous",
+    "aliti": "al",
+    "iviti": "ive",
+    "biliti": "ble",
 }
 
 step3map = {
-    "icate": "ic", "ative": "", "alize": "al", "alise": "al",
-    "iciti": "ic", "ical": "ic", "ful": "", "ness": "",
+    "icate": "ic",
+    "ative": "",
+    "alize": "al",
+    "alise": "al",
+    "iciti": "ic",
+    "ical": "ic",
+    "ful": "",
+    "ness": "",
 }
+
 
 def _has_vowel(s: str) -> bool:
     return any(c in "aeiou" for c in s)
+
 
 def _measure(s: str) -> int:
     # Reduce non-vowels (excluding y) to C, vowels (+y) to V
@@ -41,14 +65,17 @@ def _measure(s: str) -> int:
     # count "VC" patterns
     return len(re.findall(r"VC", reduced))
 
+
 def _ends_double_consonant(s: str) -> bool:
     return len(s) >= 2 and s[-1] == s[-2] and s[-1] not in "aeiou"
+
 
 def _ends_cvc(s: str) -> bool:
     if len(s) < 3:
         return False
     c1, v, c2 = s[-3], s[-2], s[-1]
     return c1 not in "aeiou" and v in "aeiou" and c2 not in "aeiouwxy"
+
 
 def stem(word: str) -> str:
     if len(word) <= 2:
@@ -92,7 +119,7 @@ def stem(word: str) -> str:
     # Step 2
     for suffix, replacement in step2map.items():
         if w.endswith(suffix):
-            base = w[:-len(suffix)]
+            base = w[: -len(suffix)]
             if _measure(base) > 0:
                 w = base + replacement
             break
@@ -100,20 +127,41 @@ def stem(word: str) -> str:
     # Step 3
     for suffix, replacement in step3map.items():
         if w.endswith(suffix):
-            base = w[:-len(suffix)]
+            base = w[: -len(suffix)]
             if _measure(base) > 0:
                 w = base + replacement
             break
 
     # Step 4
     suffixes_step4 = (
-        "al", "ance", "ence", "er", "ic", "able", "ible", "ant", "ement",
-        "ment", "ent", "tion", "sion", "ou", "ism", "ate", "iti", "ous",
-        "ive", "ize", "ise"
+        "al",
+        "ance",
+        "ence",
+        "er",
+        "ic",
+        "able",
+        "ible",
+        "ant",
+        "ement",
+        "ment",
+        "ent",
+        "tion",
+        "sion",
+        "ou",
+        "ism",
+        "ate",
+        "iti",
+        "ous",
+        "ive",
+        "ize",
+        "ise",
     )
     if w.endswith(suffixes_step4):
         # find matching suffix length
-        match = re.search(r"(ement|ment|tion|sion|ance|ence|able|ible|ism|ate|iti|ous|ive|ize|ise|ant|ent|al|er|ic|ou)$", w)
+        match = re.search(
+            r"(ement|ment|tion|sion|ance|ence|able|ible|ism|ate|iti|ous|ive|ize|ise|ant|ent|al|er|ic|ou)$",
+            w,
+        )
         if match:
             suffix_len = len(match.group(1))
             base = w[:-suffix_len]
@@ -131,6 +179,7 @@ def stem(word: str) -> str:
         w = w[:-1]
 
     return w
+
 
 # =====================================================================
 # Synonym Map (Ported from synonyms.ts)
@@ -191,21 +240,28 @@ for group in SYNONYM_GROUPS:
             if other != s:
                 synonymMap[s].add(other)
 
+
 def get_synonyms(stemmed_term: str) -> List[str]:
     return list(synonymMap.get(stemmed_term, []))
+
 
 # =====================================================================
 # CJK Segmenter (Ported from cjk-segmenter.ts)
 # =====================================================================
 
-CJK_RE = re.compile(r'[\u3000-\u303f\u3040-\u309f\u30a0-\u30ff\uff00-\uff9f\u4e00-\u9faf\uac00-\ud7a3]')
-CJK_RUN_RE = re.compile(r'[\u3000-\u303f\u3040-\u309f\u30a0-\u30ff\uff00-\uff9f\u4e00-\u9faf\uac00-\ud7a3]+')
-HANGUL_RE = re.compile(r'[\uac00-\ud7a3]')
-KANA_RE = re.compile(r'[\u3040-\u309f\u30a0-\u30ff]')
-HANGUL_BLOCK_RE = re.compile(r'[가-힯]+')
+CJK_RE = re.compile(
+    r"[\u3000-\u303f\u3040-\u309f\u30a0-\u30ff\uff00-\uff9f\u4e00-\u9faf\uac00-\ud7a3]"
+)
+CJK_RUN_RE = re.compile(
+    r"[\u3000-\u303f\u3040-\u309f\u30a0-\u30ff\uff00-\uff9f\u4e00-\u9faf\uac00-\ud7a3]+"
+)
+HANGUL_RE = re.compile(r"[\uac00-\ud7a3]")
+KANA_RE = re.compile(r"[\u3040-\u309f\u30a0-\u30ff]")
+HANGUL_BLOCK_RE = re.compile(r"[가-힯]+")
 
 jieba_loaded = False
 jieba_instance = None
+
 
 def get_jieba():
     global jieba_loaded, jieba_instance
@@ -214,13 +270,18 @@ def get_jieba():
     jieba_loaded = True
     try:
         import jieba
+
         jieba_instance = jieba
     except ImportError:
-        print("[search] Install jieba to improve Chinese word segmentation (pip install jieba)")
+        print(
+            "[search] Install jieba to improve Chinese word segmentation (pip install jieba)"
+        )
     return jieba_instance
+
 
 def has_cjk(text: str) -> bool:
     return bool(CJK_RE.search(text))
+
 
 def segment_cjk(text: str) -> List[str]:
     if not has_cjk(text):
@@ -262,9 +323,11 @@ def segment_cjk(text: str) -> List[str]:
 
     return out
 
+
 # =====================================================================
 # SearchIndex (BM25 - Ported from search-index.ts)
 # =====================================================================
+
 
 class SearchIndex:
     def __init__(self):
@@ -282,7 +345,7 @@ class SearchIndex:
         obs_id = obs.get("id")
         if not obs_id:
             return
-            
+
         terms = self.extract_terms(obs)
         term_freq: Dict[str, int] = {}
         term_count = 0
@@ -357,7 +420,7 @@ class SearchIndex:
         for q_item in query_terms:
             term = q_item["term"]
             weight = q_item["weight"]
-            
+
             matching_docs = self.inverted_index.get(term)
             if matching_docs:
                 df = len(matching_docs)
@@ -370,7 +433,9 @@ class SearchIndex:
                     doc_len = entry["termCount"]
 
                     numerator = tf * (self.k1 + 1)
-                    denominator = tf + self.k1 * (1 - self.b + self.b * (doc_len / avg_doc_len))
+                    denominator = tf + self.k1 * (
+                        1 - self.b + self.b * (doc_len / avg_doc_len)
+                    )
                     bm25_score = idf * (numerator / denominator) * weight
 
                     scores[obs_id] = scores.get(obs_id, 0.0) + bm25_score
@@ -386,25 +451,30 @@ class SearchIndex:
 
                 obs_ids = self.inverted_index.get(index_term, set())
                 prefix_df = len(obs_ids)
-                prefix_idf = math.log((N - prefix_df + 0.5) / (prefix_df + 0.5) + 1) * 0.5
-                
+                prefix_idf = (
+                    math.log((N - prefix_df + 0.5) / (prefix_df + 0.5) + 1) * 0.5
+                )
+
                 for obs_id in obs_ids:
                     entry = self.entries[obs_id]
                     doc_terms = self.doc_term_counts.get(obs_id, {})
                     tf = doc_terms.get(index_term, 0)
                     doc_len = entry["termCount"]
                     numerator = tf * (self.k1 + 1)
-                    denominator = tf + self.k1 * (1 - self.b + self.b * (doc_len / avg_doc_len))
-                    scores[obs_id] = scores.get(obs_id, 0.0) + prefix_idf * (numerator / denominator) * weight
+                    denominator = tf + self.k1 * (
+                        1 - self.b + self.b * (doc_len / avg_doc_len)
+                    )
+                    scores[obs_id] = (
+                        scores.get(obs_id, 0.0)
+                        + prefix_idf * (numerator / denominator) * weight
+                    )
 
         results = []
         for obs_id, score in scores.items():
             entry = self.entries[obs_id]
-            results.append({
-                "obsId": obs_id,
-                "sessionId": entry["sessionId"],
-                "score": score
-            })
+            results.append(
+                {"obsId": obs_id, "sessionId": entry["sessionId"], "score": score}
+            )
 
         results.sort(key=lambda x: x["score"], reverse=True)
         return results[:limit]
@@ -424,7 +494,7 @@ class SearchIndex:
         self.clear()
         if not data:
             return
-        
+
         for k, v in data.get("entries", []):
             self.entries[k] = v
         for term, ids in data.get("inverted", []):
@@ -437,7 +507,9 @@ class SearchIndex:
     def serialize_data(self) -> Dict[str, Any]:
         entries = list(self.entries.items())
         inverted = [(term, list(ids)) for term, ids in self.inverted_index.items()]
-        doc_terms = [(id_, list(counts.items())) for id_, counts in self.doc_term_counts.items()]
+        doc_terms = [
+            (id_, list(counts.items())) for id_, counts in self.doc_term_counts.items()
+        ]
         return {
             "v": 2,
             "entries": entries,
@@ -460,7 +532,7 @@ class SearchIndex:
 
     def tokenize(self, text: str) -> List[str]:
         # Strip special characters except valid separators
-        cleaned = re.sub(r'[^\w\s/.\\-_]', ' ', text)
+        cleaned = re.sub(r"[^\w\s/.\\-_]", " ", text)
         out = []
         for raw in cleaned.split():
             if len(raw) < 2:
@@ -489,18 +561,22 @@ class SearchIndex:
                 hi = mid
         return lo
 
+
 # =====================================================================
 # VectorIndex (Cosine Similarity - Ported from vector-index.ts)
 # =====================================================================
 
+
 def float32_to_base64(floats: List[float]) -> str:
-    arr = array.array('f', floats)
-    return base64.b64encode(arr.tobytes()).decode('utf-8')
+    arr = array.array("f", floats)
+    return base64.b64encode(arr.tobytes()).decode("utf-8")
+
 
 def base64_to_float32(b64: str) -> List[float]:
-    arr = array.array('f')
+    arr = array.array("f")
     arr.frombytes(base64.b64decode(b64))
     return list(arr)
+
 
 def cosine_similarity(a: List[float], b: List[float]) -> float:
     if len(a) != len(b) or len(a) == 0:
@@ -514,6 +590,7 @@ def cosine_similarity(a: List[float], b: List[float]) -> float:
         norm_b += y * y
     denom = math.sqrt(norm_a) * math.sqrt(norm_b)
     return dot / denom if denom != 0.0 else 0.0
+
 
 class VectorIndex:
     def __init__(self):
@@ -533,12 +610,10 @@ class VectorIndex:
         results = []
         for obs_id, entry in self.vectors.items():
             score = cosine_similarity(query, entry["embedding"])
-            results.append({
-                "obsId": obs_id,
-                "sessionId": entry["sessionId"],
-                "score": score
-            })
-            
+            results.append(
+                {"obsId": obs_id, "sessionId": entry["sessionId"], "score": score}
+            )
+
         results.sort(key=lambda x: x["score"], reverse=True)
         return results[:limit]
 
@@ -546,7 +621,9 @@ class VectorIndex:
     def size(self) -> int:
         return len(self.vectors)
 
-    def validate_dimensions(self, expected: int) -> Tuple[List[Dict[str, Any]], Set[int]]:
+    def validate_dimensions(
+        self, expected: int
+    ) -> Tuple[List[Dict[str, Any]], Set[int]]:
         mismatches = []
         seen_dimensions = set()
         for obs_id, entry in self.vectors.items():
@@ -562,13 +639,15 @@ class VectorIndex:
     def serialize_data(self) -> List[Any]:
         data = []
         for obs_id, entry in self.vectors.items():
-            data.append([
-                obs_id,
-                {
-                    "embedding": float32_to_base64(entry["embedding"]),
-                    "sessionId": entry["sessionId"]
-                }
-            ])
+            data.append(
+                [
+                    obs_id,
+                    {
+                        "embedding": float32_to_base64(entry["embedding"]),
+                        "sessionId": entry["sessionId"],
+                    },
+                ]
+            )
         return data
 
     def restore_from_data(self, data: List[Any]) -> None:
@@ -588,14 +667,16 @@ class VectorIndex:
                     continue
                 self.vectors[obs_id] = {
                     "embedding": base64_to_float32(emb_b64),
-                    "sessionId": sess_id
+                    "sessionId": sess_id,
                 }
             except Exception:
                 continue
 
+
 # =====================================================================
 # Gemini Embedding Client (Urllib POST completion)
 # =====================================================================
+
 
 class GeminiEmbeddingProvider:
     def __init__(self, api_key: str):
@@ -612,10 +693,10 @@ class GeminiEmbeddingProvider:
     def embed_batch(self, texts: List[str]) -> List[List[float]]:
         results: List[List[float]] = []
         batch_limit = 100
-        
+
         for i in range(0, len(texts), batch_limit):
-            chunk = texts[i:i + batch_limit]
-            
+            chunk = texts[i : i + batch_limit]
+
             payload = {
                 "requests": [
                     {
@@ -626,27 +707,27 @@ class GeminiEmbeddingProvider:
                     for t in chunk
                 ]
             }
-            
+
             req_data = json.dumps(payload).encode("utf-8")
             url = f"{self.api_url}?key={self.api_key}"
-            
+
             req = urllib.request.Request(
                 url,
                 data=req_data,
                 headers={"Content-Type": "application/json"},
-                method="POST"
+                method="POST",
             )
-            
+
             try:
                 with urllib.request.urlopen(req, timeout=30.0) as response:
                     resp_data = json.loads(response.read().decode("utf-8"))
-                    
+
                 for emb in resp_data.get("embeddings", []):
                     values = emb.get("values", [])
                     results.append(self._l2_normalize(values))
             except Exception as e:
                 raise RuntimeError(f"Gemini embedding batch call failed: {e}")
-                
+
         return results
 
     def _l2_normalize(self, vec: List[float]) -> List[float]:
@@ -656,9 +737,11 @@ class GeminiEmbeddingProvider:
             return vec
         return [x / norm for x in vec]
 
+
 # =====================================================================
 # HybridSearch (Triple Stream - Ported from hybrid-search.ts)
 # =====================================================================
+
 
 class HybridSearch:
     def __init__(
@@ -669,7 +752,7 @@ class HybridSearch:
         kv: Any,
         bm25_weight: float = 0.4,
         vector_weight: float = 0.6,
-        graph_weight: float = 0.3
+        graph_weight: float = 0.3,
     ):
         self.bm25 = bm25
         self.vector = vector
@@ -689,7 +772,7 @@ class HybridSearch:
                 query_embedding = self.embedding_provider.embed(query)
                 vector_results = self.vector.search(query_embedding, limit * 2)
             except Exception:
-                pass # Fallback to BM25
+                pass  # Fallback to BM25
 
         # Build scores mapping
         scores: Dict[str, Dict[str, Any]] = {}
@@ -722,10 +805,10 @@ class HybridSearch:
                 }
 
         has_vector = len(vector_results) > 0
-        
+
         effective_bm25_w = self.bm25_weight
         effective_vector_w = self.vector_weight if has_vector else 0.0
-        
+
         total_w = effective_bm25_w + effective_vector_w
         if total_w > 0:
             effective_bm25_w /= total_w
@@ -733,17 +816,19 @@ class HybridSearch:
 
         combined = []
         for obs_id, s in scores.items():
-            combined.append({
-                "obsId": obs_id,
-                "sessionId": s["sessionId"],
-                "bm25Score": s["bm25Score"],
-                "vectorScore": s["vectorScore"],
-                "graphScore": s["graphScore"],
-                "combinedScore": (
-                    effective_bm25_w * (1.0 / (RRF_K + s["bm25Rank"])) +
-                    effective_vector_w * (1.0 / (RRF_K + s["vectorRank"]))
-                )
-            })
+            combined.append(
+                {
+                    "obsId": obs_id,
+                    "sessionId": s["sessionId"],
+                    "bm25Score": s["bm25Score"],
+                    "vectorScore": s["vectorScore"],
+                    "graphScore": s["graphScore"],
+                    "combinedScore": (
+                        effective_bm25_w * (1.0 / (RRF_K + s["bm25Rank"]))
+                        + effective_vector_w * (1.0 / (RRF_K + s["vectorRank"]))
+                    ),
+                }
+            )
 
         combined.sort(key=lambda x: x["combinedScore"], reverse=True)
         return combined[:limit]
@@ -752,6 +837,7 @@ class HybridSearch:
 # =====================================================================
 # OpenAI Embedding Client (D5.1)
 # =====================================================================
+
 
 class OpenAIEmbeddingProvider:
     """OpenAI text-embedding-3-small provider (1536 dims).
@@ -790,7 +876,9 @@ class OpenAIEmbeddingProvider:
                 with urllib.request.urlopen(req, timeout=30.0) as response:
                     resp_data = json.loads(response.read().decode("utf-8"))
                 # Sort by index to preserve order
-                embeddings_sorted = sorted(resp_data.get("data", []), key=lambda e: e["index"])
+                embeddings_sorted = sorted(
+                    resp_data.get("data", []), key=lambda e: e["index"]
+                )
                 for emb in embeddings_sorted:
                     results.append(self._l2_normalize(emb["embedding"]))
             except Exception as e:
@@ -809,6 +897,7 @@ class OpenAIEmbeddingProvider:
 # SentenceTransformer Local Provider (D5.2)
 # =====================================================================
 
+
 class SentenceTransformerProvider:
     """Local sentence-transformers provider (optional install).
 
@@ -823,9 +912,12 @@ class SentenceTransformerProvider:
         self.name = "sentence-transformers"
         try:
             from sentence_transformers import SentenceTransformer  # type: ignore
+
             self._model = SentenceTransformer(model_name)
             self.dimensions = self._model.get_sentence_embedding_dimension()
-            print(f"[search] SentenceTransformerProvider loaded: {model_name} ({self.dimensions} dims)")
+            print(
+                f"[search] SentenceTransformerProvider loaded: {model_name} ({self.dimensions} dims)"
+            )
         except ImportError:
             raise ImportError(
                 "sentence-transformers is not installed. "
@@ -836,5 +928,7 @@ class SentenceTransformerProvider:
         return self.embed_batch([text])[0]
 
     def embed_batch(self, texts: List[str]) -> List[List[float]]:
-        embeddings = self._model.encode(texts, show_progress_bar=False, normalize_embeddings=True)
+        embeddings = self._model.encode(
+            texts, show_progress_bar=False, normalize_embeddings=True
+        )
         return [emb.tolist() for emb in embeddings]

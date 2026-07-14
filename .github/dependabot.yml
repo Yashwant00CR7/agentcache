@@ -1,96 +1,22 @@
 version: 2
 updates:
-  - package-ecosystem: npm
-    directory: /
+  - package-ecosystem: pip
+    directory: "/"
     schedule:
       interval: weekly
       day: monday
       time: "06:00"
       timezone: Etc/UTC
-    open-pull-requests-limit: 10
+    open-pull-requests-limit: 5
     labels:
       - dependencies
-      - npm
+      - python
     commit-message:
       prefix: deps
       include: scope
-    groups:
-      minor-and-patch:
-        update-types:
-          - minor
-          - patch
-
-  - package-ecosystem: npm
-    directory: /website
-    schedule:
-      interval: weekly
-      day: monday
-      time: "06:00"
-      timezone: Etc/UTC
-    open-pull-requests-limit: 10
-    labels:
-      - dependencies
-      - npm
-      - website
-    commit-message:
-      prefix: deps(website)
-      include: scope
-    groups:
-      minor-and-patch:
-        update-types:
-          - minor
-          - patch
-
-  - package-ecosystem: npm
-    directory: /integrations/openclaw
-    schedule:
-      interval: weekly
-      day: monday
-      time: "06:00"
-      timezone: Etc/UTC
-    open-pull-requests-limit: 5
-    labels:
-      - dependencies
-      - npm
-      - integrations
-    commit-message:
-      prefix: deps(openclaw)
-      include: scope
-
-  - package-ecosystem: npm
-    directory: /integrations/pi
-    schedule:
-      interval: weekly
-      day: monday
-      time: "06:00"
-      timezone: Etc/UTC
-    open-pull-requests-limit: 5
-    labels:
-      - dependencies
-      - npm
-      - integrations
-    commit-message:
-      prefix: deps(pi)
-      include: scope
-
-  - package-ecosystem: npm
-    directory: /integrations/filesystem-watcher
-    schedule:
-      interval: weekly
-      day: monday
-      time: "06:00"
-      timezone: Etc/UTC
-    open-pull-requests-limit: 5
-    labels:
-      - dependencies
-      - npm
-      - integrations
-    commit-message:
-      prefix: deps(fs-watcher)
-      include: scope
 
   - package-ecosystem: github-actions
-    directory: /
+    directory: "/"
     schedule:
       interval: weekly
       day: monday
@@ -103,8 +29,4 @@ updates:
     commit-message:
       prefix: ci(deps)
       include: scope
-    groups:
-      minor-and-patch:
-        update-types:
-          - minor
-          - patch
+

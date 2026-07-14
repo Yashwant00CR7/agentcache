@@ -153,24 +153,6 @@ logObservation(`Tool: ${toolName}\nInput: ${JSON.stringify(toolInput)}`);
 
 The module reads `AGENTCACHE_URL`, `AGENTCACHE_SECRET`, and `AGENTCACHE_AGENT_ID` from `process.env`. Set them in your shell profile or in Cursor's environment settings.
 
-### PowerShell terminal (`hooks/powershell-hook.ps1`)
-
-Add a single dot-source line to your PowerShell `$PROFILE` to activate automatic command logging:
-
-```powershell
-. C:\path\to\hooks\powershell-hook.ps1
-```
-
-Set the required variables in `$PROFILE` before the dot-source line:
-
-```powershell
-$env:AGENTCACHE_URL      = "http://127.0.0.1:3111"
-$env:AGENTCACHE_SECRET   = "your-secret-here"   # omit if no auth set
-$env:AGENTCACHE_AGENT_ID = "powershell"
-```
-
-The hook installs a PSReadLine `CommandValidationHandler` that fires a background job on every command you run. If PSReadLine is not available, call `Send-AgentCacheObservation -Text "..."` manually.
-
 ### `.env` file format
 
 All hooks and the server itself read credentials from `~/.agentcache/.env`. Create this file if it doesn't exist:

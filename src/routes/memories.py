@@ -18,6 +18,7 @@ memories_bp = Blueprint("memories", __name__)
 
 def _check_auth():
     import hmac
+
     secret = os.getenv("AGENTCACHE_SECRET") or os.getenv("AGENTMEMORY_SECRET")
     if not secret:
         return None
@@ -32,12 +33,14 @@ def _check_auth():
 
 def _get_kv():
     import app as app_module
+
     return app_module.kv
 
 
 # ---------------------------------------------------------------------------
 # POST /agentmemory/remember
 # ---------------------------------------------------------------------------
+
 
 @memories_bp.route("/agentcache/remember", methods=["POST"])
 @memories_bp.route("/agentmemory/remember", methods=["POST"])
@@ -57,6 +60,7 @@ def api_remember():
 # ---------------------------------------------------------------------------
 # POST /agentmemory/agent/remember
 # ---------------------------------------------------------------------------
+
 
 @memories_bp.route("/agentcache/agent/remember", methods=["POST"])
 @memories_bp.route("/agentmemory/agent/remember", methods=["POST"])
@@ -103,6 +107,7 @@ def api_agent_remember():
 # GET /agentmemory/memories
 # ---------------------------------------------------------------------------
 
+
 @memories_bp.route("/agentcache/memories", methods=["GET"])
 @memories_bp.route("/agentmemory/memories", methods=["GET"])
 def api_memories_list():
@@ -122,6 +127,7 @@ def api_memories_list():
 # ---------------------------------------------------------------------------
 # POST /agentmemory/forget
 # ---------------------------------------------------------------------------
+
 
 @memories_bp.route("/agentcache/forget", methods=["POST"])
 @memories_bp.route("/agentmemory/forget", methods=["POST"])

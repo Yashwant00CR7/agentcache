@@ -72,9 +72,7 @@ def normalize_folder_path(path: str) -> str:
     # component in the raw input before normpath has a chance to resolve it.
     raw_parts = path.replace("\\", "/").split("/")
     if any(part == ".." for part in raw_parts):
-        raise ValueError(
-            f"folder_path contains path traversal segment '..': {path!r}"
-        )
+        raise ValueError(f"folder_path contains path traversal segment '..': {path!r}")
 
     # 2. OS-level normalisation (resolves duplicate separators, etc.)
     normalized = os.path.normpath(path)
@@ -88,9 +86,7 @@ def normalize_folder_path(path: str) -> str:
     # Guard: also reject any ".." that somehow survives normalisation.
     parts = normalized.split("/")
     if any(part == ".." for part in parts):
-        raise ValueError(
-            f"folder_path contains path traversal segment '..': {path!r}"
-        )
+        raise ValueError(f"folder_path contains path traversal segment '..': {path!r}")
 
     if not normalized:
         raise ValueError("folder_path is empty after normalization")

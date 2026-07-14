@@ -1,6 +1,7 @@
 """
 C1.1 — Unit tests for observe(), strip_private_data(), and folder_observe().
 """
+
 import sys
 import os
 import datetime
@@ -9,13 +10,13 @@ import pytest
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 from db import StateKV
-import functions
 from functions import observe, folder_observe, strip_private_data, KV
 
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def make_kv(tmp_path):
     return StateKV(db_path=str(tmp_path / "test.db"))
@@ -51,6 +52,7 @@ def valid_folder_payload(**overrides):
 # observe() — valid payload
 # ---------------------------------------------------------------------------
 
+
 class TestObserveValid:
     def test_returns_observation_id(self, tmp_path):
         kv = make_kv(tmp_path)
@@ -76,6 +78,7 @@ class TestObserveValid:
 # ---------------------------------------------------------------------------
 # observe() — missing required fields
 # ---------------------------------------------------------------------------
+
 
 class TestObserveMissingFields:
     def test_missing_session_id_raises(self, tmp_path):
@@ -119,6 +122,7 @@ class TestObserveMissingFields:
 # strip_private_data() — redaction
 # ---------------------------------------------------------------------------
 
+
 class TestStripPrivateData:
     def test_redacts_api_key_assignment(self):
         text = "api_key = sk-proj-abc123LONGKEY456789012345678901234567890"
@@ -161,6 +165,7 @@ class TestStripPrivateData:
 # MAX_OBS_PER_SESSION cap
 # ---------------------------------------------------------------------------
 
+
 class TestObserveSessionCap:
     def test_cap_raises_on_fourth_observation(self, tmp_path, monkeypatch):
         monkeypatch.setenv("MAX_OBS_PER_SESSION", "3")
@@ -184,6 +189,7 @@ class TestObserveSessionCap:
 # ---------------------------------------------------------------------------
 # folder_observe() — valid payload / fobs_ prefix
 # ---------------------------------------------------------------------------
+
 
 class TestFolderObserveCore:
     def test_returns_observation_id(self, tmp_path):

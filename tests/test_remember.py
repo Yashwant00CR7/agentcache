@@ -3,6 +3,7 @@ tests/test_remember.py — C1.2
 
 Tests for remember(), forget(), and jaccard_similarity().
 """
+
 import sys
 import os
 import datetime
@@ -16,8 +17,10 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_kv(tmp_path):
     from db import StateKV
+
     os.environ.pop("AGENTCACHE_SECRET", None)
     return StateKV(db_path=str(tmp_path / "test.db"))
 
@@ -30,27 +33,35 @@ def _now():
 # jaccard_similarity
 # ---------------------------------------------------------------------------
 
+
 class TestJaccardSimilarity:
     def test_identical_strings(self):
         from functions import jaccard_similarity
+
         assert jaccard_similarity("hello world foo", "hello world foo") == 1.0
 
     def test_completely_different(self):
         from functions import jaccard_similarity
+
         score = jaccard_similarity("apple banana cherry", "xyz uvw qrs")
         assert score == 0.0
 
     def test_partial_overlap(self):
         from functions import jaccard_similarity
-        score = jaccard_similarity("authentication security token", "authentication bearer token")
+
+        score = jaccard_similarity(
+            "authentication security token", "authentication bearer token"
+        )
         assert 0.0 < score < 1.0
 
     def test_empty_strings(self):
         from functions import jaccard_similarity
+
         assert jaccard_similarity("", "") == 1.0
 
     def test_high_similarity_above_threshold(self):
         from functions import jaccard_similarity
+
         # These two should meet or exceed the 0.7 threshold used in remember()
         a = "Use parameterised queries to prevent SQL injection in all database calls"
         b = "Use parameterised queries to prevent SQL injection in database operations"
@@ -58,6 +69,7 @@ class TestJaccardSimilarity:
 
     def test_low_similarity_below_threshold(self):
         from functions import jaccard_similarity
+
         a = "Configure Redis as the session cache backend"
         b = "Deploy the React frontend to Vercel using GitHub Actions CI"
         assert jaccard_similarity(a, b) < 0.7
@@ -67,9 +79,11 @@ class TestJaccardSimilarity:
 # remember()
 # ---------------------------------------------------------------------------
 
+
 class TestRemember:
     def test_creates_memory_with_is_latest_true(self, tmp_path):
         from functions import remember
+
         kv = _make_kv(tmp_path)
         result = remember(kv, {"content": "Always use type hints in Python functions"})
         assert result["success"] is True
@@ -80,12 +94,16 @@ class TestRemember:
 
     def test_memory_has_required_fields(self, tmp_path):
         from functions import remember
+
         kv = _make_kv(tmp_path)
-        result = remember(kv, {
-            "content": "Prefer composition over inheritance",
-            "type": "architecture",
-            "concepts": ["design", "patterns"],
-        })
+        result = remember(
+            kv,
+            {
+                "content": "Prefer composition over inheritance",
+                "type": "architecture",
+                "concepts": ["design", "patterns"],
+            },
+        )
         mem = result["memory"]
         assert "id" in mem
         assert "content" in mem
@@ -95,13 +113,24 @@ class TestRemember:
 
     def test_supersedes_memory_with_high_jaccard_similarity(self, tmp_path):
         from functions import remember, KV
+
         kv = _make_kv(tmp_path)
 
-        first = remember(kv, {"content": "Always use parameterised SQL queries to prevent injection attacks in every database call"})
+        first = remember(
+            kv,
+            {
+                "content": "Always use parameterised SQL queries to prevent injection attacks in every database call"
+            },
+        )
         first_id = first["memory"]["id"]
 
         # Highly similar content — should supersede the first
-        second = remember(kv, {"content": "Always use parameterised SQL queries to prevent injection attacks in every database operation"})
+        second = remember(
+            kv,
+            {
+                "content": "Always use parameterised SQL queries to prevent injection attacks in every database operation"
+            },
+        )
         second_mem = second["memory"]
 
         # Old memory should be marked as not latest
@@ -115,13 +144,24 @@ class TestRemember:
 
     def test_independent_memory_with_low_jaccard_similarity(self, tmp_path):
         from functions import remember, KV
+
         kv = _make_kv(tmp_path)
 
-        first = remember(kv, {"content": "Configure Redis as the session cache backend for high throughput"})
+        first = remember(
+            kv,
+            {
+                "content": "Configure Redis as the session cache backend for high throughput"
+            },
+        )
         first_id = first["memory"]["id"]
 
         # Very different content — should be independent
-        second = remember(kv, {"content": "Deploy the React frontend to Vercel using GitHub Actions continuous deployment"})
+        second = remember(
+            kv,
+            {
+                "content": "Deploy the React frontend to Vercel using GitHub Actions continuous deployment"
+            },
+        )
         second_mem = second["memory"]
 
         # Old memory should remain latest
@@ -139,31 +179,43 @@ class TestRemember:
 
     def test_remember_raises_on_empty_content(self, tmp_path):
         from functions import remember
+
         kv = _make_kv(tmp_path)
         with pytest.raises(ValueError, match="content is required"):
             remember(kv, {"content": ""})
 
     def test_remember_strips_private_data(self, tmp_path):
         from functions import remember
+
         kv = _make_kv(tmp_path)
-        result = remember(kv, {
-            "content": "API key is sk-proj-abc123def456ghi789jkl012mno345pqr678 for production"
-        })
+        result = remember(
+            kv,
+            {
+                "content": "API key is sk-proj-abc123def456ghi789jkl012mno345pqr678 for production"
+            },
+        )
         assert "sk-proj-" not in result["memory"]["content"]
         assert "[REDACTED" in result["memory"]["content"]
 
     def test_remember_with_project_scoping(self, tmp_path):
         from functions import remember
+
         kv = _make_kv(tmp_path)
         # Two very similar memories for different projects should not supersede each other
-        first = remember(kv, {
-            "content": "Always use parameterised queries in all database operations",
-            "project": "project-alpha",
-        })
-        second = remember(kv, {
-            "content": "Always use parameterised queries in all database operations",
-            "project": "project-beta",
-        })
+        first = remember(
+            kv,
+            {
+                "content": "Always use parameterised queries in all database operations",
+                "project": "project-alpha",
+            },
+        )
+        second = remember(
+            kv,
+            {
+                "content": "Always use parameterised queries in all database operations",
+                "project": "project-beta",
+            },
+        )
         # Both should remain independent (different projects)
         assert first["memory"]["isLatest"] is True
         assert second["memory"]["isLatest"] is True
@@ -173,9 +225,11 @@ class TestRemember:
 # forget()
 # ---------------------------------------------------------------------------
 
+
 class TestForget:
     def test_forget_memory_by_id(self, tmp_path):
         from functions import remember, forget, KV
+
         kv = _make_kv(tmp_path)
         result = remember(kv, {"content": "This memory will be forgotten"})
         mem_id = result["memory"]["id"]
@@ -186,6 +240,7 @@ class TestForget:
 
     def test_forget_returns_zero_for_nonexistent_memory(self, tmp_path):
         from functions import forget
+
         kv = _make_kv(tmp_path)
         result = forget(kv, {"memoryId": "mem_nonexistent_id"})
         # Should still succeed (memory was already gone) — deleted may be 0 or 1

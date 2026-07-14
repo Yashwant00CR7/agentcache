@@ -22,7 +22,10 @@ def is_managed_image_path(file_path: str) -> bool:
         return False
     resolved = os.path.abspath(file_path)
     normalized_images_dir = os.path.abspath(IMAGES_DIR)
-    return resolved.startswith(normalized_images_dir + os.sep) or resolved == normalized_images_dir
+    return (
+        resolved.startswith(normalized_images_dir + os.sep)
+        or resolved == normalized_images_dir
+    )
 
 
 def save_image_to_disk(base64_data: str) -> Tuple[str, int]:
@@ -51,7 +54,7 @@ def save_image_to_disk(base64_data: str) -> Tuple[str, int]:
                 ext = "webp"
             elif "gif" in meta:
                 ext = "gif"
-            clean_base64 = base64_data[comma_idx + 1:]
+            clean_base64 = base64_data[comma_idx + 1 :]
     elif base64_data.startswith("/9j/"):
         ext = "jpg"
 
@@ -62,6 +65,7 @@ def save_image_to_disk(base64_data: str) -> Tuple[str, int]:
         return file_path, 0
 
     import base64
+
     buffer = base64.b64decode(clean_base64)
     with open(file_path, "wb") as f:
         f.write(buffer)

@@ -3,10 +3,10 @@ tests/test_search.py — C1.3
 
 Tests for SearchIndex, HybridSearch, and synonym expansion.
 """
+
 import sys
 import os
 
-import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
@@ -14,6 +14,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 # ---------------------------------------------------------------------------
 # SearchIndex unit tests
 # ---------------------------------------------------------------------------
+
 
 class TestSearchIndex:
     def _make_obs(self, obs_id, title, narrative="", concepts=None, obs_type="other"):
@@ -29,6 +30,7 @@ class TestSearchIndex:
 
     def test_add_and_exact_match_returns_rank_one(self):
         from search import SearchIndex
+
         idx = SearchIndex()
         obs = self._make_obs("obs_001", "authentication middleware refactor")
         idx.add(obs)
@@ -38,6 +40,7 @@ class TestSearchIndex:
 
     def test_prefix_matching(self):
         from search import SearchIndex
+
         idx = SearchIndex()
         obs = self._make_obs("obs_002", "authentication token validation")
         idx.add(obs)
@@ -47,14 +50,20 @@ class TestSearchIndex:
     def test_synonym_expansion_db_conn(self):
         """'db conn' should find document indexed with 'database connection'."""
         from search import SearchIndex
+
         idx = SearchIndex()
-        obs = self._make_obs("obs_003", "database connection pooling setup", "configure database connection pool")
+        obs = self._make_obs(
+            "obs_003",
+            "database connection pooling setup",
+            "configure database connection pool",
+        )
         idx.add(obs)
         results = idx.search("db conn")
         assert any(r["obsId"] == "obs_003" for r in results)
 
     def test_remove_document(self):
         from search import SearchIndex
+
         idx = SearchIndex()
         obs = self._make_obs("obs_004", "deploy kubernetes service mesh")
         idx.add(obs)
@@ -64,22 +73,37 @@ class TestSearchIndex:
 
     def test_empty_index_returns_empty(self):
         from search import SearchIndex
+
         idx = SearchIndex()
         results = idx.search("anything")
         assert results == []
 
     def test_multiple_docs_rank_order(self):
         from search import SearchIndex
+
         idx = SearchIndex()
-        idx.add(self._make_obs("obs_a", "authentication login system", "user authentication flow"))
-        idx.add(self._make_obs("obs_b", "database migration script", "run database migration"))
-        idx.add(self._make_obs("obs_c", "deployment pipeline CI", "CI CD pipeline deployment"))
+        idx.add(
+            self._make_obs(
+                "obs_a", "authentication login system", "user authentication flow"
+            )
+        )
+        idx.add(
+            self._make_obs(
+                "obs_b", "database migration script", "run database migration"
+            )
+        )
+        idx.add(
+            self._make_obs(
+                "obs_c", "deployment pipeline CI", "CI CD pipeline deployment"
+            )
+        )
 
         results = idx.search("authentication")
         assert results[0]["obsId"] == "obs_a"
 
     def test_size_property(self):
         from search import SearchIndex
+
         idx = SearchIndex()
         assert idx.size == 0
         idx.add(self._make_obs("x1", "title one"))
@@ -90,6 +114,7 @@ class TestSearchIndex:
 
     def test_clear(self):
         from search import SearchIndex
+
         idx = SearchIndex()
         idx.add(self._make_obs("x1", "something"))
         idx.clear()
@@ -98,6 +123,7 @@ class TestSearchIndex:
 
     def test_dirty_flag_set_on_add(self):
         from search import SearchIndex
+
         idx = SearchIndex()
         assert idx._dirty is False
         idx.add(self._make_obs("x1", "test dirty flag"))
@@ -105,6 +131,7 @@ class TestSearchIndex:
 
     def test_dirty_flag_set_on_remove(self):
         from search import SearchIndex
+
         idx = SearchIndex()
         idx.add(self._make_obs("x1", "test remove dirty"))
         idx._dirty = False  # reset manually
@@ -113,6 +140,7 @@ class TestSearchIndex:
 
     def test_dirty_flag_reset_after_restore(self):
         from search import SearchIndex
+
         idx = SearchIndex()
         idx.add(self._make_obs("x1", "test restore"))
         data = idx.serialize_data()
@@ -122,6 +150,7 @@ class TestSearchIndex:
 
     def test_has_method(self):
         from search import SearchIndex
+
         idx = SearchIndex()
         obs = self._make_obs("obs_has", "has method test")
         assert not idx.has("obs_has")
@@ -135,9 +164,11 @@ class TestSearchIndex:
 # VectorIndex unit tests
 # ---------------------------------------------------------------------------
 
+
 class TestVectorIndex:
     def test_dirty_flag_on_add(self):
         from search import VectorIndex
+
         vi = VectorIndex()
         assert vi._dirty is False
         vi.add("v1", "sess", [0.1, 0.2, 0.3])
@@ -145,6 +176,7 @@ class TestVectorIndex:
 
     def test_dirty_flag_on_remove(self):
         from search import VectorIndex
+
         vi = VectorIndex()
         vi.add("v1", "sess", [0.1, 0.2, 0.3])
         vi._dirty = False
@@ -153,6 +185,7 @@ class TestVectorIndex:
 
     def test_dirty_flag_reset_after_restore(self):
         from search import VectorIndex
+
         vi = VectorIndex()
         vi.add("v1", "sess", [0.1, 0.2, 0.3])
         data = vi.serialize_data()
@@ -164,6 +197,7 @@ class TestVectorIndex:
 # ---------------------------------------------------------------------------
 # HybridSearch in BM25-only mode
 # ---------------------------------------------------------------------------
+
 
 class TestHybridSearchBM25Only:
     def _make_obs(self, obs_id, title, narrative=""):
@@ -204,6 +238,7 @@ class TestHybridSearchBM25Only:
 
     def test_hybrid_returns_empty_for_no_matches(self):
         from search import SearchIndex, VectorIndex, HybridSearch
+
         bm25 = SearchIndex()
         hybrid = HybridSearch(bm25, VectorIndex(), None, None)
         assert hybrid.search("zzznomatch", 10) == []
@@ -213,19 +248,23 @@ class TestHybridSearchBM25Only:
 # Serialization round-trip
 # ---------------------------------------------------------------------------
 
+
 class TestSearchIndexSerialization:
     def test_roundtrip_preserves_search_results(self):
         from search import SearchIndex
+
         idx = SearchIndex()
-        idx.add({
-            "id": "rt_001",
-            "sessionId": "sess_rt",
-            "title": "serialization round trip test",
-            "narrative": "verify that index survives serialize/restore",
-            "concepts": ["test"],
-            "files": [],
-            "type": "other",
-        })
+        idx.add(
+            {
+                "id": "rt_001",
+                "sessionId": "sess_rt",
+                "title": "serialization round trip test",
+                "narrative": "verify that index survives serialize/restore",
+                "concepts": ["test"],
+                "files": [],
+                "type": "other",
+            }
+        )
 
         data = idx.serialize_data()
         idx2 = SearchIndex()

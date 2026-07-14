@@ -11,13 +11,13 @@ Handles:
 import os
 from flask import Blueprint, request, jsonify
 import functions
-from functions import KV
 
 graph_bp = Blueprint("graph", __name__)
 
 
 def _check_auth():
     import hmac
+
     secret = os.getenv("AGENTCACHE_SECRET") or os.getenv("AGENTMEMORY_SECRET")
     if not secret:
         return None
@@ -32,12 +32,14 @@ def _check_auth():
 
 def _get_kv():
     import app as app_module
+
     return app_module.kv
 
 
 # ---------------------------------------------------------------------------
 # GET /agentcache/graph
 # ---------------------------------------------------------------------------
+
 
 @graph_bp.route("/agentcache/graph", methods=["GET"])
 @graph_bp.route("/agentmemory/graph", methods=["GET"])
@@ -52,6 +54,7 @@ def api_graph():
 # ---------------------------------------------------------------------------
 # GET /agentcache/graph/stats
 # ---------------------------------------------------------------------------
+
 
 @graph_bp.route("/agentcache/graph/stats", methods=["GET"])
 @graph_bp.route("/agentmemory/graph/stats", methods=["GET"])
@@ -72,6 +75,7 @@ def api_graph_stats():
 # POST /agentcache/graph/query
 # ---------------------------------------------------------------------------
 
+
 @graph_bp.route("/agentcache/graph/query", methods=["POST"])
 @graph_bp.route("/agentmemory/graph/query", methods=["POST"])
 def api_graph_query():
@@ -79,7 +83,7 @@ def api_graph_query():
     if auth_err:
         return auth_err
     try:
-        body = request.get_json(force=True) or {}
+        request.get_json(force=True) or {}
         # start_node_id = body.get("startNodeId")  # reserved for future use
         return jsonify({"nodes": [], "edges": [], "success": True}), 200
     except Exception as e:
@@ -89,6 +93,7 @@ def api_graph_query():
 # ---------------------------------------------------------------------------
 # POST /agentcache/graph/build
 # ---------------------------------------------------------------------------
+
 
 @graph_bp.route("/agentcache/graph/build", methods=["POST"])
 @graph_bp.route("/agentmemory/graph/build", methods=["POST"])

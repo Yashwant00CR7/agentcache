@@ -8,14 +8,7 @@ import datetime
 import threading
 from typing import Dict, Any, List, Optional, Tuple, Set
 from db import StateKV
-from search import (
-    SearchIndex,
-    VectorIndex,
-    GeminiEmbeddingProvider,
-    HybridSearch,
-    base64_to_float32,
-    float32_to_base64
-)
+from search import SearchIndex, VectorIndex, HybridSearch
 
 # =====================================================================
 # Global Variables / Module State
@@ -26,8 +19,9 @@ _embedding_provider = None
 _hybrid_search = HybridSearch(_bm25_index, _vector_index, None, None)
 _index_persistence = None
 _stream_broadcaster = None  # Callable: (payload) -> None
-_dedup_locks: Dict[str, threading.Lock] = {}   # per-(folder, agent) write locks
-_dedup_locks_meta = threading.Lock()           # protects _dedup_locks dict itself
+_dedup_locks: Dict[str, threading.Lock] = {}  # per-(folder, agent) write locks
+_dedup_locks_meta = threading.Lock()  # protects _dedup_locks dict itself
+
 
 # KV scope registry — folder-based memory model
 class KV:
@@ -108,6 +102,7 @@ class KV:
     # Global (cross-project) pinned slots.
     globalSlots = "mem:global-slots"
 
+
 def get_current_project(kv: StateKV) -> Optional[str]:
     try:
         sessions = kv.list(KV.sessions)
@@ -122,6 +117,7 @@ def get_current_project(kv: StateKV) -> Optional[str]:
     except Exception:
         return None
 
+
 def project_slots_scope(kv: StateKV, project: Optional[str] = None) -> str:
     if not project:
         project = get_current_project(kv)
@@ -129,9 +125,11 @@ def project_slots_scope(kv: StateKV, project: Optional[str] = None) -> str:
         return KV.slots
     return f"mem:slots:{project}"
 
+
 # =====================================================================
 # Core Helpers & Utilities
 # =====================================================================
+
 
 def generate_id(prefix: str) -> str:
     t = int(time.time() * 1000)
@@ -145,9 +143,11 @@ def generate_id(prefix: str) -> str:
     rand = uuid.uuid4().hex[:12]
     return f"{prefix}_{ts_str}_{rand}"
 
+
 def fingerprint_id(prefix: str, content: str) -> str:
-    h = hashlib.sha256(content.strip().lower().encode('utf-8')).hexdigest()
+    h = hashlib.sha256(content.strip().lower().encode("utf-8")).hexdigest()
     return f"{prefix}_{h[:16]}"
+
 
 # ---- Folder-path normalisation (REQ-002, REQ-063, REQ-064, REQ-066) ----
 
@@ -189,9 +189,7 @@ def normalize_folder_path(path: str) -> str:
     # would silently resolve to "etc/passwd" (REQ-064).
     raw_parts = path.replace("\\", "/").split("/")
     if any(part == ".." for part in raw_parts):
-        raise ValueError(
-            f"folder_path contains path traversal segment '..': {path!r}"
-        )
+        raise ValueError(f"folder_path contains path traversal segment '..': {path!r}")
 
     # 2. OS-level normalisation (resolves duplicate separators, etc.)
     normalized = os.path.normpath(path)
@@ -205,9 +203,7 @@ def normalize_folder_path(path: str) -> str:
     # Guard: also reject any ".." that somehow survives normalisation.
     parts = normalized.split("/")
     if any(part == ".." for part in parts):
-        raise ValueError(
-            f"folder_path contains path traversal segment '..': {path!r}"
-        )
+        raise ValueError(f"folder_path contains path traversal segment '..': {path!r}")
 
     if not normalized:
         raise ValueError("folder_path is empty after normalization")
@@ -249,7 +245,12 @@ def _get_dedup_lock(folder_path: str, agent_id: str) -> threading.Lock:
         return _dedup_locks[key]
 
 
-def auto_complete_old_active_sessions(kv: StateKV, current_session_id: str, project: Optional[str] = None, agent_id: Optional[str] = None) -> int:
+def auto_complete_old_active_sessions(
+    kv: StateKV,
+    current_session_id: str,
+    project: Optional[str] = None,
+    agent_id: Optional[str] = None,
+) -> int:
     sessions = kv.list(KV.sessions)
     count = 0
     now = datetime.datetime.utcnow().isoformat() + "Z"
@@ -269,6 +270,7 @@ def auto_complete_old_active_sessions(kv: StateKV, current_session_id: str, proj
         print(f"[session] Auto-completed {count} dangling active sessions.")
     return count
 
+
 def jaccard_similarity(a: str, b: str) -> float:
     tokens_a = [t for t in a.split() if len(t) > 2]
     tokens_b = [t for t in b.split() if len(t) > 2]
@@ -282,28 +284,35 @@ def jaccard_similarity(a: str, b: str) -> float:
     union = len(set_a.union(set_b))
     return intersection / union
 
+
 # =====================================================================
 # Privacy & Data Scrubbing
 # =====================================================================
 
-PRIVATE_TAG_RE = re.compile(r'<private>[\s\S]*?</private>', re.IGNORECASE)
+PRIVATE_TAG_RE = re.compile(r"<private>[\s\S]*?</private>", re.IGNORECASE)
 
 SECRET_PATTERN_SOURCES = [
-    re.compile(r'(?:api[_-]?key|secret|token|password|credential|auth)[\s]*[=:]\s*["\']?[A-Za-z0-9_\-/.+]{20,}["\']?', re.IGNORECASE),
-    re.compile(r'Bearer\s+[A-Za-z0-9._\-+/=]{20,}', re.IGNORECASE),
-    re.compile(r'sk-proj-[A-Za-z0-9\-_]{20,}', re.IGNORECASE),
-    re.compile(r'(?:sk|pk|rk|ak)-[A-Za-z0-9][A-Za-z0-9\-_]{19,}', re.IGNORECASE),
-    re.compile(r'sk-ant-[A-Za-z0-9\-_]{20,}', re.IGNORECASE),
-    re.compile(r'gh[pus]_[A-Za-z0-9]{36,}', re.IGNORECASE),
-    re.compile(r'github_pat_[A-Za-z0-9_]{22,}', re.IGNORECASE),
-    re.compile(r'xoxb-[A-Za-z0-9\-]+', re.IGNORECASE),
-    re.compile(r'AKIA[0-9A-Z]{16}', re.IGNORECASE),
-    re.compile(r'AIza[A-Za-z0-9\-_]{35}', re.IGNORECASE),
-    re.compile(r'eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}', re.IGNORECASE),
-    re.compile(r'npm_[A-Za-z0-9]{36}', re.IGNORECASE),
-    re.compile(r'glpat-[A-Za-z0-9\-_]{20,}', re.IGNORECASE),
-    re.compile(r'dop_v1_[A-Za-z0-9]{64}', re.IGNORECASE),
+    re.compile(
+        r'(?:api[_-]?key|secret|token|password|credential|auth)[\s]*[=:]\s*["\']?[A-Za-z0-9_\-/.+]{20,}["\']?',
+        re.IGNORECASE,
+    ),
+    re.compile(r"Bearer\s+[A-Za-z0-9._\-+/=]{20,}", re.IGNORECASE),
+    re.compile(r"sk-proj-[A-Za-z0-9\-_]{20,}", re.IGNORECASE),
+    re.compile(r"(?:sk|pk|rk|ak)-[A-Za-z0-9][A-Za-z0-9\-_]{19,}", re.IGNORECASE),
+    re.compile(r"sk-ant-[A-Za-z0-9\-_]{20,}", re.IGNORECASE),
+    re.compile(r"gh[pus]_[A-Za-z0-9]{36,}", re.IGNORECASE),
+    re.compile(r"github_pat_[A-Za-z0-9_]{22,}", re.IGNORECASE),
+    re.compile(r"xoxb-[A-Za-z0-9\-]+", re.IGNORECASE),
+    re.compile(r"AKIA[0-9A-Z]{16}", re.IGNORECASE),
+    re.compile(r"AIza[A-Za-z0-9\-_]{35}", re.IGNORECASE),
+    re.compile(
+        r"eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}", re.IGNORECASE
+    ),
+    re.compile(r"npm_[A-Za-z0-9]{36}", re.IGNORECASE),
+    re.compile(r"glpat-[A-Za-z0-9\-_]{20,}", re.IGNORECASE),
+    re.compile(r"dop_v1_[A-Za-z0-9]{64}", re.IGNORECASE),
 ]
+
 
 def strip_private_data(input_str: str) -> str:
     result = PRIVATE_TAG_RE.sub("[REDACTED]", input_str)
@@ -311,9 +320,11 @@ def strip_private_data(input_str: str) -> str:
         result = pattern.sub("[REDACTED_SECRET]", result)
     return result
 
+
 # =====================================================================
 # Audit Log System
 # =====================================================================
+
 
 def record_audit(
     kv: StateKV,
@@ -337,6 +348,7 @@ def record_audit(
     kv.set(KV.audit, entry["id"], entry)
     return entry
 
+
 def safe_audit(
     kv: StateKV,
     operation: str,
@@ -347,13 +359,15 @@ def safe_audit(
     user_id: Optional[str] = None,
 ) -> None:
     try:
-        record_audit(kv, operation, function_id, target_ids, details, quality_score, user_id)
+        record_audit(
+            kv, operation, function_id, target_ids, details, quality_score, user_id
+        )
     except Exception as e:
         print(f"[audit] Failed to write audit: {e}")
 
+
 def query_audit(
-    kv: StateKV,
-    filter_opts: Optional[Dict[str, Any]] = None
+    kv: StateKV, filter_opts: Optional[Dict[str, Any]] = None
 ) -> List[Dict[str, Any]]:
     all_entries = kv.list(KV.audit)
     entries = sorted(all_entries, key=lambda x: x.get("timestamp", ""), reverse=True)
@@ -405,21 +419,32 @@ def query_audit(
     limit = filter_opts.get("limit", 100)
     return entries[:limit]
 
+
 # =====================================================================
 # Image Store System
 # =====================================================================
 
 IMAGES_DIR = os.path.join(os.path.expanduser("~"), ".agentcache", "images")
 
+
 def get_max_bytes() -> int:
-    return int(os.getenv("AGENTCACHE_IMAGE_STORE_MAX_BYTES") or os.getenv("AGENTMEMORY_IMAGE_STORE_MAX_BYTES") or 500 * 1024 * 1024)
+    return int(
+        os.getenv("AGENTCACHE_IMAGE_STORE_MAX_BYTES")
+        or os.getenv("AGENTMEMORY_IMAGE_STORE_MAX_BYTES")
+        or 500 * 1024 * 1024
+    )
+
 
 def is_managed_image_path(file_path: str) -> bool:
     if not file_path:
         return False
     resolved = os.path.abspath(file_path)
     normalized_images_dir = os.path.abspath(IMAGES_DIR)
-    return resolved.startswith(normalized_images_dir + os.sep) or resolved == normalized_images_dir
+    return (
+        resolved.startswith(normalized_images_dir + os.sep)
+        or resolved == normalized_images_dir
+    )
+
 
 def save_image_to_disk(base64_data: str) -> Tuple[str, int]:
     if not base64_data:
@@ -441,23 +466,25 @@ def save_image_to_disk(base64_data: str) -> Tuple[str, int]:
                 ext = "webp"
             elif "gif" in meta:
                 ext = "gif"
-            clean_base64 = base64_data[comma_idx + 1:]
+            clean_base64 = base64_data[comma_idx + 1 :]
     elif base64_data.startswith("/9j/"):
         ext = "jpg"
 
-    h = hashlib.sha256(clean_base64.encode('utf-8')).hexdigest()
+    h = hashlib.sha256(clean_base64.encode("utf-8")).hexdigest()
     file_path = os.path.join(IMAGES_DIR, f"{h}.{ext}")
 
     if os.path.exists(file_path):
         return file_path, 0
 
     import base64
+
     buffer = base64.b64decode(clean_base64)
     with open(file_path, "wb") as f:
         f.write(buffer)
 
     size = os.path.getsize(file_path)
     return file_path, size
+
 
 def delete_image(file_path: Optional[str]) -> int:
     if not file_path or not is_managed_image_path(file_path):
@@ -471,6 +498,7 @@ def delete_image(file_path: Optional[str]) -> int:
         print(f"[agentcache] Failed to delete image context: {e}")
     return 0
 
+
 def touch_image(file_path: str) -> None:
     if not file_path or not is_managed_image_path(file_path):
         return
@@ -480,9 +508,11 @@ def touch_image(file_path: str) -> None:
     except Exception:
         pass
 
+
 # =====================================================================
 # Index Persistence System (JSON Sharded)
 # =====================================================================
+
 
 class IndexPersistence:
     """Persist BM25 and vector indexes to the KV store with a debounce queue.
@@ -538,7 +568,7 @@ class IndexPersistence:
                     json.dumps(self.bm25.serialize_data()),
                     "data:manifest",
                     "data",
-                    "mem:index:bm25:bm25:"
+                    "mem:index:bm25:bm25:",
                 )
                 self.bm25._dirty = False  # A4.2 — reset after save
 
@@ -547,7 +577,7 @@ class IndexPersistence:
                     json.dumps(self.vector.serialize_data()),
                     "vectors:manifest",
                     "vectors",
-                    "mem:index:bm25:vectors:"
+                    "mem:index:bm25:vectors:",
                 )
                 self.vector._dirty = False  # A4.2 — reset after save
 
@@ -556,7 +586,9 @@ class IndexPersistence:
         except Exception as e:
             print(f"[index persistence] failed to save index: {e}")
 
-    def save_sharded_index(self, serialized: str, manifest_key: str, legacy_key: str, scope_prefix: str) -> None:
+    def save_sharded_index(
+        self, serialized: str, manifest_key: str, legacy_key: str, scope_prefix: str
+    ) -> None:
         previous = self.kv.get(KV.bm25Index, manifest_key)
         generation = generate_id("idx")
         chunk_chars = 2000000
@@ -567,7 +599,7 @@ class IndexPersistence:
         shard_idx = 0
         while offset < len(serialized):
             scope = f"{scope_prefix}{generation}:{str(shard_idx).zfill(5)}"
-            chunk = serialized[offset:offset + chunk_chars]
+            chunk = serialized[offset : offset + chunk_chars]
             shards.append({"scope": scope, "key": "data", "chars": len(chunk)})
             chunks.append(chunk)
             offset += chunk_chars
@@ -580,7 +612,7 @@ class IndexPersistence:
             "v": 1,
             "generation": generation,
             "shards": shards,
-            "chars": len(serialized)
+            "chars": len(serialized),
         }
 
         self.kv.set(KV.bm25Index, manifest_key, next_manifest)
@@ -593,7 +625,7 @@ class IndexPersistence:
             try:
                 cursor.execute(
                     "SELECT DISTINCT scope FROM kv_store WHERE scope LIKE ?",
-                    (scope_prefix + "%",)
+                    (scope_prefix + "%",),
                 )
                 rows = cursor.fetchall()
                 current_scopes = {s["scope"] for s in shards}
@@ -602,14 +634,14 @@ class IndexPersistence:
                     scope_name = row["scope"]
                     if scope_name not in current_scopes:
                         to_delete.append(scope_name)
-                
+
                 if to_delete:
                     for i in range(0, len(to_delete), 50):
-                        chunk_delete = to_delete[i:i + 50]
-                        format_strings = ','.join(['?'] * len(chunk_delete))
+                        chunk_delete = to_delete[i : i + 50]
+                        format_strings = ",".join(["?"] * len(chunk_delete))
                         cursor.execute(
                             f"DELETE FROM kv_store WHERE scope IN ({format_strings})",
-                            tuple(chunk_delete)
+                            tuple(chunk_delete),
                         )
                         conn.commit()
             finally:
@@ -617,7 +649,12 @@ class IndexPersistence:
         except Exception as ex:
             print(f"[index persistence] error cleaning up obsolete shards: {ex}")
 
-        if previous and isinstance(previous, dict) and previous.get("v") == 1 and isinstance(previous.get("shards"), list):
+        if (
+            previous
+            and isinstance(previous, dict)
+            and previous.get("v") == 1
+            and isinstance(previous.get("shards"), list)
+        ):
             current_shards = {(s["scope"], s["key"]) for s in shards}
             for old_shard in previous["shards"]:
                 if (old_shard["scope"], old_shard["key"]) not in current_shards:
@@ -662,9 +699,11 @@ class IndexPersistence:
             return legacy
         return None
 
+
 # =====================================================================
 # Vector Index / Embedding Helpers
 # =====================================================================
+
 
 def clip_embed_input(text: str) -> str:
     EMBED_MAX_CHARS = 16000
@@ -672,27 +711,42 @@ def clip_embed_input(text: str) -> str:
         return text
     return text[:EMBED_MAX_CHARS]
 
+
 def get_agent_id() -> Optional[str]:
     return os.getenv("AGENT_ID") or None
 
-def commit_if_enabled(kv: StateKV, message: str, agent_id: Optional[str]) -> Optional[str]:
+
+def commit_if_enabled(
+    kv: StateKV, message: str, agent_id: Optional[str]
+) -> Optional[str]:
     return kv.commit_version(message, agent_id or "unknown-agent")
 
 
 def is_agent_scope_isolated() -> bool:
-    return (os.getenv("AGENTCACHE_AGENT_SCOPE") or os.getenv("AGENTMEMORY_AGENT_SCOPE")) == "isolated"
+    return (
+        os.getenv("AGENTCACHE_AGENT_SCOPE") or os.getenv("AGENTMEMORY_AGENT_SCOPE")
+    ) == "isolated"
+
 
 def is_auto_compress_enabled() -> bool:
-    return (os.getenv("AGENTCACHE_AUTO_COMPRESS") or os.getenv("AGENTMEMORY_AUTO_COMPRESS")) == "true"
+    return (
+        os.getenv("AGENTCACHE_AUTO_COMPRESS") or os.getenv("AGENTMEMORY_AUTO_COMPRESS")
+    ) == "true"
+
 
 def is_slots_enabled() -> bool:
     return (os.getenv("AGENTCACHE_SLOTS") or os.getenv("AGENTMEMORY_SLOTS")) == "true"
 
+
 def is_reflect_enabled() -> bool:
-    return (os.getenv("AGENTCACHE_REFLECT") or os.getenv("AGENTMEMORY_REFLECT")) == "true"
+    return (
+        os.getenv("AGENTCACHE_REFLECT") or os.getenv("AGENTMEMORY_REFLECT")
+    ) == "true"
+
 
 def is_graph_extraction_enabled() -> bool:
     return os.getenv("GRAPH_EXTRACTION_ENABLED") == "true"
+
 
 def is_consolidation_enabled() -> bool:
     val = os.getenv("CONSOLIDATION_ENABLED")
@@ -702,11 +756,9 @@ def is_consolidation_enabled() -> bool:
         return True
     return bool(os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY"))
 
+
 def vector_index_add_guarded(
-    obs_id: str,
-    session_id: str,
-    text: str,
-    context: Dict[str, Any]
+    obs_id: str, session_id: str, text: str, context: Dict[str, Any]
 ) -> bool:
     vi = _vector_index
     ep = _embedding_provider
@@ -716,7 +768,9 @@ def vector_index_add_guarded(
         clipped = clip_embed_input(text)
         embedding = ep.embed(clipped)
         if len(embedding) != ep.dimensions:
-            print(f"[vector-index] Dimension mismatch: expected {ep.dimensions}, got {len(embedding)}")
+            print(
+                f"[vector-index] Dimension mismatch: expected {ep.dimensions}, got {len(embedding)}"
+            )
             return False
         vi.add(obs_id, session_id, embedding)
         return True
@@ -724,15 +778,21 @@ def vector_index_add_guarded(
         print(f"[vector-index] Embed failed: {e}")
         return False
 
+
 # =====================================================================
 # Observation System (Observe, Synthetic Compression)
 # =====================================================================
+
 
 def extract_image(d: Any) -> Optional[str]:
     if not d:
         return None
     if isinstance(d, str):
-        if d.startswith("data:image/") or d.startswith("iVBORw0KGgo") or d.startswith("/9j/"):
+        if (
+            d.startswith("data:image/")
+            or d.startswith("iVBORw0KGgo")
+            or d.startswith("/9j/")
+        ):
             return d
         return None
     if isinstance(d, dict):
@@ -744,6 +804,7 @@ def extract_image(d: Any) -> Optional[str]:
             if match:
                 return match
     return None
+
 
 def infer_type(tool_name: Optional[str], hook_type: str) -> str:
     if hook_type == "post_tool_failure":
@@ -758,11 +819,16 @@ def infer_type(tool_name: Optional[str], hook_type: str) -> str:
     if not tool_name:
         return "other"
 
-    n = re.sub(r'([a-z])([A-Z])', r'\1_\2', tool_name)
-    n = re.sub(r'[-\s]+', '_', n).lower()
+    n = re.sub(r"([a-z])([A-Z])", r"\1_\2", tool_name)
+    n = re.sub(r"[-\s]+", "_", n).lower()
 
     def has_word(word: str) -> bool:
-        return bool(re.search(rf"(^|_){word}(_|$)", n)) or n == word or n.endswith(word) or n.startswith(word)
+        return (
+            bool(re.search(rf"(^|_){word}(_|$)", n))
+            or n == word
+            or n.endswith(word)
+            or n.startswith(word)
+        )
 
     if any(has_word(w) for w in ["fetch", "http", "web"]):
         return "web_fetch"
@@ -780,6 +846,7 @@ def infer_type(tool_name: Optional[str], hook_type: str) -> str:
         return "subagent"
     return "other"
 
+
 def extract_files(input_data: Any) -> List[str]:
     if not input_data or not isinstance(input_data, dict):
         return []
@@ -790,6 +857,7 @@ def extract_files(input_data: Any) -> List[str]:
             out.add(v)
     return list(out)
 
+
 def stringify_for_narrative(v: Any) -> str:
     if v is None:
         return ""
@@ -799,6 +867,7 @@ def stringify_for_narrative(v: Any) -> str:
         return json.dumps(v)
     except Exception:
         return str(v)
+
 
 def build_synthetic_compression(raw: Dict[str, Any]) -> Dict[str, Any]:
     tool_name = raw.get("toolName") or raw.get("hookType")
@@ -840,13 +909,16 @@ def build_synthetic_compression(raw: Dict[str, Any]) -> Dict[str, Any]:
             res[k] = raw[k]
     return res
 
+
 def observe(kv: StateKV, payload: Dict[str, Any]) -> Dict[str, Any]:
     session_id = payload.get("sessionId")
     hook_type = payload.get("hookType")
     timestamp = payload.get("timestamp")
 
     if not session_id or not hook_type or not timestamp:
-        raise ValueError("Invalid payload: sessionId, hookType, and timestamp are required")
+        raise ValueError(
+            "Invalid payload: sessionId, hookType, and timestamp are required"
+        )
 
     obs_id = generate_id("obs")
     sanitized_data = payload.get("data")
@@ -870,31 +942,49 @@ def observe(kv: StateKV, payload: Dict[str, Any]) -> Dict[str, Any]:
         if hook_type in ("post_tool_use", "post_tool_failure"):
             raw["toolName"] = sanitized_data.get("tool_name")
             raw["toolInput"] = sanitized_data.get("tool_input")
-            raw["toolOutput"] = sanitized_data.get("tool_output") or sanitized_data.get("error")
+            raw["toolOutput"] = sanitized_data.get("tool_output") or sanitized_data.get(
+                "error"
+            )
         if hook_type == "prompt_submit":
             raw["userPrompt"] = sanitized_data.get("prompt")
         if extracted_img:
-            raw["modality"] = "mixed" if (raw.get("toolInput") or raw.get("toolOutput") or raw.get("userPrompt")) else "image"
+            raw["modality"] = (
+                "mixed"
+                if (
+                    raw.get("toolInput")
+                    or raw.get("toolOutput")
+                    or raw.get("userPrompt")
+                )
+                else "image"
+            )
     elif isinstance(sanitized_data, str) and extracted_img:
         raw["modality"] = "image"
 
     max_obs = int(os.getenv("MAX_OBS_PER_SESSION", "500"))
     if max_obs > 0:
         existing = kv.list(KV.observations(session_id))
-        actual_obs_count = sum(1 for o in existing if not str(o.get("id", "")).endswith(":raw"))
+        actual_obs_count = sum(
+            1 for o in existing if not str(o.get("id", "")).endswith(":raw")
+        )
         if actual_obs_count >= max_obs:
             raise ValueError(f"Session observation limit reached ({max_obs})")
 
     existing_session = kv.get(KV.sessions, session_id)
-    inherited_agent_id = existing_session.get("agentId") if existing_session else get_agent_id()
+    inherited_agent_id = (
+        existing_session.get("agentId") if existing_session else get_agent_id()
+    )
     if inherited_agent_id:
         raw["agentId"] = inherited_agent_id
 
-    if extracted_img and (extracted_img.startswith("data:image/") or extracted_img.startswith("iVBORw0KGgo") or extracted_img.startswith("/9j/")):
+    if extracted_img and (
+        extracted_img.startswith("data:image/")
+        or extracted_img.startswith("iVBORw0KGgo")
+        or extracted_img.startswith("/9j/")
+    ):
         try:
             file_path, bytes_written = save_image_to_disk(extracted_img)
             raw["imageData"] = file_path
-            
+
             # Increment image ref count
             img_refs = kv.get(KV.imageRefs, file_path) or 0
             kv.set(KV.imageRefs, file_path, img_refs + 1)
@@ -906,29 +996,41 @@ def observe(kv: StateKV, payload: Dict[str, Any]) -> Dict[str, Any]:
     kv.set(KV.observations(session_id), raw["id"], raw)
 
     # Stream raw observation
-    broadcast_stream({
-        "type": "raw_observation",
-        "sessionId": session_id,
-        "data": {
-            "type": "raw",
-            "observation": raw,
-            "sessionId": session_id
+    broadcast_stream(
+        {
+            "type": "raw_observation",
+            "sessionId": session_id,
+            "data": {"type": "raw", "observation": raw, "sessionId": session_id},
         }
-    })
+    )
 
     if existing_session:
         updates = [
-            {"type": "set", "path": "updatedAt", "value": datetime.datetime.utcnow().isoformat() + "Z"},
-            {"type": "set", "path": "observationCount", "value": (existing_session.get("observationCount") or 0) + 1}
+            {
+                "type": "set",
+                "path": "updatedAt",
+                "value": datetime.datetime.utcnow().isoformat() + "Z",
+            },
+            {
+                "type": "set",
+                "path": "observationCount",
+                "value": (existing_session.get("observationCount") or 0) + 1,
+            },
         ]
-        if not existing_session.get("firstPrompt") and isinstance(raw.get("userPrompt"), str):
+        if not existing_session.get("firstPrompt") and isinstance(
+            raw.get("userPrompt"), str
+        ):
             trimmed = " ".join(raw["userPrompt"].split()).strip()
             if trimmed:
-                updates.append({"type": "set", "path": "firstPrompt", "value": trimmed[:200]})
+                updates.append(
+                    {"type": "set", "path": "firstPrompt", "value": trimmed[:200]}
+                )
         kv.update(KV.sessions, session_id, updates)
     else:
         project = payload.get("project") or "unknown"
-        auto_complete_old_active_sessions(kv, session_id, project=project, agent_id=inherited_agent_id)
+        auto_complete_old_active_sessions(
+            kv, session_id, project=project, agent_id=inherited_agent_id
+        )
         cwd = payload.get("cwd") or os.getcwd()
         trimmed_prompt = None
         if isinstance(raw.get("userPrompt"), str):
@@ -960,24 +1062,35 @@ def observe(kv: StateKV, payload: Dict[str, Any]) -> Dict[str, Any]:
     _bm25_index.add(synthetic)
 
     comb_text = synthetic["title"] + " " + (synthetic.get("narrative") or "")
-    vector_index_add_guarded(synthetic["id"], synthetic["sessionId"], comb_text, {"kind": "synthetic", "logId": synthetic["id"]})
+    vector_index_add_guarded(
+        synthetic["id"],
+        synthetic["sessionId"],
+        comb_text,
+        {"kind": "synthetic", "logId": synthetic["id"]},
+    )
 
     if _index_persistence:
         _index_persistence.schedule_save()
 
     # Stream compressed observation
-    broadcast_stream({
-        "type": "compressed_observation",
-        "sessionId": session_id,
-        "data": {
-            "type": "compressed",
-            "observation": synthetic,
-            "sessionId": session_id
+    broadcast_stream(
+        {
+            "type": "compressed_observation",
+            "sessionId": session_id,
+            "data": {
+                "type": "compressed",
+                "observation": synthetic,
+                "sessionId": session_id,
+            },
         }
-    })
+    )
 
     # Commit to Dolt
-    commit_if_enabled(kv, f"Observe: {synthetic.get('title', 'observation')} in session {session_id[:8]}", synthetic.get("agentId"))
+    commit_if_enabled(
+        kv,
+        f"Observe: {synthetic.get('title', 'observation')} in session {session_id[:8]}",
+        synthetic.get("agentId"),
+    )
 
     return {"observationId": obs_id}
 
@@ -985,6 +1098,7 @@ def observe(kv: StateKV, payload: Dict[str, Any]) -> Dict[str, Any]:
 # =====================================================================
 # Folder-Based Observation Ingestion (folder_observe)
 # =====================================================================
+
 
 def folder_observe(kv: StateKV, payload: Dict[str, Any]) -> Dict[str, Any]:
     """Ingest a new observation scoped to a (folder_path, agent_id) pair.
@@ -1029,12 +1143,18 @@ def folder_observe(kv: StateKV, payload: Dict[str, Any]) -> Dict[str, Any]:
     safe_text = safe_text[:4000]
 
     # 3a. Deduplication check — compute fingerprint over normalized text (REQ-DEDUP)
-    _dedup_fp = hashlib.sha256(safe_text[:4000].strip().lower().encode("utf-8")).hexdigest()
+    _dedup_fp = hashlib.sha256(
+        safe_text[:4000].strip().lower().encode("utf-8")
+    ).hexdigest()
     _dedup_lock = _get_dedup_lock(folder_path, agent_id)
     _dedup_lock.acquire()
     try:
         _existing_dedup = kv.get(KV.obs_dedup(folder_path, agent_id), _dedup_fp)
-        if _existing_dedup and isinstance(_existing_dedup, dict) and _existing_dedup.get("obsId"):
+        if (
+            _existing_dedup
+            and isinstance(_existing_dedup, dict)
+            and _existing_dedup.get("obsId")
+        ):
             return {"observationId": _existing_dedup["obsId"], "deduplicated": True}
 
         # 10. Enforce MAX_OBS_PER_FOLDER cap before writing (REQ-015)
@@ -1092,13 +1212,21 @@ def folder_observe(kv: StateKV, payload: Dict[str, Any]) -> Dict[str, Any]:
         kv.set(obs_scope, obs_id, obs)
 
         # Write coordinate lookup mapping
-        kv.set(KV.obs_lookup, obs_id, {
-            "folderPath": folder_path,
-            "agentId": agent_id,
-        })
+        kv.set(
+            KV.obs_lookup,
+            obs_id,
+            {
+                "folderPath": folder_path,
+                "agentId": agent_id,
+            },
+        )
 
         # Write dedup index entry — inside lock so check+write is atomic (REQ-DEDUP)
-        kv.set(KV.obs_dedup(folder_path, agent_id), _dedup_fp, {"obsId": obs_id, "timestamp": timestamp})
+        kv.set(
+            KV.obs_dedup(folder_path, agent_id),
+            _dedup_fp,
+            {"obsId": obs_id, "timestamp": timestamp},
+        )
 
     finally:
         _dedup_lock.release()
@@ -1118,12 +1246,16 @@ def folder_observe(kv: StateKV, payload: Dict[str, Any]) -> Dict[str, Any]:
 
     # 8. Upsert global folders index entry (REQ-004, REQ-011)
     index_key = f"{folder_path}:{agent_id}"
-    kv.set(KV.folders, index_key, {
-        "folderPath": folder_path,
-        "agentId": agent_id,
-        "lastUpdated": meta["lastUpdated"],
-        "obsCount": meta["obsCount"],
-    })
+    kv.set(
+        KV.folders,
+        index_key,
+        {
+            "folderPath": folder_path,
+            "agentId": agent_id,
+            "lastUpdated": meta["lastUpdated"],
+            "obsCount": meta["obsCount"],
+        },
+    )
 
     # 9. Add to BM25 index and vector index (REQ-012)
     try:
@@ -1132,7 +1264,9 @@ def folder_observe(kv: StateKV, payload: Dict[str, Any]) -> Dict[str, Any]:
         print(f"[bm25] folder_observe add failed: {ex}")
 
     comb_text = title + " " + safe_text
-    vector_index_add_guarded(obs_id, folder_path, comb_text, {"kind": "folder_obs", "logId": obs_id})
+    vector_index_add_guarded(
+        obs_id, folder_path, comb_text, {"kind": "folder_obs", "logId": obs_id}
+    )
 
     if _index_persistence:
         _index_persistence.schedule_save()
@@ -1141,12 +1275,14 @@ def folder_observe(kv: StateKV, payload: Dict[str, Any]) -> Dict[str, Any]:
     kv.commit_version(f"folder_observe: {obs_id}", agent_id)
 
     # 12. Broadcast via WebSocket stream (REQ-013)
-    broadcast_stream({
-        "type": "folder_observation",
-        "folderPath": folder_path,
-        "agentId": agent_id,
-        "data": obs,
-    })
+    broadcast_stream(
+        {
+            "type": "folder_observation",
+            "folderPath": folder_path,
+            "agentId": agent_id,
+            "data": obs,
+        }
+    )
 
     return {"observationId": obs_id}
 
@@ -1154,6 +1290,7 @@ def folder_observe(kv: StateKV, payload: Dict[str, Any]) -> Dict[str, Any]:
 # =====================================================================
 # Folder Deduplication (dedup_folder_observations)
 # =====================================================================
+
 
 def dedup_folder_observations(
     kv: StateKV,
@@ -1202,7 +1339,9 @@ def dedup_folder_observations(
 
         for obs in all_obs:
             text = obs.get("text") or ""
-            fp_hash = hashlib.sha256(text[:4000].strip().lower().encode("utf-8")).hexdigest()
+            fp_hash = hashlib.sha256(
+                text[:4000].strip().lower().encode("utf-8")
+            ).hexdigest()
             if fp_hash not in fingerprint_map:
                 fingerprint_map[fp_hash] = obs
             else:
@@ -1226,9 +1365,15 @@ def dedup_folder_observations(
         dedup_scope = KV.obs_dedup(fp, aid)
         # Clear existing dedup entries by re-writing from surviving observations
         for fp_hash, obs in fingerprint_map.items():
-            kv.set(dedup_scope, fp_hash, {"obsId": obs["id"], "timestamp": obs.get("timestamp", "")})
+            kv.set(
+                dedup_scope,
+                fp_hash,
+                {"obsId": obs["id"], "timestamp": obs.get("timestamp", "")},
+            )
 
-    print(f"[dedup] Processed {len(pairs)} pair(s): removed {total_removed}, kept {total_kept}")
+    print(
+        f"[dedup] Processed {len(pairs)} pair(s): removed {total_removed}, kept {total_kept}"
+    )
     return {
         "success": True,
         "deduplicated": total_removed,
@@ -1240,6 +1385,7 @@ def dedup_folder_observations(
 # =====================================================================
 # Folder-Based Search (folder_search)
 # =====================================================================
+
 
 def folder_search(
     kv: StateKV,
@@ -1416,14 +1562,18 @@ def folder_timeline(
     # Step 8 — return at most limit entries (REQ-022)
     return all_obs[:limit]
 
+
 # =====================================================================
 # Memory System (Remember, Forget, Evolve)
 # =====================================================================
 
+
 def memory_to_observation(memory: Dict[str, Any]) -> Dict[str, Any]:
     return {
         "id": memory["id"],
-        "sessionId": memory.get("sessionIds", ["memory"])[0] if memory.get("sessionIds") else "memory",
+        "sessionId": memory.get("sessionIds", ["memory"])[0]
+        if memory.get("sessionIds")
+        else "memory",
         "timestamp": memory["createdAt"],
         "type": "decision",
         "title": memory["title"],
@@ -1433,6 +1583,7 @@ def memory_to_observation(memory: Dict[str, Any]) -> Dict[str, Any]:
         "files": memory.get("files", []),
         "importance": memory.get("strength", 7),
     }
+
 
 def remember(kv: StateKV, data: Dict[str, Any]) -> Dict[str, Any]:
     content = data.get("content")
@@ -1461,7 +1612,9 @@ def remember(kv: StateKV, data: Dict[str, Any]) -> Dict[str, Any]:
             continue
         if project and existing.get("project") and existing["project"] != project:
             continue
-        similarity = jaccard_similarity(lower_content, existing.get("content", "").lower())
+        similarity = jaccard_similarity(
+            lower_content, existing.get("content", "").lower()
+        )
         if similarity > 0.7:
             superseded_id = existing["id"]
             superseded_version = existing.get("version") or 1
@@ -1507,19 +1660,25 @@ def remember(kv: StateKV, data: Dict[str, Any]) -> Dict[str, Any]:
         print(f"[bm25] memory add failed: {ex}")
 
     comb_text = new_mem["title"] + " " + new_mem["content"]
-    vector_index_add_guarded(new_mem["id"], "memory", comb_text, {"kind": "memory", "logId": new_mem["id"]})
+    vector_index_add_guarded(
+        new_mem["id"], "memory", comb_text, {"kind": "memory", "logId": new_mem["id"]}
+    )
 
     if _index_persistence:
         _index_persistence.schedule_save()
 
     # Commit to Dolt
-    commit_if_enabled(kv, f"Remember: {new_mem.get('title', '')}", new_mem.get("agentId"))
+    commit_if_enabled(
+        kv, f"Remember: {new_mem.get('title', '')}", new_mem.get("agentId")
+    )
 
     # Broadcast memory created
-    broadcast_stream({
-        "type": "memory_created",
-        "data": new_mem,
-    })
+    broadcast_stream(
+        {
+            "type": "memory_created",
+            "data": new_mem,
+        }
+    )
 
     return {"success": True, "memory": new_mem}
 
@@ -1566,10 +1725,12 @@ def forget(kv: StateKV, data: Dict[str, Any]) -> Dict[str, Any]:
         deleted_mem_ids.append(memory_id)
         deleted += 1
         # Broadcast memory deleted
-        broadcast_stream({
-            "type": "memory_deleted",
-            "memoryId": memory_id,
-        })
+        broadcast_stream(
+            {
+                "type": "memory_deleted",
+                "memoryId": memory_id,
+            }
+        )
 
     # ------------------------------------------------------------------
     # Path 2 & 3: folder-based deletion (REQ-030, REQ-031, REQ-032, REQ-033)
@@ -1600,7 +1761,9 @@ def forget(kv: StateKV, data: Dict[str, Any]) -> Dict[str, Any]:
                         _vector_index.remove(oid)
                     if obs and isinstance(obs, dict) and obs.get("text"):
                         fp_text = obs["text"][:4000]
-                        dedup_fp = hashlib.sha256(fp_text.strip().lower().encode("utf-8")).hexdigest()
+                        dedup_fp = hashlib.sha256(
+                            fp_text.strip().lower().encode("utf-8")
+                        ).hexdigest()
                         kv.delete(KV.obs_dedup(fp, aid), dedup_fp)
                     deleted_obs_ids.append(oid)
                     partial_deleted += 1
@@ -1621,12 +1784,14 @@ def forget(kv: StateKV, data: Dict[str, Any]) -> Dict[str, Any]:
 
             # Broadcast observations deleted
             if deleted_obs_ids:
-                broadcast_stream({
-                    "type": "observations_deleted",
-                    "folderPath": fp,
-                    "agentId": aid,
-                    "observationIds": deleted_obs_ids,
-                })
+                broadcast_stream(
+                    {
+                        "type": "observations_deleted",
+                        "folderPath": fp,
+                        "agentId": aid,
+                        "observationIds": deleted_obs_ids,
+                    }
+                )
         else:
             # ----------------------------------------------------------
             # Path 2: full pair deletion (REQ-030, REQ-032)
@@ -1656,11 +1821,13 @@ def forget(kv: StateKV, data: Dict[str, Any]) -> Dict[str, Any]:
                     kv.delete(dedup_scope, item["id"])
 
             # Broadcast folder pair deleted
-            broadcast_stream({
-                "type": "folder_deleted",
-                "folderPath": fp,
-                "agentId": aid,
-            })
+            broadcast_stream(
+                {
+                    "type": "folder_deleted",
+                    "folderPath": fp,
+                    "agentId": aid,
+                }
+            )
 
     # ------------------------------------------------------------------
     # Legacy: session-based deletion (unchanged)
@@ -1728,12 +1895,14 @@ def forget(kv: StateKV, data: Dict[str, Any]) -> Dict[str, Any]:
                 "memoriesDeleted": len(deleted_mem_ids),
                 "observationsDeleted": len(deleted_obs_ids),
                 "sessionDeleted": deleted_session,
-                "reason": "user-initiated forget"
-            }
+                "reason": "user-initiated forget",
+            },
         )
 
         agent_id = data.get("agentId") or get_agent_id()
-        commit_if_enabled(kv, f"Forget: memory_id={memory_id} folder_path={folder_path_raw}", agent_id)
+        commit_if_enabled(
+            kv, f"Forget: memory_id={memory_id} folder_path={folder_path_raw}", agent_id
+        )
 
     return {"success": True, "deleted": deleted}
 
@@ -1742,11 +1911,19 @@ def forget(kv: StateKV, data: Dict[str, Any]) -> Dict[str, Any]:
 # Prompt Context Compilation System
 # =====================================================================
 
+
 def estimate_tokens(text: str) -> int:
     return int(len(text) / 3)
 
+
 def escape_xml_attr(s: str) -> str:
-    return s.replace("&", "&amp;").replace('"', "&quot;").replace("<", "&lt;").replace(">", "&gt;")
+    return (
+        s.replace("&", "&amp;")
+        .replace('"', "&quot;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+    )
+
 
 def context(kv: StateKV, data: Dict[str, Any]) -> Dict[str, Any]:
     session_id = data.get("sessionId")
@@ -1762,12 +1939,14 @@ def context(kv: StateKV, data: Dict[str, Any]) -> Dict[str, Any]:
     pinned_slots = list_pinned_slots(kv, project)
     slot_content = render_pinned_context(pinned_slots)
     if slot_content:
-        blocks.append({
-            "type": "memory",
-            "content": slot_content,
-            "tokens": estimate_tokens(slot_content),
-            "recency": int(time.time() * 1000)
-        })
+        blocks.append(
+            {
+                "type": "memory",
+                "content": slot_content,
+                "tokens": estimate_tokens(slot_content),
+                "recency": int(time.time() * 1000),
+            }
+        )
 
     # 2. Profile
     profile = kv.get(KV.profiles, project)
@@ -1775,7 +1954,8 @@ def context(kv: StateKV, data: Dict[str, Any]) -> Dict[str, Any]:
         profile_parts = []
         if profile.get("topConcepts"):
             profile_parts.append(
-                "Concepts: " + ", ".join([c["concept"] for c in profile["topConcepts"][:8]])
+                "Concepts: "
+                + ", ".join([c["concept"] for c in profile["topConcepts"][:8]])
             )
         if profile.get("topFiles"):
             profile_parts.append(
@@ -1784,51 +1964,59 @@ def context(kv: StateKV, data: Dict[str, Any]) -> Dict[str, Any]:
         if profile.get("conventions"):
             profile_parts.append("Conventions: " + "; ".join(profile["conventions"]))
         if profile.get("commonErrors"):
-            profile_parts.append("Common errors: " + "; ".join(profile["commonErrors"][:3]))
-        
+            profile_parts.append(
+                "Common errors: " + "; ".join(profile["commonErrors"][:3])
+            )
+
         if profile_parts:
-            profile_content = f"## Project Profile\n" + "\n".join(profile_parts)
-            blocks.append({
-                "type": "memory",
-                "content": profile_content,
-                "tokens": estimate_tokens(profile_content),
-                "recency": int(time.time() * 1000)
-            })
+            profile_content = "## Project Profile\n" + "\n".join(profile_parts)
+            blocks.append(
+                {
+                    "type": "memory",
+                    "content": profile_content,
+                    "tokens": estimate_tokens(profile_content),
+                    "recency": int(time.time() * 1000),
+                }
+            )
 
     # 3. Lessons
     lessons = kv.list(KV.lessons)
     relevant_lessons = [
-        l for l in lessons
-        if not l.get("deleted") and (not l.get("project") or l["project"] == project)
+        les
+        for les in lessons
+        if not les.get("deleted")
+        and (not les.get("project") or les["project"] == project)
     ]
+
     # Score lessons
-    def lesson_score(l):
-        factor = 1.5 if l.get("project") == project else 1.0
-        return factor * l.get("confidence", 0.5)
+    def lesson_score(les):
+        factor = 1.5 if les.get("project") == project else 1.0
+        return factor * les.get("confidence", 0.5)
 
     relevant_lessons.sort(key=lesson_score, reverse=True)
     relevant_lessons = relevant_lessons[:10]
 
     if relevant_lessons:
         items = []
-        for l in relevant_lessons:
-            desc = f"- ({l['confidence']:.2f}) {l['content']}"
-            if l.get("context"):
-                desc += f" — {l['context']}"
+        for les in relevant_lessons:
+            desc = f"- ({les['confidence']:.2f}) {les['content']}"
+            if les.get("context"):
+                desc += f" — {les['context']}"
             items.append(desc)
         lessons_content = "## Lessons Learned\n" + "\n".join(items)
-        blocks.append({
-            "type": "memory",
-            "content": lessons_content,
-            "tokens": estimate_tokens(lessons_content),
-            "recency": int(time.time() * 1000)
-        })
+        blocks.append(
+            {
+                "type": "memory",
+                "content": lessons_content,
+                "tokens": estimate_tokens(lessons_content),
+                "recency": int(time.time() * 1000),
+            }
+        )
 
     # 4. Sessions & Summaries
     all_sessions = kv.list(KV.sessions)
     sessions = [
-        s for s in all_sessions
-        if s.get("project") == project and s["id"] != session_id
+        s for s in all_sessions if s.get("project") == project and s["id"] != session_id
     ]
     sessions.sort(key=lambda s: s.get("startedAt", ""), reverse=True)
     sessions = sessions[:10]
@@ -1836,30 +2024,44 @@ def context(kv: StateKV, data: Dict[str, Any]) -> Dict[str, Any]:
     for s in sessions:
         summary = kv.get(KV.summaries, s["id"])
         if summary:
-            content = f"## {summary.get('title', 'Session summary')}\n{summary.get('narrative', '')}\n" \
-                      f"Decisions: {'; '.join(summary.get('keyDecisions', []))}\n" \
-                      f"Files: {', '.join(summary.get('filesModified', []))}"
-            blocks.append({
-                "type": "summary",
-                "content": content,
-                "tokens": estimate_tokens(content),
-                "recency": int(time.time() * 1000)
-            })
+            content = (
+                f"## {summary.get('title', 'Session summary')}\n{summary.get('narrative', '')}\n"
+                f"Decisions: {'; '.join(summary.get('keyDecisions', []))}\n"
+                f"Files: {', '.join(summary.get('filesModified', []))}"
+            )
+            blocks.append(
+                {
+                    "type": "summary",
+                    "content": content,
+                    "tokens": estimate_tokens(content),
+                    "recency": int(time.time() * 1000),
+                }
+            )
         else:
             # Fallback to important observations
             obs_list = kv.list(KV.observations(s["id"]))
-            important = [o for o in obs_list if o.get("title") and o.get("importance", 0) >= 5]
+            important = [
+                o for o in obs_list if o.get("title") and o.get("importance", 0) >= 5
+            ]
             if important:
                 important.sort(key=lambda o: o.get("importance", 0), reverse=True)
                 top = important[:5]
-                items = [f"- [{o.get('type')}] {o.get('title')}: {o.get('narrative')}" for o in top]
-                content = f"## Session {s['id'][:8]} ({s.get('startedAt')})\n" + "\n".join(items)
-                blocks.append({
-                    "type": "observation",
-                    "content": content,
-                    "tokens": estimate_tokens(content),
-                    "recency": int(time.time() * 1000)
-                })
+                items = [
+                    f"- [{o.get('type')}] {o.get('title')}: {o.get('narrative')}"
+                    for o in top
+                ]
+                content = (
+                    f"## Session {s['id'][:8]} ({s.get('startedAt')})\n"
+                    + "\n".join(items)
+                )
+                blocks.append(
+                    {
+                        "type": "observation",
+                        "content": content,
+                        "tokens": estimate_tokens(content),
+                        "recency": int(time.time() * 1000),
+                    }
+                )
 
     blocks.sort(key=lambda b: b.get("recency", 0), reverse=True)
 
@@ -1879,6 +2081,7 @@ def context(kv: StateKV, data: Dict[str, Any]) -> Dict[str, Any]:
 
     res_context = f"{header}\n" + "\n\n".join(selected) + f"\n{footer}"
     return {"context": res_context, "blocks": len(selected), "tokens": used_tokens}
+
 
 # =====================================================================
 # Memory Slots System
@@ -1959,6 +2162,7 @@ DEFAULT_SLOTS = [
     },
 ]
 
+
 def seed_defaults(kv: StateKV) -> None:
     now = datetime.datetime.utcnow().isoformat() + "Z"
     for tmpl in DEFAULT_SLOTS:
@@ -1972,7 +2176,10 @@ def seed_defaults(kv: StateKV) -> None:
         slot["updatedAt"] = now
         kv.set(target, tmpl["label"], slot)
 
-def list_pinned_slots(kv: StateKV, project: Optional[str] = None) -> List[Dict[str, Any]]:
+
+def list_pinned_slots(
+    kv: StateKV, project: Optional[str] = None
+) -> List[Dict[str, Any]]:
     p_slots = kv.list(project_slots_scope(kv, project))
     g_slots = kv.list(KV.globalSlots)
     merged = {}
@@ -1980,9 +2187,12 @@ def list_pinned_slots(kv: StateKV, project: Optional[str] = None) -> List[Dict[s
         merged[s["label"]] = s
     for s in p_slots:
         merged[s["label"]] = s
-    pinned = [s for s in merged.values() if s.get("pinned") and s.get("content", "").strip()]
+    pinned = [
+        s for s in merged.values() if s.get("pinned") and s.get("content", "").strip()
+    ]
     pinned.sort(key=lambda s: s["label"])
     return pinned
+
 
 def render_pinned_context(slots: List[Dict[str, Any]]) -> str:
     if not slots:
@@ -1993,6 +2203,7 @@ def render_pinned_context(slots: List[Dict[str, Any]]) -> str:
         lines.append(s["content"].strip())
         lines.append("")
     return "\n".join(lines)
+
 
 def slot_list(kv: StateKV, project: Optional[str] = None) -> Dict[str, Any]:
     p_slots = kv.list(project_slots_scope(kv, project))
@@ -2005,6 +2216,7 @@ def slot_list(kv: StateKV, project: Optional[str] = None) -> Dict[str, Any]:
     slots = sorted(list(merged.values()), key=lambda s: s["label"])
     return {"success": True, "slots": slots}
 
+
 def slot_get(kv: StateKV, label: str, project: Optional[str] = None) -> Dict[str, Any]:
     p_scope = project_slots_scope(kv, project)
     project_s = kv.get(p_scope, label)
@@ -2015,10 +2227,14 @@ def slot_get(kv: StateKV, label: str, project: Optional[str] = None) -> Dict[str
         return {"success": True, "slot": global_s, "scope": "global"}
     return {"success": False, "error": "slot not found"}
 
+
 def slot_create(kv: StateKV, data: Dict[str, Any]) -> Dict[str, Any]:
     label = data.get("label")
-    if not label or not re.match(r'^[a-z][a-z0-9_]*$', label):
-        return {"success": False, "error": "label required (lowercase, starts with letter, [a-z0-9_])"}
+    if not label or not re.match(r"^[a-z][a-z0-9_]*$", label):
+        return {
+            "success": False,
+            "error": "label required (lowercase, starts with letter, [a-z0-9_])",
+        }
 
     scope = data.get("scope") or "project"
     if scope not in ("project", "global"):
@@ -2026,17 +2242,25 @@ def slot_create(kv: StateKV, data: Dict[str, Any]) -> Dict[str, Any]:
 
     limit = data.get("sizeLimit") or 2000
     if not isinstance(limit, int) or limit < 1 or limit > 20000:
-        return {"success": False, "error": "sizeLimit must be an integer between 1 and 20000"}
+        return {
+            "success": False,
+            "error": "sizeLimit must be an integer between 1 and 20000",
+        }
 
     content = strip_private_data(data.get("content") or "")
     if len(content) > limit:
-        return {"success": False, "error": f"content exceeds sizeLimit ({len(content)} > {limit})"}
+        return {
+            "success": False,
+            "error": f"content exceeds sizeLimit ({len(content)} > {limit})",
+        }
 
     description = data.get("description") or ""
     pinned = data.get("pinned", True)
     project = data.get("project")
 
-    target_kv = KV.globalSlots if scope == "global" else project_slots_scope(kv, project)
+    target_kv = (
+        KV.globalSlots if scope == "global" else project_slots_scope(kv, project)
+    )
     existing = kv.get(target_kv, label)
     if existing:
         return {"success": False, "error": f"slot already exists in {scope} scope"}
@@ -2054,22 +2278,37 @@ def slot_create(kv: StateKV, data: Dict[str, Any]) -> Dict[str, Any]:
         "updatedAt": now,
     }
     kv.set(target_kv, label, slot)
-    safe_audit(kv, "slot_create", "mem::slot-create", [label], {"scope": scope, "sizeLimit": limit, "pinned": pinned})
-    
+    safe_audit(
+        kv,
+        "slot_create",
+        "mem::slot-create",
+        [label],
+        {"scope": scope, "sizeLimit": limit, "pinned": pinned},
+    )
+
     # Commit to Dolt
     agent_id = data.get("agentId") or get_agent_id()
     commit_if_enabled(kv, f"Create slot: {label}", agent_id)
 
     return {"success": True, "slot": slot}
 
-def slot_append(kv: StateKV, label: str, text: str, agent_id: Optional[str] = None, project: Optional[str] = None) -> Dict[str, Any]:
+
+def slot_append(
+    kv: StateKV,
+    label: str,
+    text: str,
+    agent_id: Optional[str] = None,
+    project: Optional[str] = None,
+) -> Dict[str, Any]:
     res = slot_get(kv, label, project)
     if not res.get("success"):
         return {"success": False, "error": "slot not found"}
 
     slot = res["slot"]
     scope = res["scope"]
-    target_kv = KV.globalSlots if scope == "global" else project_slots_scope(kv, project)
+    target_kv = (
+        KV.globalSlots if scope == "global" else project_slots_scope(kv, project)
+    )
 
     if slot.get("readOnly"):
         return {"success": False, "error": "slot is read-only"}
@@ -2084,28 +2323,43 @@ def slot_append(kv: StateKV, label: str, text: str, agent_id: Optional[str] = No
             "success": False,
             "error": f"append would exceed sizeLimit ({len(next_content)} > {limit})",
             "currentSize": len(content),
-            "sizeLimit": limit
+            "sizeLimit": limit,
         }
 
     slot["content"] = next_content
     slot["updatedAt"] = datetime.datetime.utcnow().isoformat() + "Z"
     kv.set(target_kv, label, slot)
 
-    safe_audit(kv, "slot_append", "mem::slot-append", [label], {"scope": scope, "added": len(text), "total": len(next_content)})
-    
+    safe_audit(
+        kv,
+        "slot_append",
+        "mem::slot-append",
+        [label],
+        {"scope": scope, "added": len(text), "total": len(next_content)},
+    )
+
     # Commit to Dolt
     commit_if_enabled(kv, f"Append slot: {label}", agent_id or get_agent_id())
 
     return {"success": True, "slot": slot, "size": len(next_content)}
 
-def slot_replace(kv: StateKV, label: str, content: str, agent_id: Optional[str] = None, project: Optional[str] = None) -> Dict[str, Any]:
+
+def slot_replace(
+    kv: StateKV,
+    label: str,
+    content: str,
+    agent_id: Optional[str] = None,
+    project: Optional[str] = None,
+) -> Dict[str, Any]:
     res = slot_get(kv, label, project)
     if not res.get("success"):
         return {"success": False, "error": "slot not found"}
 
     slot = res["slot"]
     scope = res["scope"]
-    target_kv = KV.globalSlots if scope == "global" else project_slots_scope(kv, project)
+    target_kv = (
+        KV.globalSlots if scope == "global" else project_slots_scope(kv, project)
+    )
 
     if slot.get("readOnly"):
         return {"success": False, "error": "slot is read-only"}
@@ -2116,7 +2370,7 @@ def slot_replace(kv: StateKV, label: str, content: str, agent_id: Optional[str] 
         return {
             "success": False,
             "error": f"content exceeds sizeLimit ({len(content)} > {limit})",
-            "sizeLimit": limit
+            "sizeLimit": limit,
         }
 
     before_len = len(slot.get("content") or "")
@@ -2124,28 +2378,48 @@ def slot_replace(kv: StateKV, label: str, content: str, agent_id: Optional[str] 
     slot["updatedAt"] = datetime.datetime.utcnow().isoformat() + "Z"
     kv.set(target_kv, label, slot)
 
-    safe_audit(kv, "slot_replace", "mem::slot-replace", [label], {"scope": scope, "before": before_len, "after": len(content)})
-    
+    safe_audit(
+        kv,
+        "slot_replace",
+        "mem::slot-replace",
+        [label],
+        {"scope": scope, "before": before_len, "after": len(content)},
+    )
+
     # Commit to Dolt
     commit_if_enabled(kv, f"Replace slot: {label}", agent_id or get_agent_id())
 
     return {"success": True, "slot": slot, "size": len(content)}
 
-def slot_delete(kv: StateKV, label: str, agent_id: Optional[str] = None, project: Optional[str] = None) -> Dict[str, Any]:
+
+def slot_delete(
+    kv: StateKV,
+    label: str,
+    agent_id: Optional[str] = None,
+    project: Optional[str] = None,
+) -> Dict[str, Any]:
     res = slot_get(kv, label, project)
     if not res.get("success"):
         return {"success": False, "error": "slot not found"}
 
     slot = res["slot"]
     scope = res["scope"]
-    target_kv = KV.globalSlots if scope == "global" else project_slots_scope(kv, project)
+    target_kv = (
+        KV.globalSlots if scope == "global" else project_slots_scope(kv, project)
+    )
 
     if slot.get("readOnly"):
         return {"success": False, "error": "slot is read-only"}
 
     kv.delete(target_kv, label)
-    safe_audit(kv, "slot_delete", "mem::slot-delete", [label], {"scope": scope, "size": len(slot.get("content") or "")})
-    
+    safe_audit(
+        kv,
+        "slot_delete",
+        "mem::slot-delete",
+        [label],
+        {"scope": scope, "size": len(slot.get("content") or "")},
+    )
+
     # Commit to Dolt
     commit_if_enabled(kv, f"Delete slot: {label}", agent_id or get_agent_id())
 
@@ -2160,7 +2434,9 @@ def slot_reflect(kv: StateKV, session_id: str, max_obs: int = 50) -> Dict[str, A
     if not observations:
         return {"success": True, "applied": 0, "reason": "no observations for session"}
 
-    recent = sorted(observations, key=lambda x: x.get("timestamp", ""), reverse=True)[:max_obs]
+    recent = sorted(observations, key=lambda x: x.get("timestamp", ""), reverse=True)[
+        :max_obs
+    ]
 
     pending_lines = []
     pattern_counts = {}
@@ -2186,11 +2462,19 @@ def slot_reflect(kv: StateKV, session_id: str, max_obs: int = 50) -> Dict[str, A
         if res.get("success"):
             slot = res["slot"]
             scope = res["scope"]
-            target_kv = scopeKv = KV.globalSlots if scope == "global" else project_slots_scope(kv, project)
+            target_kv = (
+                KV.globalSlots
+                if scope == "global"
+                else project_slots_scope(kv, project)
+            )
             already = set((slot.get("content") or "").split("\n"))
-            fresh = [l for l in pending_lines if l not in already]
+            fresh = [line for line in pending_lines if line not in already]
             if fresh:
-                sep = "\n" if slot.get("content") and not slot["content"].endswith("\n") else ""
+                sep = (
+                    "\n"
+                    if slot.get("content") and not slot["content"].endswith("\n")
+                    else ""
+                )
                 next_content = (slot.get("content") or "") + sep + "\n".join(fresh)
                 limit = slot.get("sizeLimit") or 2000
                 if len(next_content) > limit:
@@ -2205,7 +2489,11 @@ def slot_reflect(kv: StateKV, session_id: str, max_obs: int = 50) -> Dict[str, A
         if res.get("success"):
             slot = res["slot"]
             scope = res["scope"]
-            target_kv = KV.globalSlots if scope == "global" else project_slots_scope(kv, project)
+            target_kv = (
+                KV.globalSlots
+                if scope == "global"
+                else project_slots_scope(kv, project)
+            )
             summary = [f"last reflection: {now}"]
             for k, v in pattern_counts.items():
                 summary.append(f"- {k}: {v} in last {len(recent)} observations")
@@ -2223,7 +2511,11 @@ def slot_reflect(kv: StateKV, session_id: str, max_obs: int = 50) -> Dict[str, A
         if res.get("success"):
             slot = res["slot"]
             scope = res["scope"]
-            target_kv = KV.globalSlots if scope == "global" else project_slots_scope(kv, project)
+            target_kv = (
+                KV.globalSlots
+                if scope == "global"
+                else project_slots_scope(kv, project)
+            )
             already = slot.get("content") or ""
             fresh = [f for f in files if f not in already][:20]
             if fresh:
@@ -2234,7 +2526,7 @@ def slot_reflect(kv: StateKV, session_id: str, max_obs: int = 50) -> Dict[str, A
                     lines.append(header_line)
                 for f in fresh:
                     lines.append(f"- {f}")
-                next_content = sep.join([l for l in lines if l])
+                next_content = sep.join([line for line in lines if line])
                 limit = slot.get("sizeLimit") or 2000
                 if len(next_content) > limit:
                     next_content = next_content[-limit:]
@@ -2244,8 +2536,18 @@ def slot_reflect(kv: StateKV, session_id: str, max_obs: int = 50) -> Dict[str, A
                 applied += 1
 
     if applied > 0:
-        safe_audit(kv, "slot_reflect", "mem::slot-reflect", [session_id], {"observationCount": len(recent), "slotsUpdated": applied})
-        commit_if_enabled(kv, f"Slot reflect: updated {applied} slots in session {session_id[:8]}", "system")
+        safe_audit(
+            kv,
+            "slot_reflect",
+            "mem::slot-reflect",
+            [session_id],
+            {"observationCount": len(recent), "slotsUpdated": applied},
+        )
+        commit_if_enabled(
+            kv,
+            f"Slot reflect: updated {applied} slots in session {session_id[:8]}",
+            "system",
+        )
 
     return {"success": True, "applied": applied, "observationsReviewed": len(recent)}
 
@@ -2254,6 +2556,7 @@ def slot_reflect(kv: StateKV, session_id: str, max_obs: int = 50) -> Dict[str, A
 # Lessons Learned System
 # =====================================================================
 
+
 def reinforce_lesson(lesson: Dict[str, Any]) -> None:
     now = datetime.datetime.utcnow().isoformat() + "Z"
     lesson["reinforcements"] = lesson.get("reinforcements", 0) + 1
@@ -2261,6 +2564,7 @@ def reinforce_lesson(lesson: Dict[str, Any]) -> None:
     lesson["confidence"] = min(1.0, conf + 0.1 * (1 - conf))
     lesson["lastReinforcedAt"] = now
     lesson["updatedAt"] = now
+
 
 def lesson_save(kv: StateKV, data: Dict[str, Any]) -> Dict[str, Any]:
     content = data.get("content")
@@ -2279,10 +2583,12 @@ def lesson_save(kv: StateKV, data: Dict[str, Any]) -> Dict[str, Any]:
             existing["context"] = context_str
         kv.set(KV.lessons, existing["id"], existing)
         safe_audit(kv, "lesson_strengthen", "mem::lesson-save", [existing["id"]])
-        
+
         # Commit to Dolt
-        commit_if_enabled(kv, f"Strengthen lesson: {existing.get('content', '')[:60]}", agent_id)
-        
+        commit_if_enabled(
+            kv, f"Strengthen lesson: {existing.get('content', '')[:60]}", agent_id
+        )
+
         return {"success": True, "action": "strengthened", "lesson": existing}
 
     confidence = data.get("confidence")
@@ -2306,7 +2612,7 @@ def lesson_save(kv: StateKV, data: Dict[str, Any]) -> Dict[str, Any]:
     }
     kv.set(KV.lessons, lesson["id"], lesson)
     safe_audit(kv, "lesson_save", "mem::lesson-save", [lesson["id"]])
-    
+
     # Commit to Dolt
     commit_if_enabled(kv, f"Create lesson: {lesson['content'][:60]}", agent_id)
 
@@ -2319,19 +2625,21 @@ def lesson_list(kv: StateKV, data: Dict[str, Any]) -> Dict[str, Any]:
     all_lessons = kv.list(KV.lessons)
 
     lessons = [
-        l for l in all_lessons
-        if not l.get("deleted") and l.get("confidence", 0.5) >= min_confidence
+        les
+        for les in all_lessons
+        if not les.get("deleted") and les.get("confidence", 0.5) >= min_confidence
     ]
 
     project = data.get("project")
     if project:
-        lessons = [l for l in lessons if l.get("project") == project]
+        lessons = [les for les in lessons if les.get("project") == project]
     source = data.get("source")
     if source:
-        lessons = [l for l in lessons if l.get("source") == source]
+        lessons = [les for les in lessons if les.get("source") == source]
 
     lessons.sort(key=lambda x: x.get("confidence", 0.5), reverse=True)
     return {"success": True, "lessons": lessons[:limit]}
+
 
 def lesson_recall(kv: StateKV, data: Dict[str, Any]) -> Dict[str, Any]:
     query = data.get("query")
@@ -2344,31 +2652,36 @@ def lesson_recall(kv: StateKV, data: Dict[str, Any]) -> Dict[str, Any]:
 
     all_lessons = kv.list(KV.lessons)
     lessons = [
-        l for l in all_lessons
-        if not l.get("deleted") and l.get("confidence", 0.5) >= min_confidence
+        les
+        for les in all_lessons
+        if not les.get("deleted") and les.get("confidence", 0.5) >= min_confidence
     ]
 
     project = data.get("project")
     if project:
-        lessons = [l for l in lessons if l.get("project") == project]
+        lessons = [les for les in lessons if les.get("project") == project]
 
     scored = []
     terms = [t for t in query_lower.split() if len(t) > 1]
 
-    for l in lessons:
-        text = f"{l.get('content', '')} {l.get('context', '')} {' '.join(l.get('tags') or [])}".lower()
+    for les in lessons:
+        text = f"{les.get('content', '')} {les.get('context', '')} {' '.join(les.get('tags') or [])}".lower()
         match_count = sum(1 for t in terms if t in text)
         if match_count == 0:
             continue
 
         relevance = match_count / len(terms)
-        baseline = l.get("lastReinforcedAt") or l.get("createdAt")
+        baseline = les.get("lastReinforcedAt") or les.get("createdAt")
         import dateutil.parser
+
         dt = dateutil.parser.parse(baseline)
-        days = (datetime.datetime.utcnow().replace(tzinfo=datetime.timezone.utc) - dt.replace(tzinfo=datetime.timezone.utc)).total_seconds() / (3600 * 24)
+        days = (
+            datetime.datetime.utcnow().replace(tzinfo=datetime.timezone.utc)
+            - dt.replace(tzinfo=datetime.timezone.utc)
+        ).total_seconds() / (3600 * 24)
         recency_boost = 1 / (1 + days * 0.01)
-        score = l.get("confidence", 0.5) * relevance * recency_boost
-        scored.append({"lesson": l, "score": score})
+        score = les.get("confidence", 0.5) * relevance * recency_boost
+        scored.append({"lesson": les, "score": score})
 
     scored.sort(key=lambda x: x["score"], reverse=True)
     results = []
@@ -2377,8 +2690,15 @@ def lesson_recall(kv: StateKV, data: Dict[str, Any]) -> Dict[str, Any]:
         item["score"] = round(s["score"], 3)
         results.append(item)
 
-    safe_audit(kv, "lesson_recall", "mem::lesson-recall", [], {"query": query, "resultCount": len(results)})
+    safe_audit(
+        kv,
+        "lesson_recall",
+        "mem::lesson-recall",
+        [],
+        {"query": query, "resultCount": len(results)},
+    )
     return {"success": True, "lessons": results}
+
 
 def lesson_strengthen(kv: StateKV, lesson_id: str) -> Dict[str, Any]:
     lesson = kv.get(KV.lessons, lesson_id)
@@ -2388,11 +2708,14 @@ def lesson_strengthen(kv: StateKV, lesson_id: str) -> Dict[str, Any]:
     reinforce_lesson(lesson)
     kv.set(KV.lessons, lesson["id"], lesson)
     safe_audit(kv, "lesson_strengthen", "mem::lesson-strengthen", [lesson["id"]])
-    
+
     # Commit to Dolt
-    commit_if_enabled(kv, f"Strengthen lesson: {lesson.get('content', '')[:60]}", get_agent_id())
-    
+    commit_if_enabled(
+        kv, f"Strengthen lesson: {lesson.get('content', '')[:60]}", get_agent_id()
+    )
+
     return {"success": True, "lesson": lesson}
+
 
 def lesson_decay_sweep(kv: StateKV) -> Dict[str, Any]:
     all_lessons = kv.list(KV.lessons)
@@ -2401,49 +2724,74 @@ def lesson_decay_sweep(kv: StateKV) -> Dict[str, Any]:
     now = datetime.datetime.utcnow()
     timestamp = now.isoformat() + "Z"
 
-    for l in all_lessons:
-        if l.get("deleted"):
+    for les in all_lessons:
+        if les.get("deleted"):
             continue
-        baseline_str = l.get("lastDecayedAt") or l.get("lastReinforcedAt") or l["createdAt"]
+        baseline_str = (
+            les.get("lastDecayedAt") or les.get("lastReinforcedAt") or les["createdAt"]
+        )
         import dateutil.parser
+
         dt = dateutil.parser.parse(baseline_str)
-        weeks = (now.replace(tzinfo=datetime.timezone.utc) - dt.replace(tzinfo=datetime.timezone.utc)).total_seconds() / (3600 * 24 * 7)
+        weeks = (
+            now.replace(tzinfo=datetime.timezone.utc)
+            - dt.replace(tzinfo=datetime.timezone.utc)
+        ).total_seconds() / (3600 * 24 * 7)
         if weeks < 1.0:
             continue
 
-        decay = l.get("decayRate", 0.05) * weeks
-        new_conf = max(0.05, l.get("confidence", 0.5) - decay)
-        
-        if new_conf != l.get("confidence"):
-            before = l.get("confidence", 0.5)
-            l["confidence"] = round(new_conf, 3)
-            l["lastDecayedAt"] = timestamp
-            l["updatedAt"] = timestamp
+        decay = les.get("decayRate", 0.05) * weeks
+        new_conf = max(0.05, les.get("confidence", 0.5) - decay)
 
-            if l["confidence"] <= 0.1 and l.get("reinforcements", 0) == 0:
-                l["deleted"] = True
+        if new_conf != les.get("confidence"):
+            before = les.get("confidence", 0.5)
+            les["confidence"] = round(new_conf, 3)
+            les["lastDecayedAt"] = timestamp
+            les["updatedAt"] = timestamp
+
+            if les["confidence"] <= 0.1 and les.get("reinforcements", 0) == 0:
+                les["deleted"] = True
                 soft_deleted += 1
             else:
                 decayed += 1
 
-            kv.set(KV.lessons, l["id"], l)
-            safe_audit(kv, "lesson_strengthen", "mem::lesson-decay-sweep", [l["id"]], {
-                "action": "soft-delete" if l.get("deleted") else "decay",
-                "actor": "system",
-                "reason": "decay-sweep",
-                "before": {"confidence": before, "deleted": False},
-                "after": {"confidence": l["confidence"], "deleted": bool(l.get("deleted"))}
-            })
+            kv.set(KV.lessons, les["id"], les)
+            safe_audit(
+                kv,
+                "lesson_strengthen",
+                "mem::lesson-decay-sweep",
+                [les["id"]],
+                {
+                    "action": "soft-delete" if les.get("deleted") else "decay",
+                    "actor": "system",
+                    "reason": "decay-sweep",
+                    "before": {"confidence": before, "deleted": False},
+                    "after": {
+                        "confidence": les["confidence"],
+                        "deleted": bool(les.get("deleted")),
+                    },
+                },
+            )
 
     if decayed > 0 or soft_deleted > 0:
-        commit_if_enabled(kv, f"Lesson decay sweep: decayed {decayed}, soft-deleted {soft_deleted}", "system")
+        commit_if_enabled(
+            kv,
+            f"Lesson decay sweep: decayed {decayed}, soft-deleted {soft_deleted}",
+            "system",
+        )
 
-    return {"success": True, "decayed": decayed, "softDeleted": soft_deleted, "total": len(all_lessons)}
+    return {
+        "success": True,
+        "decayed": decayed,
+        "softDeleted": soft_deleted,
+        "total": len(all_lessons),
+    }
 
 
 # =====================================================================
 # Database Rebuilder (Index Bootstrapper)
 # =====================================================================
+
 
 def rebuild_index(kv: StateKV) -> int:
     _bm25_index.clear()
@@ -2465,10 +2813,15 @@ def rebuild_index(kv: StateKV) -> int:
                 continue
             # Populate coordinate lookup index
             kv.set(KV.obs_lookup, obs["id"], {"folderPath": fp, "agentId": aid})
-            
+
             _bm25_index.add(obs)
             comb_text = (obs.get("title") or "") + " " + (obs.get("text") or "")
-            vector_index_add_guarded(obs["id"], fp, comb_text.strip(), {"kind": "folder_observation", "logId": obs["id"]})
+            vector_index_add_guarded(
+                obs["id"],
+                fp,
+                comb_text.strip(),
+                {"kind": "folder_observation", "logId": obs["id"]},
+            )
             total_indexed += 1
 
     # ---- Path B: session-based observations (legacy schema — kept for old data) ----
@@ -2487,7 +2840,12 @@ def rebuild_index(kv: StateKV) -> int:
                         continue
                     _bm25_index.add(obs)
                     comb_text = obs["title"] + " " + obs["narrative"]
-                    vector_index_add_guarded(obs["id"], sid, comb_text, {"kind": "observation", "logId": obs["id"]})
+                    vector_index_add_guarded(
+                        obs["id"],
+                        sid,
+                        comb_text,
+                        {"kind": "observation", "logId": obs["id"]},
+                    )
                     total_indexed += 1
     except Exception as e:
         print(f"[rebuild_index] session-based backfill skipped: {e}")
@@ -2502,7 +2860,9 @@ def rebuild_index(kv: StateKV) -> int:
         converted = memory_to_observation(mem)
         _bm25_index.add(converted)
         comb_text = mem["title"] + " " + mem["content"]
-        vector_index_add_guarded(mem["id"], "memory", comb_text, {"kind": "memory", "logId": mem["id"]})
+        vector_index_add_guarded(
+            mem["id"], "memory", comb_text, {"kind": "memory", "logId": mem["id"]}
+        )
         total_indexed += 1
 
     if _index_persistence and total_indexed > 0:
@@ -2510,9 +2870,11 @@ def rebuild_index(kv: StateKV) -> int:
 
     return total_indexed
 
+
 # =====================================================================
 # Advanced Function Stubs / CRUD Operations
 # =====================================================================
+
 
 def list_sessions(kv: StateKV) -> List[Dict[str, Any]]:
     sessions = kv.list(KV.sessions)
@@ -2526,6 +2888,7 @@ def list_sessions(kv: StateKV) -> List[Dict[str, Any]]:
     sessions.sort(key=lambda s: s.get("startedAt", ""), reverse=True)
     return sessions
 
+
 def get_session(kv: StateKV, session_id: str) -> Optional[Dict[str, Any]]:
     s = kv.get(KV.sessions, session_id)
     if s:
@@ -2535,18 +2898,30 @@ def get_session(kv: StateKV, session_id: str) -> Optional[Dict[str, Any]]:
             s["summary"] = summary.get("narrative")
     return s
 
+
 def create_session(kv: StateKV, session: Dict[str, Any]) -> Dict[str, Any]:
-    auto_complete_old_active_sessions(kv, session["id"], project=session.get("project"), agent_id=session.get("agentId"))
+    auto_complete_old_active_sessions(
+        kv,
+        session["id"],
+        project=session.get("project"),
+        agent_id=session.get("agentId"),
+    )
     kv.set(KV.sessions, session["id"], session)
     return session
 
+
 def end_session(kv: StateKV, session_id: str) -> bool:
     now = datetime.datetime.utcnow().isoformat() + "Z"
-    kv.update(KV.sessions, session_id, [
-        {"type": "set", "path": "endedAt", "value": now},
-        {"type": "set", "path": "status", "value": "completed"}
-    ])
+    kv.update(
+        KV.sessions,
+        session_id,
+        [
+            {"type": "set", "path": "endedAt", "value": now},
+            {"type": "set", "path": "status", "value": "completed"},
+        ],
+    )
     return True
+
 
 def timeline(kv: StateKV, data: Dict[str, Any]) -> Dict[str, Any]:
     # Simple timeline query returning observations sorted by timestamp
@@ -2568,7 +2943,7 @@ def timeline(kv: StateKV, data: Dict[str, Any]) -> Dict[str, Any]:
 
     # sort by timestamp
     all_obs.sort(key=lambda x: x.get("timestamp", ""))
-    
+
     anchor_idx = -1
     for idx, obs in enumerate(all_obs):
         if obs["id"] == anchor or obs.get("timestamp", "") >= (anchor or ""):
@@ -2584,8 +2959,9 @@ def timeline(kv: StateKV, data: Dict[str, Any]) -> Dict[str, Any]:
     return {
         "success": True,
         "observations": all_obs[start:end],
-        "anchorIndex": anchor_idx - start
+        "anchorIndex": anchor_idx - start,
     }
+
 
 def get_project_profile(kv: StateKV, project: str) -> Dict[str, Any]:
     prof = kv.get(KV.profiles, project)
@@ -2596,11 +2972,12 @@ def get_project_profile(kv: StateKV, project: str) -> Dict[str, Any]:
             "topFiles": [],
             "conventions": [],
             "commonErrors": [],
-            "updatedAt": datetime.datetime.utcnow().isoformat() + "Z"
+            "updatedAt": datetime.datetime.utcnow().isoformat() + "Z",
         }
     if not prof.get("topConcepts") and not prof.get("topFiles"):
         prof = build_project_profile(kv, project)
     return prof
+
 
 def build_project_profile(kv: StateKV, project: str) -> Dict[str, Any]:
     prof = kv.get(KV.profiles, project)
@@ -2611,13 +2988,16 @@ def build_project_profile(kv: StateKV, project: str) -> Dict[str, Any]:
             "topFiles": [],
             "conventions": [],
             "commonErrors": [],
-            "updatedAt": datetime.datetime.utcnow().isoformat() + "Z"
+            "updatedAt": datetime.datetime.utcnow().isoformat() + "Z",
         }
 
     # Stored profile may lack topConcepts/topFiles — compute from observations + memories if empty
     if not prof.get("topConcepts") and not prof.get("topFiles"):
-        import re as _re, json as _j, os.path as _osp
+        import re as _re
+        import json as _j
+        import os.path as _osp
         from collections import Counter
+
         sessions = kv.list(KV.sessions)
         project_sessions = [s for s in sessions if s.get("project") == project]
         concept_counts = Counter()
@@ -2627,12 +3007,17 @@ def build_project_profile(kv: StateKV, project: str) -> Dict[str, Any]:
             if not isinstance(path, str) or not path:
                 return
             fc[path] += 1
-            parts = _re.split(r'[\\/]', path)
+            parts = _re.split(r"[\\/]", path)
             fname = parts[-1] if parts else ""
             skip = {"tmp", "temp", "claude", "appdata", "local", "users", "windows"}
             for part in parts[:-1]:
                 p = part.lower().strip()
-                if p and len(p) > 2 and p not in skip and not _re.match(r'^[a-z]:|^\.|^--', p):
+                if (
+                    p
+                    and len(p) > 2
+                    and p not in skip
+                    and not _re.match(r"^[a-z]:|^\.|^--", p)
+                ):
                     cc[p] += 1
             stem = _osp.splitext(fname)[0]
             if stem and len(stem) > 2:
@@ -2646,18 +3031,20 @@ def build_project_profile(kv: StateKV, project: str) -> Dict[str, Any]:
             if not sid:
                 continue
             for o in kv.list(KV.observations(sid)):
-                for c in (o.get("concepts") or []):
+                for c in o.get("concepts") or []:
                     if isinstance(c, str) and c:
                         concept_counts[c] += 1
-                for f in (o.get("files") or []):
+                for f in o.get("files") or []:
                     _harvest_file(f, file_counts, concept_counts)
                 tn = o.get("toolName")
                 if tn:
                     concept_counts[tn] += 1
                 ti = o.get("toolInput")
                 if isinstance(ti, str):
-                    try: ti = _j.loads(ti)
-                    except Exception: ti = {}
+                    try:
+                        ti = _j.loads(ti)
+                    except Exception:
+                        ti = {}
                 if isinstance(ti, dict):
                     for fk in ("path", "file_path", "file", "filename"):
                         _harvest_file(ti.get(fk, ""), file_counts, concept_counts)
@@ -2667,25 +3054,34 @@ def build_project_profile(kv: StateKV, project: str) -> Dict[str, Any]:
                         nd = _j.loads(narr)
                         if isinstance(nd, dict):
                             tn2 = nd.get("toolName") or nd.get("tool_name")
-                            if tn2: concept_counts[tn2] += 1
+                            if tn2:
+                                concept_counts[tn2] += 1
                             for fk in ("path", "file_path", "file", "filename"):
-                                _harvest_file(nd.get(fk, ""), file_counts, concept_counts)
+                                _harvest_file(
+                                    nd.get(fk, ""), file_counts, concept_counts
+                                )
                     except Exception:
                         pass
 
         # memories for this project
         for m in kv.list(KV.memories):
             if m.get("project") == project:
-                for c in (m.get("concepts") or []):
-                    if c: concept_counts[c] += 1
-                for f in (m.get("files") or []):
+                for c in m.get("concepts") or []:
+                    if c:
+                        concept_counts[c] += 1
+                for f in m.get("files") or []:
                     _harvest_file(f, file_counts, concept_counts)
 
-        prof["topConcepts"] = [{"concept": c, "frequency": n} for c, n in concept_counts.most_common(20)]
-        prof["topFiles"] = [{"file": f, "frequency": n} for f, n in file_counts.most_common(20)]
+        prof["topConcepts"] = [
+            {"concept": c, "frequency": n} for c, n in concept_counts.most_common(20)
+        ]
+        prof["topFiles"] = [
+            {"file": f, "frequency": n} for f, n in file_counts.most_common(20)
+        ]
         prof["sessionCount"] = len(project_sessions)
 
     return prof
+
 
 def export_data(kv: StateKV, data: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     if data is None:
@@ -2708,12 +3104,14 @@ def export_data(kv: StateKV, data: Optional[Dict[str, Any]] = None) -> Dict[str,
             "obsCount": entry.get("obsCount", 0),
         }
         observations = kv.list(KV.folder_obs(fp, aid))
-        folders_export.append({
-            "folderPath": fp,
-            "agentId": aid,
-            "meta": meta,
-            "observations": observations,
-        })
+        folders_export.append(
+            {
+                "folderPath": fp,
+                "agentId": aid,
+                "meta": meta,
+                "observations": observations,
+            }
+        )
 
     memories = kv.list(KV.memories)
 
@@ -2735,90 +3133,111 @@ def migrate_sessions_to_folders(kv: StateKV, dry_run: bool = False) -> Dict[str,
     errors = []
 
     for session in sessions:
-        session_id = session.get('id')
+        session_id = session.get("id")
         if not session_id:
             continue
         try:
-            fp_raw = session.get('cwd') or session.get('project') or 'unknown'
-            aid = (session.get('agentId') or 'unknown').strip()[:_MAX_PATH_LEN]
+            fp_raw = session.get("cwd") or session.get("project") or "unknown"
+            aid = (session.get("agentId") or "unknown").strip()[:_MAX_PATH_LEN]
             try:
                 fp = normalize_folder_path(fp_raw)
             except ValueError:
-                fp = 'unknown'
+                fp = "unknown"
 
             obs_list = kv.list(KV.observations(session_id))
             session_obs_count = 0
             for obs in obs_list:
-                obs_id = obs.get('id', '')
-                if obs_id.endswith(':raw'):
+                obs_id = obs.get("id", "")
+                if obs_id.endswith(":raw"):
                     continue
                 folder_obs = {
-                    'id': obs_id,
-                    'folderPath': fp,
-                    'agentId': aid,
-                    'timestamp': obs.get('timestamp', ''),
-                    'text': obs.get('narrative') or obs.get('raw') or obs.get('title') or '',
-                    'type': obs.get('type', 'other'),
-                    'title': obs.get('title', ''),
-                    'concepts': obs.get('concepts') or [],
-                    'files': obs.get('files') or [],
-                    'importance': obs.get('importance', 5),
+                    "id": obs_id,
+                    "folderPath": fp,
+                    "agentId": aid,
+                    "timestamp": obs.get("timestamp", ""),
+                    "text": obs.get("narrative")
+                    or obs.get("raw")
+                    or obs.get("title")
+                    or "",
+                    "type": obs.get("type", "other"),
+                    "title": obs.get("title", ""),
+                    "concepts": obs.get("concepts") or [],
+                    "files": obs.get("files") or [],
+                    "importance": obs.get("importance", 5),
                 }
-                if isinstance(folder_obs['text'], dict):
+                if isinstance(folder_obs["text"], dict):
                     import json as _json
-                    folder_obs['text'] = _json.dumps(folder_obs['text'])[:4000]
-                folder_obs['text'] = str(folder_obs['text'])[:4000]
+
+                    folder_obs["text"] = _json.dumps(folder_obs["text"])[:4000]
+                folder_obs["text"] = str(folder_obs["text"])[:4000]
 
                 if not dry_run:
                     kv.set(KV.folder_obs(fp, aid), obs_id, folder_obs)
-                    kv.set(KV.obs_lookup, obs_id, {
-                        'folderPath': fp,
-                        'agentId': aid,
-                    })
+                    kv.set(
+                        KV.obs_lookup,
+                        obs_id,
+                        {
+                            "folderPath": fp,
+                            "agentId": aid,
+                        },
+                    )
                 session_obs_count += 1
                 migrated_observations += 1
 
             if not dry_run and session_obs_count > 0:
                 meta_scope = KV.folder_meta(fp, aid)
-                meta = kv.get(meta_scope, 'meta') or {
-                    'folderPath': fp, 'agentId': aid, 'obsCount': 0,
-                    'lastUpdated': session.get('updatedAt', ''), 'summary': None,
+                meta = kv.get(meta_scope, "meta") or {
+                    "folderPath": fp,
+                    "agentId": aid,
+                    "obsCount": 0,
+                    "lastUpdated": session.get("updatedAt", ""),
+                    "summary": None,
                 }
-                meta['obsCount'] = meta.get('obsCount', 0) + session_obs_count
-                meta['lastUpdated'] = session.get('updatedAt', '') or meta['lastUpdated']
-                kv.set(meta_scope, 'meta', meta)
+                meta["obsCount"] = meta.get("obsCount", 0) + session_obs_count
+                meta["lastUpdated"] = (
+                    session.get("updatedAt", "") or meta["lastUpdated"]
+                )
+                kv.set(meta_scope, "meta", meta)
 
-                index_key = f'{fp}:{aid}'
-                kv.set(KV.folders, index_key, {
-                    'folderPath': fp,
-                    'agentId': aid,
-                    'lastUpdated': meta['lastUpdated'],
-                    'obsCount': meta['obsCount'],
-                })
+                index_key = f"{fp}:{aid}"
+                kv.set(
+                    KV.folders,
+                    index_key,
+                    {
+                        "folderPath": fp,
+                        "agentId": aid,
+                        "lastUpdated": meta["lastUpdated"],
+                        "obsCount": meta["obsCount"],
+                    },
+                )
 
             migrated_sessions += 1
         except Exception as e:
-            errors.append({'sessionId': session_id, 'error': str(e)})
+            errors.append({"sessionId": session_id, "error": str(e)})
 
     return {
-        'migrated_sessions': migrated_sessions,
-        'migrated_observations': migrated_observations,
-        'errors': errors,
-        'dry_run': dry_run,
+        "migrated_sessions": migrated_sessions,
+        "migrated_observations": migrated_observations,
+        "errors": errors,
+        "dry_run": dry_run,
     }
 
 
-def set_project_profile(kv: StateKV, project: str, profile: Dict[str, Any]) -> Dict[str, Any]:
+def set_project_profile(
+    kv: StateKV, project: str, profile: Dict[str, Any]
+) -> Dict[str, Any]:
     profile["updatedAt"] = datetime.datetime.utcnow().isoformat() + "Z"
     kv.set(KV.profiles, project, profile)
-    
+
     # Commit to Dolt
     commit_if_enabled(kv, f"Set project profile for {project}", get_agent_id())
-    
+
     return profile
+
 
 def get_relations(kv: StateKV) -> List[Dict[str, Any]]:
     return kv.list(KV.relations)
+
 
 def add_relation(kv: StateKV, data: Dict[str, Any]) -> Dict[str, Any]:
     rel = {
@@ -2826,15 +3245,20 @@ def add_relation(kv: StateKV, data: Dict[str, Any]) -> Dict[str, Any]:
         "sourceId": data["sourceId"],
         "targetId": data["targetId"],
         "type": data["type"],
-        "createdAt": datetime.datetime.utcnow().isoformat() + "Z"
+        "createdAt": datetime.datetime.utcnow().isoformat() + "Z",
     }
     kv.set(KV.relations, rel["id"], rel)
-    
+
     # Commit to Dolt
     agent_id = data.get("agentId") or get_agent_id()
-    commit_if_enabled(kv, f"Add relation {rel['type']} between {rel['sourceId']} and {rel['targetId']}", agent_id)
+    commit_if_enabled(
+        kv,
+        f"Add relation {rel['type']} between {rel['sourceId']} and {rel['targetId']}",
+        agent_id,
+    )
 
     return rel
+
 
 def evolve_memory(kv: StateKV, data: Dict[str, Any]) -> Dict[str, Any]:
     # Update memory content and create a new version
@@ -2874,7 +3298,9 @@ def evolve_memory(kv: StateKV, data: Dict[str, Any]) -> Dict[str, Any]:
         pass
 
     comb_text = new_mem["title"] + " " + new_mem["content"]
-    vector_index_add_guarded(new_mem["id"], "memory", comb_text, {"kind": "memory", "logId": new_mem["id"]})
+    vector_index_add_guarded(
+        new_mem["id"], "memory", comb_text, {"kind": "memory", "logId": new_mem["id"]}
+    )
     if _vector_index:
         _vector_index.remove(existing["id"])
 
@@ -2883,13 +3309,18 @@ def evolve_memory(kv: StateKV, data: Dict[str, Any]) -> Dict[str, Any]:
 
     # Commit to Dolt
     agent_id = data.get("agentId") or get_agent_id() or new_mem.get("agentId")
-    commit_if_enabled(kv, f"Evolve memory {new_mem['id']} (v{new_mem['version']}): {new_mem['title']}", agent_id)
+    commit_if_enabled(
+        kv,
+        f"Evolve memory {new_mem['id']} (v{new_mem['version']}): {new_mem['title']}",
+        agent_id,
+    )
 
     return {"success": True, "memory": new_mem}
 
+
 def auto_forget(kv: StateKV, dry_run: bool = False) -> Dict[str, Any]:
     now_dt = datetime.datetime.utcnow()
-    now_str = now_dt.isoformat() + "Z"
+    now_dt.isoformat() + "Z"
     evicted_memories = []
     evicted_observations = []
 
@@ -2900,13 +3331,16 @@ def auto_forget(kv: StateKV, dry_run: bool = False) -> Dict[str, Any]:
         if forget_after:
             try:
                 import dateutil.parser
+
                 fa_dt = dateutil.parser.parse(forget_after)
                 if fa_dt.tzinfo:
                     fa_dt = fa_dt.replace(tzinfo=None)
                 if fa_dt < now_dt:
                     evicted_memories.append(mem["id"])
             except Exception as e:
-                print(f"[auto_forget] Failed to parse forgetAfter '{forget_after}': {e}")
+                print(
+                    f"[auto_forget] Failed to parse forgetAfter '{forget_after}': {e}"
+                )
 
     # 2. Evict low-value old observations (importance <= 2, age > 180 days)
     sessions = kv.list(KV.sessions)
@@ -2921,6 +3355,7 @@ def auto_forget(kv: StateKV, dry_run: bool = False) -> Dict[str, Any]:
             if importance is not None and ts:
                 try:
                     import dateutil.parser
+
                     ts_dt = dateutil.parser.parse(ts)
                     if ts_dt.tzinfo:
                         ts_dt = ts_dt.replace(tzinfo=None)
@@ -2947,10 +3382,10 @@ def auto_forget(kv: StateKV, dry_run: bool = False) -> Dict[str, Any]:
             base_oid = obs_id.replace(":raw", "")
             obs = kv.get(KV.observations(sid), base_oid)
             raw_obs = kv.get(KV.observations(sid), f"{base_oid}:raw")
-            
+
             kv.delete(KV.observations(sid), base_oid)
             kv.delete(KV.observations(sid), f"{base_oid}:raw")
-            
+
             for o in (obs, raw_obs):
                 if o:
                     img = o.get("imageData") or o.get("imageRef")
@@ -2958,7 +3393,7 @@ def auto_forget(kv: StateKV, dry_run: bool = False) -> Dict[str, Any]:
                         refs = kv.get(KV.imageRefs, img) or 0
                         if refs > 0:
                             kv.set(KV.imageRefs, img, refs - 1)
-            
+
             _bm25_index.remove(base_oid)
             _bm25_index.remove(f"{base_oid}:raw")
             if _vector_index:
@@ -2976,18 +3411,23 @@ def auto_forget(kv: StateKV, dry_run: bool = False) -> Dict[str, Any]:
                 {
                     "evictedMemoriesCount": len(evicted_memories),
                     "evictedObservationsCount": len(evicted_observations),
-                    "dryRun": False
-                }
+                    "dryRun": False,
+                },
             )
-            commit_if_enabled(kv, f"Auto forget: evicted {len(evicted_memories)} memories, {len(evicted_observations)} observations", "system")
+            commit_if_enabled(
+                kv,
+                f"Auto forget: evicted {len(evicted_memories)} memories, {len(evicted_observations)} observations",
+                "system",
+            )
 
     return {
         "success": True,
         "evictedMemories": evicted_memories,
         "evictedObservations": [oid for _, oid in evicted_observations],
         "evicted": len(evicted_memories) + len(evicted_observations),
-        "dryRun": dry_run
+        "dryRun": dry_run,
     }
+
 
 def health_check(kv: StateKV) -> Dict[str, Any]:
     db_status = "connected"
@@ -3044,7 +3484,9 @@ def health_check(kv: StateKV) -> Dict[str, Any]:
     db_size_bytes = 0
     wal_size_bytes = 0
     try:
-        sync_state_path = os.path.join(os.path.expanduser("~"), ".agentcache", ".sync_state")
+        sync_state_path = os.path.join(
+            os.path.expanduser("~"), ".agentcache", ".sync_state"
+        )
         if os.path.exists(sync_state_path):
             with open(sync_state_path, "r", encoding="utf-8") as _sf:
                 _sync = json.loads(_sf.read())
@@ -3077,23 +3519,28 @@ def health_check(kv: StateKV) -> Dict[str, Any]:
         "lastSyncAt": last_sync_at,
     }
 
+
 def strip_xml_wrappers(raw: str) -> str:
     if not raw:
         return ""
     cleaned = raw.strip()
-    cleaned = re.sub(r'```xml\s*\n?', '', cleaned, flags=re.IGNORECASE)
-    cleaned = re.sub(r'```', '', cleaned)
+    cleaned = re.sub(r"```xml\s*\n?", "", cleaned, flags=re.IGNORECASE)
+    cleaned = re.sub(r"```", "", cleaned)
     cleaned = cleaned.strip()
-    root_match = re.search(r'(<[a-zA-Z_][a-zA-Z0-9_-]*>[\s\S]*<\/[a-zA-Z_][a-zA-Z0-9_-]*>)', cleaned)
+    root_match = re.search(
+        r"(<[a-zA-Z_][a-zA-Z0-9_-]*>[\s\S]*<\/[a-zA-Z_][a-zA-Z0-9_-]*>)", cleaned
+    )
     if root_match:
         return root_match.group(1).strip()
     return cleaned
+
 
 def get_xml_tag(text: str, tag: str) -> Optional[str]:
     cleaned = strip_xml_wrappers(text)
     pattern = rf"<{tag}>(.*?)</{tag}>"
     match = re.search(pattern, cleaned, re.DOTALL)
     return match.group(1).strip() if match else None
+
 
 def get_xml_children(text: str, parent_tag: str, child_tag: str) -> List[str]:
     parent_content = get_xml_tag(text, parent_tag)
@@ -3102,6 +3549,7 @@ def get_xml_children(text: str, parent_tag: str, child_tag: str) -> List[str]:
     pattern = rf"<{child_tag}>(.*?)</{child_tag}>"
     return [m.strip() for m in re.findall(pattern, parent_content, re.DOTALL)]
 
+
 def generate_content(system_instruction: str, prompt: str) -> str:
     api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
     if not api_key:
@@ -3109,63 +3557,49 @@ def generate_content(system_instruction: str, prompt: str) -> str:
     model = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
     payload = {
-        "contents": [
-            {
-                "role": "user",
-                "parts": [
-                    {"text": prompt}
-                ]
-            }
-        ],
-        "systemInstruction": {
-            "parts": [
-                {"text": system_instruction}
-            ]
-        },
-        "generationConfig": {
-            "temperature": 0.2
-        }
+        "contents": [{"role": "user", "parts": [{"text": prompt}]}],
+        "systemInstruction": {"parts": [{"text": system_instruction}]},
+        "generationConfig": {"temperature": 0.2},
     }
-    
+
     req_data = json.dumps(payload).encode("utf-8")
     import urllib.request
+
     req = urllib.request.Request(
-        url,
-        data=req_data,
-        headers={"Content-Type": "application/json"},
-        method="POST"
+        url, data=req_data, headers={"Content-Type": "application/json"}, method="POST"
     )
-    
+
     try:
         with urllib.request.urlopen(req, timeout=60.0) as response:
             resp_data = json.loads(response.read().decode("utf-8"))
-            
+
         candidates = resp_data.get("candidates", [])
         if not candidates:
             raise RuntimeError("Gemini generateContent returned no candidates")
-        
+
         parts = candidates[0].get("content", {}).get("parts", [])
         if not parts:
             raise RuntimeError("Gemini generateContent candidate content had no parts")
-            
+
         return parts[0].get("text", "")
     except Exception as e:
         raise RuntimeError(f"Gemini generateContent call failed: {e}")
+
 
 def summarize(kv: StateKV, data: Dict[str, Any]) -> Dict[str, Any]:
     session_id = data.get("sessionId")
     if not session_id:
         return {"success": False, "error": "sessionId is required"}
-    
+
     session = kv.get(KV.sessions, session_id)
     if not session:
         return {"success": False, "error": "session_not_found"}
-        
+
     observations = kv.list(KV.observations(session_id))
     compressed = [o for o in observations if o.get("title")]
     if not compressed:
         return {"success": False, "error": "no_observations"}
-        
+
     SUMMARY_SYSTEM = """You are a session summarization assistant. Your job is to read all raw tool executions and outcomes from a coding session and produce a high-fidelity summary.
     
     Output XML:
@@ -3184,35 +3618,42 @@ def summarize(kv: StateKV, data: Dict[str, Any]) -> Dict[str, Any]:
     </summary>"""
 
     chunk_size = 400
-    chunks = [compressed[i:i + chunk_size] for i in range(0, len(compressed), chunk_size)]
-    
+    chunks = [
+        compressed[i : i + chunk_size] for i in range(0, len(compressed), chunk_size)
+    ]
+
     partial_summaries = []
     for idx, chunk in enumerate(chunks):
         obs_text = ""
         for o in chunk:
             obs_text += f"[{o.get('type')}] {o.get('title')}\n{o.get('narrative') or ''}\nFiles: {', '.join(o.get('files') or [])}\n\n"
-        
-        prompt = f"Summarize this chunk {idx+1}/{len(chunks)} of observations:\n\n{obs_text}"
+
+        prompt = f"Summarize this chunk {idx + 1}/{len(chunks)} of observations:\n\n{obs_text}"
         try:
             response = generate_content(SUMMARY_SYSTEM, prompt)
             cleaned = strip_xml_wrappers(response)
             title = get_xml_tag(cleaned, "title")
             if not title:
                 continue
-            partial_summaries.append({
-                "title": title,
-                "narrative": get_xml_tag(cleaned, "narrative") or "",
-                "keyDecisions": get_xml_children(cleaned, "decisions", "decision"),
-                "filesModified": get_xml_children(cleaned, "files", "file"),
-                "concepts": get_xml_children(cleaned, "concepts", "concept"),
-            })
+            partial_summaries.append(
+                {
+                    "title": title,
+                    "narrative": get_xml_tag(cleaned, "narrative") or "",
+                    "keyDecisions": get_xml_children(cleaned, "decisions", "decision"),
+                    "filesModified": get_xml_children(cleaned, "files", "file"),
+                    "concepts": get_xml_children(cleaned, "concepts", "concept"),
+                }
+            )
         except Exception as e:
             last_error = str(e)
-            print(f"[summarize] Chunk {idx+1} failed: {e}")
-            
+            print(f"[summarize] Chunk {idx + 1} failed: {e}")
+
     if not partial_summaries:
-        return {"success": False, "error": f"No chunks summarized successfully. Last error: {last_error}"}
-        
+        return {
+            "success": False,
+            "error": f"No chunks summarized successfully. Last error: {last_error}",
+        }
+
     if len(partial_summaries) == 1:
         final_summary = {
             "sessionId": session_id,
@@ -3223,7 +3664,7 @@ def summarize(kv: StateKV, data: Dict[str, Any]) -> Dict[str, Any]:
             "keyDecisions": partial_summaries[0]["keyDecisions"],
             "filesModified": partial_summaries[0]["filesModified"],
             "concepts": partial_summaries[0]["concepts"],
-            "observationCount": len(compressed)
+            "observationCount": len(compressed),
         }
     else:
         REDUCE_SYSTEM = """You are a session summarization reducer. Reduce multiple partial chunk summaries into a single final summary.
@@ -3242,11 +3683,11 @@ def summarize(kv: StateKV, data: Dict[str, Any]) -> Dict[str, Any]:
             <concept>important concept, library, tool, or command used</concept>
           </concepts>
         </summary>"""
-        
+
         reduce_prompt = "Reduce these partial summaries:\n\n"
         for idx, ps in enumerate(partial_summaries):
-            reduce_prompt += f"[Chunk {idx+1}]\nTitle: {ps['title']}\nNarrative: {ps['narrative']}\nDecisions: {', '.join(ps['keyDecisions'])}\nFiles: {', '.join(ps['filesModified'])}\nConcepts: {', '.join(ps['concepts'])}\n\n"
-            
+            reduce_prompt += f"[Chunk {idx + 1}]\nTitle: {ps['title']}\nNarrative: {ps['narrative']}\nDecisions: {', '.join(ps['keyDecisions'])}\nFiles: {', '.join(ps['filesModified'])}\nConcepts: {', '.join(ps['concepts'])}\n\n"
+
         try:
             response = generate_content(REDUCE_SYSTEM, reduce_prompt)
             cleaned = strip_xml_wrappers(response)
@@ -3259,41 +3700,51 @@ def summarize(kv: StateKV, data: Dict[str, Any]) -> Dict[str, Any]:
                 "keyDecisions": get_xml_children(cleaned, "decisions", "decision"),
                 "filesModified": get_xml_children(cleaned, "files", "file"),
                 "concepts": get_xml_children(cleaned, "concepts", "concept"),
-                "observationCount": len(compressed)
+                "observationCount": len(compressed),
             }
         except Exception as e:
             return {"success": False, "error": f"Reduction failed: {e}"}
-            
+
     kv.set(KV.summaries, session_id, final_summary)
-    
+
     session = kv.get(KV.sessions, session_id)
     if session:
         session["title"] = final_summary["title"]
         session["summary"] = final_summary["narrative"]
         kv.set(KV.sessions, session_id, session)
 
-    safe_audit(kv, "compress", "mem::summarize", [session_id], {
-        "title": final_summary["title"],
-        "observationCount": len(compressed)
-    })
-    
+    safe_audit(
+        kv,
+        "compress",
+        "mem::summarize",
+        [session_id],
+        {"title": final_summary["title"], "observationCount": len(compressed)},
+    )
+
     return {"success": True, "summary": final_summary}
 
-def consolidate(kv: StateKV, project: Optional[str] = None, min_observations: int = 10) -> Dict[str, Any]:
+
+def consolidate(
+    kv: StateKV, project: Optional[str] = None, min_observations: int = 10
+) -> Dict[str, Any]:
     sessions = list_sessions(kv)
     if project:
         sessions = [s for s in sessions if s.get("project") == project]
-        
+
     all_obs = []
     for s in sessions:
         obs_list = kv.list(KV.observations(s["id"]))
         for o in obs_list:
             if o.get("title") and o.get("importance", 5) >= 5:
                 all_obs.append((o, s["id"]))
-                
+
     if len(all_obs) < min_observations:
-        return {"consolidated": 0, "reason": "insufficient_observations", "success": True}
-        
+        return {
+            "consolidated": 0,
+            "reason": "insufficient_observations",
+            "success": True,
+        }
+
     # Group observations by concepts
     concept_groups = {}
     for obs, sid in all_obs:
@@ -3305,20 +3756,20 @@ def consolidate(kv: StateKV, project: Optional[str] = None, min_observations: in
             if key not in concept_groups:
                 concept_groups[key] = []
             concept_groups[key].append((obs, sid))
-            
+
     # Sort groups that have >= 3 observations by size descending
     sorted_groups = sorted(
         [(k, g) for k, g in concept_groups.items() if len(g) >= 3],
         key=lambda x: len(x[1]),
-        reverse=True
+        reverse=True,
     )
-    
+
     consolidated_count = 0
     existing_memories = kv.list(KV.memories)
-    
+
     MAX_LLM_CALLS = 10
     llm_calls = 0
-    
+
     # Prompt templates
     CONSOLIDATION_SYSTEM = """You are a memory consolidation engine. Given a set of related observations from coding sessions, synthesize them into a single long-term memory.
     
@@ -3335,56 +3786,70 @@ def consolidate(kv: StateKV, project: Optional[str] = None, min_observations: in
       </files>
       <strength>1-10 how confident/important this memory is</strength>
     </memory>"""
-    
+
     for concept, obs_group in sorted_groups:
         if llm_calls >= MAX_LLM_CALLS:
             break
-            
+
         # Get top 8 by importance
-        top = sorted(obs_group, key=lambda x: x[0].get("importance", 5), reverse=True)[:8]
+        top = sorted(obs_group, key=lambda x: x[0].get("importance", 5), reverse=True)[
+            :8
+        ]
         session_ids = list(set([x[1] for x in top]))
         obs_ids = list(set([x[0]["id"] for x in top]))
-        
+
         prompt_parts = []
         for obs, sid in top:
-            prompt_parts.append(f"[{obs.get('type')}] {obs.get('title')}\n{obs.get('narrative') or ''}\nFiles: {', '.join(obs.get('files') or [])}\nImportance: {obs.get('importance', 5)}")
+            prompt_parts.append(
+                f"[{obs.get('type')}] {obs.get('title')}\n{obs.get('narrative') or ''}\nFiles: {', '.join(obs.get('files') or [])}\nImportance: {obs.get('importance', 5)}"
+            )
         obs_prompt = "\n\n".join(prompt_parts)
-        
+
         try:
-            response = generate_content(CONSOLIDATION_SYSTEM, f"Concept: \"{concept}\"\n\nObservations:\n{obs_prompt}")
+            response = generate_content(
+                CONSOLIDATION_SYSTEM,
+                f'Concept: "{concept}"\n\nObservations:\n{obs_prompt}',
+            )
             llm_calls += 1
-            
+
             cleaned = strip_xml_wrappers(response)
             m_type = get_xml_tag(cleaned, "type") or "fact"
             m_title = get_xml_tag(cleaned, "title")
             m_content = get_xml_tag(cleaned, "content")
-            
+
             if not m_title or not m_content:
                 continue
-                
+
             m_strength_str = get_xml_tag(cleaned, "strength") or "5"
             try:
                 m_strength = max(1, min(10, int(m_strength_str)))
             except Exception:
                 m_strength = 5
-                
+
             concepts_list = get_xml_children(cleaned, "concepts", "concept")
             files_list = get_xml_children(cleaned, "files", "file")
-            
+
             now = datetime.datetime.utcnow().isoformat() + "Z"
-            
+
             # Find existing memory with same title
             existing_match = None
             for mem in existing_memories:
-                if mem.get("title", "").lower() == m_title.lower() and mem.get("isLatest") is not False:
-                    if not project or not mem.get("project") or mem.get("project") == project:
+                if (
+                    mem.get("title", "").lower() == m_title.lower()
+                    and mem.get("isLatest") is not False
+                ):
+                    if (
+                        not project
+                        or not mem.get("project")
+                        or mem.get("project") == project
+                    ):
                         existing_match = mem
                         break
-                        
+
             if existing_match:
                 existing_match["isLatest"] = False
                 kv.set(KV.memories, existing_match["id"], existing_match)
-                
+
                 evolved = {
                     "id": generate_id("mem"),
                     "createdAt": now,
@@ -3398,9 +3863,10 @@ def consolidate(kv: StateKV, project: Optional[str] = None, min_observations: in
                     "strength": m_strength,
                     "version": (existing_match.get("version") or 1) + 1,
                     "parentId": existing_match["id"],
-                    "supersedes": [existing_match["id"]] + (existing_match.get("supersedes") or []),
+                    "supersedes": [existing_match["id"]]
+                    + (existing_match.get("supersedes") or []),
                     "sourceObservationIds": obs_ids,
-                    "isLatest": True
+                    "isLatest": True,
                 }
                 if project:
                     evolved["project"] = project
@@ -3412,7 +3878,12 @@ def consolidate(kv: StateKV, project: Optional[str] = None, min_observations: in
                 except Exception:
                     pass
                 comb_text = evolved["title"] + " " + evolved["content"]
-                vector_index_add_guarded(evolved["id"], "memory", comb_text, {"kind": "memory", "logId": evolved["id"]})
+                vector_index_add_guarded(
+                    evolved["id"],
+                    "memory",
+                    comb_text,
+                    {"kind": "memory", "logId": evolved["id"]},
+                )
                 if _vector_index and existing_match:
                     try:
                         _vector_index.remove(existing_match["id"])
@@ -3433,7 +3904,7 @@ def consolidate(kv: StateKV, project: Optional[str] = None, min_observations: in
                     "strength": m_strength,
                     "version": 1,
                     "sourceObservationIds": obs_ids,
-                    "isLatest": True
+                    "isLatest": True,
                 }
                 if project:
                     memory["project"] = project
@@ -3443,9 +3914,14 @@ def consolidate(kv: StateKV, project: Optional[str] = None, min_observations: in
                 except Exception:
                     pass
                 comb_text = memory["title"] + " " + memory["content"]
-                vector_index_add_guarded(memory["id"], "memory", comb_text, {"kind": "memory", "logId": memory["id"]})
+                vector_index_add_guarded(
+                    memory["id"],
+                    "memory",
+                    comb_text,
+                    {"kind": "memory", "logId": memory["id"]},
+                )
                 consolidated_count += 1
-                
+
         except Exception as e:
             print(f"[consolidate] Concept '{concept}' failed: {e}")
 
@@ -3454,11 +3930,9 @@ def consolidate(kv: StateKV, project: Optional[str] = None, min_observations: in
     new_facts_count = 0
     if len(summaries) >= 5:
         recent_summaries = sorted(
-            summaries,
-            key=lambda s: s.get("createdAt", ""),
-            reverse=True
+            summaries, key=lambda s: s.get("createdAt", ""), reverse=True
         )[:20]
-        
+
         SEMANTIC_MERGE_SYSTEM = """You are a memory consolidation engine. Given overlapping episodic memories (session summaries), extract stable factual knowledge.
         
         Output format (XML):
@@ -3471,50 +3945,61 @@ def consolidate(kv: StateKV, project: Optional[str] = None, min_observations: in
         - Confidence reflects how well-supported the fact is across episodes
         - Combine overlapping information into single concise facts
         - Skip ephemeral details (specific error messages, temporary states)"""
-        
+
         prompt_parts = []
         for i, s in enumerate(recent_summaries):
-            prompt_parts.append(f"[Episode {i + 1}]\nTitle: {s.get('title')}\nNarrative: {s.get('narrative') or ''}\nConcepts: {', '.join(s.get('concepts') or [])}")
-        merge_prompt = "Consolidate these episodic memories into stable facts:\n\n" + "\n\n".join(prompt_parts)
-        
+            prompt_parts.append(
+                f"[Episode {i + 1}]\nTitle: {s.get('title')}\nNarrative: {s.get('narrative') or ''}\nConcepts: {', '.join(s.get('concepts') or [])}"
+            )
+        merge_prompt = (
+            "Consolidate these episodic memories into stable facts:\n\n"
+            + "\n\n".join(prompt_parts)
+        )
+
         try:
             response = generate_content(SEMANTIC_MERGE_SYSTEM, merge_prompt)
-            fact_matches = re.findall(r'<fact\s+confidence="([^"]+)">([^<]+)</fact>', response, re.DOTALL)
-            
+            fact_matches = re.findall(
+                r'<fact\s+confidence="([^"]+)">([^<]+)</fact>', response, re.DOTALL
+            )
+
             existing_semantic = kv.list(KV.semantic)
             now = datetime.datetime.utcnow().isoformat() + "Z"
-            
+
             for conf_str, fact_text in fact_matches:
                 fact_text = fact_text.strip()
                 try:
                     confidence = float(conf_str)
                 except Exception:
                     confidence = 0.5
-                    
+
                 existing = None
                 for es in existing_semantic:
                     if es.get("fact", "").lower() == fact_text.lower():
                         existing = es
                         break
-                        
+
                 if existing:
                     existing["accessCount"] = (existing.get("accessCount") or 0) + 1
                     existing["lastAccessedAt"] = now
                     existing["updatedAt"] = now
-                    existing["confidence"] = max(existing.get("confidence", 0.5), confidence)
+                    existing["confidence"] = max(
+                        existing.get("confidence", 0.5), confidence
+                    )
                     kv.set(KV.semantic, existing["id"], existing)
                 else:
                     sem = {
                         "id": generate_id("sem"),
                         "fact": fact_text,
                         "confidence": confidence,
-                        "sourceSessionIds": [s["sessionId"] for s in recent_summaries if "sessionId" in s],
+                        "sourceSessionIds": [
+                            s["sessionId"] for s in recent_summaries if "sessionId" in s
+                        ],
                         "sourceMemoryIds": [],
                         "accessCount": 1,
                         "lastAccessedAt": now,
                         "strength": confidence,
                         "createdAt": now,
-                        "updatedAt": now
+                        "updatedAt": now,
                     }
                     kv.set(KV.semantic, sem["id"], sem)
                     new_facts_count += 1
@@ -3530,7 +4015,7 @@ def consolidate(kv: StateKV, project: Optional[str] = None, min_observations: in
             freq = len(m.get("sessionIds") or [])
             if freq >= 2:
                 patterns.append({"content": m.get("content", ""), "frequency": freq})
-                
+
     if len(patterns) >= 2:
         PROCEDURAL_EXTRACTION_SYSTEM = """You are a procedural memory extractor. Given repeated patterns and workflows observed across sessions, extract reusable procedures.
         
@@ -3546,32 +4031,46 @@ def consolidate(kv: StateKV, project: Optional[str] = None, min_observations: in
         - Only extract procedures observed 2+ times
         - Steps should be concrete and actionable
         - Trigger condition should be specific enough to match automatically"""
-        
+
         prompt_parts = []
         for i, p in enumerate(patterns):
-            prompt_parts.append(f"[Pattern {i + 1}] (seen {p['frequency']}x)\n{p['content']}")
-        proc_prompt = "Extract reusable procedures from these recurring patterns:\n\n" + "\n\n".join(prompt_parts)
-        
+            prompt_parts.append(
+                f"[Pattern {i + 1}] (seen {p['frequency']}x)\n{p['content']}"
+            )
+        proc_prompt = (
+            "Extract reusable procedures from these recurring patterns:\n\n"
+            + "\n\n".join(prompt_parts)
+        )
+
         try:
             response = generate_content(PROCEDURAL_EXTRACTION_SYSTEM, proc_prompt)
-            proc_matches = re.findall(r'<procedure\s+name="([^"]+)"\s+trigger="([^"]+)">([\s\S]*?)</procedure>', response, re.DOTALL)
-            
+            proc_matches = re.findall(
+                r'<procedure\s+name="([^"]+)"\s+trigger="([^"]+)">([\s\S]*?)</procedure>',
+                response,
+                re.DOTALL,
+            )
+
             existing_procs = kv.list(KV.procedural)
             now = datetime.datetime.utcnow().isoformat() + "Z"
-            
+
             for name, trigger, steps_block in proc_matches:
-                steps = [s.strip() for s in re.findall(r'<step>([^<]+)</step>', steps_block, re.DOTALL)]
-                
+                steps = [
+                    s.strip()
+                    for s in re.findall(r"<step>([^<]+)</step>", steps_block, re.DOTALL)
+                ]
+
                 existing = None
                 for ep in existing_procs:
                     if ep.get("name", "").lower() == name.lower():
                         existing = ep
                         break
-                        
+
                 if existing:
                     existing["frequency"] = (existing.get("frequency") or 1) + 1
                     existing["updatedAt"] = now
-                    existing["strength"] = min(1.0, (existing.get("strength") or 0.5) + 0.1)
+                    existing["strength"] = min(
+                        1.0, (existing.get("strength") or 0.5) + 0.1
+                    )
                     kv.set(KV.procedural, existing["id"], existing)
                 else:
                     proc = {
@@ -3583,7 +4082,7 @@ def consolidate(kv: StateKV, project: Optional[str] = None, min_observations: in
                         "sourceSessionIds": [],
                         "strength": 0.5,
                         "createdAt": now,
-                        "updatedAt": now
+                        "updatedAt": now,
                     }
                     kv.set(KV.procedural, proc["id"], proc)
                     new_procs_count += 1
@@ -3594,24 +4093,27 @@ def consolidate(kv: StateKV, project: Optional[str] = None, min_observations: in
         "success": True,
         "consolidated": consolidated_count,
         "totalObservations": len(all_obs),
-        "semantic": {
-            "newFacts": new_facts_count,
-            "totalSummaries": len(summaries)
-        },
+        "semantic": {"newFacts": new_facts_count, "totalSummaries": len(summaries)},
         "procedural": {
             "newProcedures": new_procs_count,
-            "patternsAnalyzed": len(patterns)
-        }
+            "patternsAnalyzed": len(patterns),
+        },
     }
     if _index_persistence and consolidated_count > 0:
         _index_persistence.schedule_save()
     safe_audit(kv, "consolidate", "mem::consolidate-pipeline", [], res_summary)
-    commit_if_enabled(kv, f"Consolidation complete: consolidated={consolidated_count}, facts={new_facts_count}, procs={new_procs_count}", "system")
+    commit_if_enabled(
+        kv,
+        f"Consolidation complete: consolidated={consolidated_count}, facts={new_facts_count}, procs={new_procs_count}",
+        "system",
+    )
     return res_summary
+
 
 # =====================================================================
 # Folder Graph
 # =====================================================================
+
 
 def folder_color(path: str) -> str:
     """Hash a folder path string to an HSL color string.
@@ -3719,14 +4221,16 @@ def folder_graph_build(kv: StateKV) -> Dict[str, Any]:
     # --- Build nodes ---
     nodes = []
     for fp, info in folder_map.items():
-        nodes.append({
-            "id": fp,
-            "label": os.path.basename(fp) or fp,
-            "folderPath": fp,
-            "agentIds": sorted(info["agentIds"]),
-            "obsCount": info["obsCount"],
-            "color": info["color"],
-        })
+        nodes.append(
+            {
+                "id": fp,
+                "label": os.path.basename(fp) or fp,
+                "folderPath": fp,
+                "agentIds": sorted(info["agentIds"]),
+                "obsCount": info["obsCount"],
+                "color": info["color"],
+            }
+        )
 
     # --- Build edges ---
     edges: List[Dict[str, Any]] = []
@@ -3769,12 +4273,14 @@ def folder_graph_build(kv: StateKV) -> Dict[str, Any]:
     for aid, fps in agent_to_folders.items():
         for i in range(len(fps)):
             for j in range(i + 1, len(fps)):
-                add_edge({
-                    "source": fps[i],
-                    "target": fps[j],
-                    "type": "agent-shared",
-                    "agentId": aid,
-                })
+                add_edge(
+                    {
+                        "source": fps[i],
+                        "target": fps[j],
+                        "type": "agent-shared",
+                        "agentId": aid,
+                    }
+                )
 
     return {"nodes": nodes, "edges": edges}
 
@@ -3784,19 +4290,17 @@ def set_index_persistence(persistence: IndexPersistence) -> None:
     global _index_persistence
     _index_persistence = persistence
 
+
 def set_embedding_provider(provider) -> None:
     global _embedding_provider, _hybrid_search
     _embedding_provider = provider
-    _hybrid_search = HybridSearch(
-        _bm25_index,
-        _vector_index,
-        _embedding_provider,
-        None
-    )
+    _hybrid_search = HybridSearch(_bm25_index, _vector_index, _embedding_provider, None)
+
 
 def set_stream_broadcaster(broadcaster) -> None:
     global _stream_broadcaster
     _stream_broadcaster = broadcaster
+
 
 def broadcast_stream(payload: Dict[str, Any]) -> None:
     if _stream_broadcaster:
@@ -3842,7 +4346,9 @@ def verify_index_sync_on_boot(kv: StateKV) -> bool:
 
         # 2. Total memories count
         memories = kv.list(KV.memories)
-        latest_memories_count = len([m for m in memories if m.get("isLatest") is not False])
+        latest_memories_count = len(
+            [m for m in memories if m.get("isLatest") is not False]
+        )
 
         # 3. Total legacy observations count
         legacy_obs_count = 0
@@ -3853,7 +4359,9 @@ def verify_index_sync_on_boot(kv: StateKV) -> bool:
                 if sid:
                     obs_list = kv.list(KV.observations(sid))
                     # Only legacy observations that were indexed (having title and narrative)
-                    legacy_obs_count += len([o for o in obs_list if o.get("title") and o.get("narrative")])
+                    legacy_obs_count += len(
+                        [o for o in obs_list if o.get("title") and o.get("narrative")]
+                    )
         except Exception:
             pass
 
@@ -3861,7 +4369,9 @@ def verify_index_sync_on_boot(kv: StateKV) -> bool:
         index_size = _bm25_index.size
 
         if total_db_count != index_size:
-            print(f"[persistence] Index out of sync with DB (DB={total_db_count}, Index={index_size}). Rebuild required.")
+            print(
+                f"[persistence] Index out of sync with DB (DB={total_db_count}, Index={index_size}). Rebuild required."
+            )
             return False
 
         print(f"[persistence] Index is in sync with DB (size={index_size}).")
@@ -3869,4 +4379,3 @@ def verify_index_sync_on_boot(kv: StateKV) -> bool:
     except Exception as e:
         print(f"[persistence] verify_index_sync_on_boot failed: {e}")
         return False
-
