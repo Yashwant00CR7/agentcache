@@ -17,8 +17,8 @@ Default mode works with no API key. It runs BM25 keyword search out of the box. 
 ## 1. Clone the repo
 
 ```bash
-git clone https://github.com/Yash030/agentcache-python.git
-cd agentcache-python
+git clone https://github.com/Yashwant00CR7/agentcache.git
+cd agentcache
 ```
 
 Expect: the directory exists with `src/app.py` inside.

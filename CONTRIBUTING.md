@@ -8,7 +8,7 @@ Apache-2.0. Every contribution is covered by it.
 
 ## Before opening an issue
 
-Search [open issues](https://github.com/Yash030/agentmemory-python/issues?q=is%3Aopen) and [closed issues](https://github.com/Yash030/agentmemory-python/issues?q=is%3Aclosed) first.
+Search [open issues](https://github.com/Yashwant00CR7/agentcache/issues?q=is%3Aopen) and [closed issues](https://github.com/Yashwant00CR7/agentcache/issues?q=is%3Aclosed) first.
 
 **Bug reports** — include:
 - Python version (`python --version`)
