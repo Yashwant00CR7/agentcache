@@ -4,14 +4,10 @@ tests/test_context.py — C1.4
 Tests for context(), export_data(), and token budget enforcement.
 """
 
-import sys
-import os
 import datetime
+import os
 
 import pytest
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -19,14 +15,16 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 
 def _make_kv(tmp_path):
-    from db import StateKV
+    from agentcache.db import StateKV
 
     os.environ.pop("AGENTCACHE_SECRET", None)
     return StateKV(db_path=str(tmp_path / "test.db"))
 
 
 def _now():
-    return datetime.datetime.utcnow().isoformat() + "Z"
+    return (
+        datetime.datetime.now(datetime.timezone.utc).isoformat().replace("+00:00", "Z")
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -37,7 +35,7 @@ def _now():
 class TestContext:
     def test_empty_db_returns_minimal_context(self, tmp_path):
         """Empty DB should return a well-formed but empty context."""
-        from functions import context
+        from agentcache.functions import context
 
         kv = _make_kv(tmp_path)
         result = context(
@@ -56,14 +54,14 @@ class TestContext:
         assert result["tokens"] == 0
 
     def test_raises_on_missing_session_id(self, tmp_path):
-        from functions import context
+        from agentcache.functions import context
 
         kv = _make_kv(tmp_path)
         with pytest.raises(ValueError):
             context(kv, {"project": "/home/user/proj"})
 
     def test_raises_on_missing_project(self, tmp_path):
-        from functions import context
+        from agentcache.functions import context
 
         kv = _make_kv(tmp_path)
         with pytest.raises(ValueError):
@@ -71,7 +69,7 @@ class TestContext:
 
     def test_respects_token_budget(self, tmp_path):
         """Context output tokens should not exceed the requested budget."""
-        from functions import context, lesson_save
+        from agentcache.functions import context, lesson_save
 
         kv = _make_kv(tmp_path)
         project = "/home/user/budget-test"
@@ -101,7 +99,7 @@ class TestContext:
 
     def test_context_includes_xml_wrapper(self, tmp_path):
         """Non-empty context should be wrapped in <agentcache-context>."""
-        from functions import context, lesson_save
+        from agentcache.functions import context, lesson_save
 
         kv = _make_kv(tmp_path)
         project = "/home/user/xml-test"
@@ -130,7 +128,7 @@ class TestContext:
 
     def test_token_budget_env_var_respected(self, tmp_path, monkeypatch):
         """TOKEN_BUDGET env var should be used when no budget param given."""
-        from functions import context, lesson_save
+        from agentcache.functions import context, lesson_save
 
         kv = _make_kv(tmp_path)
         project = "/home/user/env-budget"
@@ -158,7 +156,7 @@ class TestContext:
 
 class TestExportData:
     def test_export_returns_folders_and_memories(self, tmp_path):
-        from functions import folder_observe, remember, export_data
+        from agentcache.functions import export_data, folder_observe, remember
 
         kv = _make_kv(tmp_path)
 
@@ -178,7 +176,7 @@ class TestExportData:
         assert "folders" in result or "observations" in result or "memories" in result
 
     def test_export_empty_db(self, tmp_path):
-        from functions import export_data
+        from agentcache.functions import export_data
 
         kv = _make_kv(tmp_path)
         result = export_data(kv, {})
@@ -193,12 +191,12 @@ class TestExportData:
 
 class TestEstimateTokens:
     def test_empty_string(self):
-        from functions import estimate_tokens
+        from agentcache.functions import estimate_tokens
 
         assert estimate_tokens("") == 0
 
     def test_typical_text(self):
-        from functions import estimate_tokens
+        from agentcache.functions import estimate_tokens
 
         text = "hello world this is a test" * 10
         tokens = estimate_tokens(text)

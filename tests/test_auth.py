@@ -4,11 +4,9 @@ tests/test_auth.py
 Tests for the /auth.md agent onboarding route.
 """
 
-import sys
 import os
-import pytest
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
+import pytest
 
 
 @pytest.fixture(scope="module")
@@ -18,7 +16,7 @@ def flask_app(tmp_path_factory):
     os.environ.pop("AGENTCACHE_SECRET", None)
     os.environ.pop("AGENTMEMORY_SECRET", None)
 
-    from db import StateKV
+    from agentcache.db import StateKV
 
     original_init = StateKV.__init__
 
@@ -26,7 +24,7 @@ def flask_app(tmp_path_factory):
         original_init(self, db_path=db_path, **kwargs)
 
     StateKV.__init__ = patched_init
-    import app as app_module
+    import agentcache.app as app_module
 
     flask_application = app_module.create_app()
     StateKV.__init__ = original_init

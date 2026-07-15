@@ -9,15 +9,13 @@ Tests use the Flask test client — no running server required.
 The AGENTCACHE_SECRET env var is NOT set so all auth checks pass through.
 """
 
-import sys
-import os
-import json
 import datetime
+import json
+import os
 
 import pytest
 
 # Ensure src/ is on the path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 
 # ---------------------------------------------------------------------------
@@ -43,11 +41,11 @@ def flask_app(tmp_path_factory):
     os.environ.pop("AGENTCACHE_SECRET", None)
     os.environ.pop("AGENTMEMORY_SECRET", None)
 
-    import app as app_module
+    import agentcache.app as app_module
 
     os.environ.pop("AGENTCACHE_SECRET", None)
     os.environ.pop("AGENTMEMORY_SECRET", None)
-    from db import StateKV
+    from agentcache.db import StateKV
 
     # Patch StateKV to use tmp db before create_app() initialises it
     original_init = StateKV.__init__
@@ -75,7 +73,9 @@ def client(flask_app):
 
 
 def _now_iso() -> str:
-    return datetime.datetime.utcnow().isoformat() + "Z"
+    return (
+        datetime.datetime.now(datetime.timezone.utc).isoformat().replace("+00:00", "Z")
+    )
 
 
 def _post_json(client, url, payload):

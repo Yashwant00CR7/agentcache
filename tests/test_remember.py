@@ -4,14 +4,10 @@ tests/test_remember.py — C1.2
 Tests for remember(), forget(), and jaccard_similarity().
 """
 
-import sys
-import os
 import datetime
+import os
 
 import pytest
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -19,14 +15,16 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 
 def _make_kv(tmp_path):
-    from db import StateKV
+    from agentcache.db import StateKV
 
     os.environ.pop("AGENTCACHE_SECRET", None)
     return StateKV(db_path=str(tmp_path / "test.db"))
 
 
 def _now():
-    return datetime.datetime.utcnow().isoformat() + "Z"
+    return (
+        datetime.datetime.now(datetime.timezone.utc).isoformat().replace("+00:00", "Z")
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -36,18 +34,18 @@ def _now():
 
 class TestJaccardSimilarity:
     def test_identical_strings(self):
-        from functions import jaccard_similarity
+        from agentcache.functions import jaccard_similarity
 
         assert jaccard_similarity("hello world foo", "hello world foo") == 1.0
 
     def test_completely_different(self):
-        from functions import jaccard_similarity
+        from agentcache.functions import jaccard_similarity
 
         score = jaccard_similarity("apple banana cherry", "xyz uvw qrs")
         assert score == 0.0
 
     def test_partial_overlap(self):
-        from functions import jaccard_similarity
+        from agentcache.functions import jaccard_similarity
 
         score = jaccard_similarity(
             "authentication security token", "authentication bearer token"
@@ -55,12 +53,12 @@ class TestJaccardSimilarity:
         assert 0.0 < score < 1.0
 
     def test_empty_strings(self):
-        from functions import jaccard_similarity
+        from agentcache.functions import jaccard_similarity
 
         assert jaccard_similarity("", "") == 1.0
 
     def test_high_similarity_above_threshold(self):
-        from functions import jaccard_similarity
+        from agentcache.functions import jaccard_similarity
 
         # These two should meet or exceed the 0.7 threshold used in remember()
         a = "Use parameterised queries to prevent SQL injection in all database calls"
@@ -68,7 +66,7 @@ class TestJaccardSimilarity:
         assert jaccard_similarity(a, b) >= 0.7
 
     def test_low_similarity_below_threshold(self):
-        from functions import jaccard_similarity
+        from agentcache.functions import jaccard_similarity
 
         a = "Configure Redis as the session cache backend"
         b = "Deploy the React frontend to Vercel using GitHub Actions CI"
@@ -82,7 +80,7 @@ class TestJaccardSimilarity:
 
 class TestRemember:
     def test_creates_memory_with_is_latest_true(self, tmp_path):
-        from functions import remember
+        from agentcache.functions import remember
 
         kv = _make_kv(tmp_path)
         result = remember(kv, {"content": "Always use type hints in Python functions"})
@@ -93,7 +91,7 @@ class TestRemember:
         assert "Always use type hints" in mem["content"]
 
     def test_memory_has_required_fields(self, tmp_path):
-        from functions import remember
+        from agentcache.functions import remember
 
         kv = _make_kv(tmp_path)
         result = remember(
@@ -112,7 +110,7 @@ class TestRemember:
         assert "design" in mem["concepts"]
 
     def test_supersedes_memory_with_high_jaccard_similarity(self, tmp_path):
-        from functions import remember, KV
+        from agentcache.functions import KV, remember
 
         kv = _make_kv(tmp_path)
 
@@ -143,7 +141,7 @@ class TestRemember:
         assert second_mem.get("parentId") == first_id
 
     def test_independent_memory_with_low_jaccard_similarity(self, tmp_path):
-        from functions import remember, KV
+        from agentcache.functions import KV, remember
 
         kv = _make_kv(tmp_path)
 
@@ -178,14 +176,14 @@ class TestRemember:
         assert len(all_mems) == 2
 
     def test_remember_raises_on_empty_content(self, tmp_path):
-        from functions import remember
+        from agentcache.functions import remember
 
         kv = _make_kv(tmp_path)
         with pytest.raises(ValueError, match="content is required"):
             remember(kv, {"content": ""})
 
     def test_remember_strips_private_data(self, tmp_path):
-        from functions import remember
+        from agentcache.functions import remember
 
         kv = _make_kv(tmp_path)
         result = remember(
@@ -198,7 +196,7 @@ class TestRemember:
         assert "[REDACTED" in result["memory"]["content"]
 
     def test_remember_with_project_scoping(self, tmp_path):
-        from functions import remember
+        from agentcache.functions import remember
 
         kv = _make_kv(tmp_path)
         # Two very similar memories for different projects should not supersede each other
@@ -228,7 +226,7 @@ class TestRemember:
 
 class TestForget:
     def test_forget_memory_by_id(self, tmp_path):
-        from functions import remember, forget, KV
+        from agentcache.functions import KV, forget, remember
 
         kv = _make_kv(tmp_path)
         result = remember(kv, {"content": "This memory will be forgotten"})
@@ -239,7 +237,7 @@ class TestForget:
         assert kv.get(KV.memories, mem_id) is None
 
     def test_forget_returns_zero_for_nonexistent_memory(self, tmp_path):
-        from functions import forget
+        from agentcache.functions import forget
 
         kv = _make_kv(tmp_path)
         result = forget(kv, {"memoryId": "mem_nonexistent_id"})

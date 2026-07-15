@@ -8,17 +8,14 @@ Note: Each property test creates a fresh isolated SQLite DB per hypothesis
 example using a shared counter, avoiding state accumulation between examples.
 """
 
-import sys
-import os
 import datetime
+import os
 import tempfile
 
 import pytest
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
-
 try:
-    from hypothesis import given, settings, assume, HealthCheck
+    from hypothesis import HealthCheck, assume, given, settings
     from hypothesis import strategies as st
 
     HYPOTHESIS_AVAILABLE = True
@@ -39,7 +36,7 @@ _counter = [0]
 
 def _fresh_kv():
     """Create a brand-new isolated StateKV in a temp directory."""
-    from db import StateKV
+    from agentcache.db import StateKV
 
     os.environ.pop("AGENTCACHE_SECRET", None)
     _counter[0] += 1
@@ -48,7 +45,9 @@ def _fresh_kv():
 
 
 def _now():
-    return datetime.datetime.utcnow().isoformat() + "Z"
+    return (
+        datetime.datetime.now(datetime.timezone.utc).isoformat().replace("+00:00", "Z")
+    )
 
 
 def _safe_path():
@@ -91,7 +90,7 @@ def _safe_text():
 def test_property_1_pair_isolation(path1, agent1, path2, agent2, text):
     assume((path1, agent1) != (path2, agent2))
 
-    from functions import folder_observe, KV
+    from agentcache.functions import KV, folder_observe
 
     kv = _fresh_kv()
 
@@ -121,7 +120,7 @@ def test_property_1_pair_isolation(path1, agent1, path2, agent2, text):
     texts=st.lists(_safe_text(), min_size=1, max_size=10),
 )
 def test_property_2_obs_count_consistency(path, agent, texts):
-    from functions import folder_observe, KV
+    from agentcache.functions import KV, folder_observe
 
     kv = _fresh_kv()
 
@@ -152,7 +151,7 @@ def test_property_2_obs_count_consistency(path, agent, texts):
     text=_safe_text(),
 )
 def test_property_3_index_coverage(path, agent, text):
-    from functions import folder_observe, KV
+    from agentcache.functions import KV, folder_observe
 
     kv = _fresh_kv()
 
@@ -186,7 +185,7 @@ def test_property_3_index_coverage(path, agent, text):
     prefix=st.text(alphabet="abcdefghijklmnop", min_size=3, max_size=10),
 )
 def test_property_4_privacy_invariant(path, agent, prefix):
-    from functions import folder_observe, KV
+    from agentcache.functions import KV, folder_observe
 
     kv = _fresh_kv()
 
@@ -221,7 +220,7 @@ def test_property_4_privacy_invariant(path, agent, prefix):
     n=st.integers(min_value=2, max_value=8),
 )
 def test_property_5_timeline_ordering(path, agent, n):
-    from functions import folder_observe, folder_timeline
+    from agentcache.functions import folder_observe, folder_timeline
 
     kv = _fresh_kv()
 
@@ -256,7 +255,7 @@ def test_property_5_timeline_ordering(path, agent, n):
     texts=st.lists(_safe_text(), min_size=1, max_size=5),
 )
 def test_property_6_forget_completeness(path, agent, texts):
-    from functions import folder_observe, forget, KV
+    from agentcache.functions import KV, folder_observe, forget
 
     kv = _fresh_kv()
 
@@ -297,7 +296,7 @@ def test_property_6_forget_completeness(path, agent, texts):
     n_variants=st.integers(min_value=2, max_value=4),
 )
 def test_property_7_memory_version_uniqueness(base_content, n_variants):
-    from functions import remember, KV
+    from agentcache.functions import KV, remember
 
     kv = _fresh_kv()
 
@@ -341,7 +340,7 @@ def test_property_7_memory_version_uniqueness(base_content, n_variants):
     ).filter(lambda p: ".." not in p and p.strip("/") != ""),
 )
 def test_property_8_path_normalization_idempotency(path):
-    from functions import normalize_folder_path
+    from agentcache.functions import normalize_folder_path
 
     try:
         normalized_once = normalize_folder_path(path)

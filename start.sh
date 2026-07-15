@@ -59,7 +59,7 @@ export III_REST_PORT=7860
 
 # Start Flask application in the foreground
 echo "[start] Starting Flask application on port 7860..."
-python3 src/app.py
+python3 -m agentcache.cli serve --port 7860
 
 # Perform a final backup on shutdown
 echo "[start] Flask application exited. Performing final backup..."

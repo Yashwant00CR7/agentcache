@@ -146,7 +146,7 @@ def perform_antigravity_sync_local(args):
                             current_prompt = p_text.strip()
                             current_timestamp = step.get("created_at")
                         elif step_type == "PLANNER_RESPONSE" and current_prompt:
-                            ts = current_timestamp or step.get("created_at") or datetime.datetime.utcnow().isoformat() + "Z"
+                            ts = current_timestamp or step.get("created_at") or datetime.datetime.now(datetime.timezone.utc).isoformat().replace("+00:00", "Z")
                             turns.append({"prompt": current_prompt, "response": step.get("content", ""), "timestamp": ts})
                             current_prompt = None
                             current_timestamp = None

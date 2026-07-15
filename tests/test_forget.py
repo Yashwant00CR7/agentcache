@@ -1,12 +1,10 @@
 """Unit tests for forget() folder-based deletion (REQ-029–REQ-033)."""
 
-import sys
-import os
 import datetime
+import os
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
-from db import StateKV
-from functions import folder_observe, forget, KV
+from agentcache.db import StateKV
+from agentcache.functions import KV, folder_observe, forget
 
 
 def make_kv(tmp_path):
@@ -23,7 +21,9 @@ def add_obs(kv, folder="/home/user/proj", agent="kiro", n=1):
                 "folderPath": folder,
                 "agentId": agent,
                 "text": f"observation {i}",
-                "timestamp": datetime.datetime.utcnow().isoformat() + "Z",
+                "timestamp": datetime.datetime.now(datetime.timezone.utc)
+                .isoformat()
+                .replace("+00:00", "Z"),
             },
         )
         ids.append(result["observationId"])
@@ -102,7 +102,7 @@ class TestForgetPartial:
 class TestForgetMemory:
     def test_delete_global_memory(self, tmp_path):
         kv = make_kv(tmp_path)
-        from functions import remember
+        from agentcache.functions import remember
 
         result = remember(kv, {"content": "Important insight", "type": "fact"})
         mem_id = result["memory"]["id"]

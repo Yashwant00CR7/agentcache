@@ -4,15 +4,11 @@ tests/test_api.py — C3.1
 Integration tests for REST endpoints using the Flask test client.
 """
 
-import sys
-import os
-import json
 import datetime
+import json
+import os
 
 import pytest
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -26,7 +22,7 @@ def flask_app(tmp_path_factory):
     os.environ.pop("AGENTCACHE_SECRET", None)
     os.environ.pop("AGENTMEMORY_SECRET", None)
 
-    from db import StateKV
+    from agentcache.db import StateKV
 
     original_init = StateKV.__init__
 
@@ -34,7 +30,7 @@ def flask_app(tmp_path_factory):
         original_init(self, db_path=db_path, **kwargs)
 
     StateKV.__init__ = patched_init
-    import app as app_module
+    import agentcache.app as app_module
 
     os.environ.pop("AGENTCACHE_SECRET", None)
     os.environ.pop("AGENTMEMORY_SECRET", None)
@@ -50,7 +46,9 @@ def client(flask_app):
 
 
 def _now():
-    return datetime.datetime.utcnow().isoformat() + "Z"
+    return (
+        datetime.datetime.now(datetime.timezone.utc).isoformat().replace("+00:00", "Z")
+    )
 
 
 def _post(client, url, payload):

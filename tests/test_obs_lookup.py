@@ -1,18 +1,16 @@
 """Unit tests for observation lookup index, backfill, and index sync validation."""
 
-import sys
-import os
 import datetime
+import os
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
-from db import StateKV
-import functions
-from functions import (
+from agentcache import functions
+from agentcache.db import StateKV
+from agentcache.functions import (
+    KV,
+    backfill_obs_lookup_if_needed,
     folder_observe,
     forget,
-    backfill_obs_lookup_if_needed,
     verify_index_sync_on_boot,
-    KV,
 )
 
 
@@ -26,7 +24,9 @@ def base_payload(folder="/home/user/proj", agent="kiro", text="Test observation"
         "folderPath": folder,
         "agentId": agent,
         "text": text,
-        "timestamp": datetime.datetime.utcnow().isoformat() + "Z",
+        "timestamp": datetime.datetime.now(datetime.timezone.utc)
+        .isoformat()
+        .replace("+00:00", "Z"),
     }
 
 

@@ -1,11 +1,8 @@
 """Unit tests for normalize_folder_path (REQ-002, REQ-063, REQ-064, REQ-066)."""
 
-import sys
-import os
 import pytest
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
-from functions import normalize_folder_path
+from agentcache.functions import normalize_folder_path
 
 
 class TestNormalizeFolderPath:

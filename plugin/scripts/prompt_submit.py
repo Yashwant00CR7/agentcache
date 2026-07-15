@@ -42,7 +42,7 @@ def main():
         "sessionId": session_id,
         "project": project,
         "cwd": cwd,
-        "timestamp": datetime.utcnow().isoformat() + "Z",
+        "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         "data": {
             "prompt": prompt
         }

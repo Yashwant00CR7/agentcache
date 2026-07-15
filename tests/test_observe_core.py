@@ -2,16 +2,12 @@
 C1.1 — Unit tests for observe(), strip_private_data(), and folder_observe().
 """
 
-import sys
-import os
 import datetime
+
 import pytest
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
-
-from db import StateKV
-from functions import observe, folder_observe, strip_private_data, KV
-
+from agentcache.db import StateKV
+from agentcache.functions import KV, folder_observe, observe, strip_private_data
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -23,7 +19,9 @@ def make_kv(tmp_path):
 
 
 def _now() -> str:
-    return datetime.datetime.utcnow().isoformat() + "Z"
+    return (
+        datetime.datetime.now(datetime.timezone.utc).isoformat().replace("+00:00", "Z")
+    )
 
 
 def valid_observe_payload(**overrides):

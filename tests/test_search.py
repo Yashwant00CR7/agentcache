@@ -4,12 +4,6 @@ tests/test_search.py — C1.3
 Tests for SearchIndex, HybridSearch, and synonym expansion.
 """
 
-import sys
-import os
-
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
-
 
 # ---------------------------------------------------------------------------
 # SearchIndex unit tests
@@ -29,7 +23,7 @@ class TestSearchIndex:
         }
 
     def test_add_and_exact_match_returns_rank_one(self):
-        from search import SearchIndex
+        from agentcache.search import SearchIndex
 
         idx = SearchIndex()
         obs = self._make_obs("obs_001", "authentication middleware refactor")
@@ -39,7 +33,7 @@ class TestSearchIndex:
         assert results[0]["obsId"] == "obs_001"
 
     def test_prefix_matching(self):
-        from search import SearchIndex
+        from agentcache.search import SearchIndex
 
         idx = SearchIndex()
         obs = self._make_obs("obs_002", "authentication token validation")
@@ -49,7 +43,7 @@ class TestSearchIndex:
 
     def test_synonym_expansion_db_conn(self):
         """'db conn' should find document indexed with 'database connection'."""
-        from search import SearchIndex
+        from agentcache.search import SearchIndex
 
         idx = SearchIndex()
         obs = self._make_obs(
@@ -62,7 +56,7 @@ class TestSearchIndex:
         assert any(r["obsId"] == "obs_003" for r in results)
 
     def test_remove_document(self):
-        from search import SearchIndex
+        from agentcache.search import SearchIndex
 
         idx = SearchIndex()
         obs = self._make_obs("obs_004", "deploy kubernetes service mesh")
@@ -72,14 +66,14 @@ class TestSearchIndex:
         assert not any(r["obsId"] == "obs_004" for r in results)
 
     def test_empty_index_returns_empty(self):
-        from search import SearchIndex
+        from agentcache.search import SearchIndex
 
         idx = SearchIndex()
         results = idx.search("anything")
         assert results == []
 
     def test_multiple_docs_rank_order(self):
-        from search import SearchIndex
+        from agentcache.search import SearchIndex
 
         idx = SearchIndex()
         idx.add(
@@ -102,7 +96,7 @@ class TestSearchIndex:
         assert results[0]["obsId"] == "obs_a"
 
     def test_size_property(self):
-        from search import SearchIndex
+        from agentcache.search import SearchIndex
 
         idx = SearchIndex()
         assert idx.size == 0
@@ -113,7 +107,7 @@ class TestSearchIndex:
         assert idx.size == 1
 
     def test_clear(self):
-        from search import SearchIndex
+        from agentcache.search import SearchIndex
 
         idx = SearchIndex()
         idx.add(self._make_obs("x1", "something"))
@@ -122,7 +116,7 @@ class TestSearchIndex:
         assert idx.search("something") == []
 
     def test_dirty_flag_set_on_add(self):
-        from search import SearchIndex
+        from agentcache.search import SearchIndex
 
         idx = SearchIndex()
         assert idx._dirty is False
@@ -130,7 +124,7 @@ class TestSearchIndex:
         assert idx._dirty is True
 
     def test_dirty_flag_set_on_remove(self):
-        from search import SearchIndex
+        from agentcache.search import SearchIndex
 
         idx = SearchIndex()
         idx.add(self._make_obs("x1", "test remove dirty"))
@@ -139,7 +133,7 @@ class TestSearchIndex:
         assert idx._dirty is True
 
     def test_dirty_flag_reset_after_restore(self):
-        from search import SearchIndex
+        from agentcache.search import SearchIndex
 
         idx = SearchIndex()
         idx.add(self._make_obs("x1", "test restore"))
@@ -149,7 +143,7 @@ class TestSearchIndex:
         assert idx2._dirty is False
 
     def test_has_method(self):
-        from search import SearchIndex
+        from agentcache.search import SearchIndex
 
         idx = SearchIndex()
         obs = self._make_obs("obs_has", "has method test")
@@ -167,7 +161,7 @@ class TestSearchIndex:
 
 class TestVectorIndex:
     def test_dirty_flag_on_add(self):
-        from search import VectorIndex
+        from agentcache.search import VectorIndex
 
         vi = VectorIndex()
         assert vi._dirty is False
@@ -175,7 +169,7 @@ class TestVectorIndex:
         assert vi._dirty is True
 
     def test_dirty_flag_on_remove(self):
-        from search import VectorIndex
+        from agentcache.search import VectorIndex
 
         vi = VectorIndex()
         vi.add("v1", "sess", [0.1, 0.2, 0.3])
@@ -184,7 +178,7 @@ class TestVectorIndex:
         assert vi._dirty is True
 
     def test_dirty_flag_reset_after_restore(self):
-        from search import VectorIndex
+        from agentcache.search import VectorIndex
 
         vi = VectorIndex()
         vi.add("v1", "sess", [0.1, 0.2, 0.3])
@@ -212,7 +206,7 @@ class TestHybridSearchBM25Only:
         }
 
     def test_hybrid_bm25_only_returns_same_results_as_search_index(self):
-        from search import SearchIndex, VectorIndex, HybridSearch
+        from agentcache.search import HybridSearch, SearchIndex, VectorIndex
 
         bm25 = SearchIndex()
         vector = VectorIndex()
@@ -237,7 +231,7 @@ class TestHybridSearchBM25Only:
         assert bm25_ids[0] == hybrid_ids[0]
 
     def test_hybrid_returns_empty_for_no_matches(self):
-        from search import SearchIndex, VectorIndex, HybridSearch
+        from agentcache.search import HybridSearch, SearchIndex, VectorIndex
 
         bm25 = SearchIndex()
         hybrid = HybridSearch(bm25, VectorIndex(), None, None)
@@ -251,7 +245,7 @@ class TestHybridSearchBM25Only:
 
 class TestSearchIndexSerialization:
     def test_roundtrip_preserves_search_results(self):
-        from search import SearchIndex
+        from agentcache.search import SearchIndex
 
         idx = SearchIndex()
         idx.add(

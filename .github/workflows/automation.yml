@@ -1,26 +1,13 @@
-name: Test Automation Pipeline
+name: Test & Publish Pipeline
 
 on:
   push:
     branches: [main]
-    paths-ignore:
-      - "README.md"
-      - "CHANGELOG.md"
-      - "AGENTS.md"
-      - "ROADMAP.md"
-      - "**/*.md"
+    tags:
+      - 'v*'
   pull_request:
     branches: [main]
-    paths-ignore:
-      - "README.md"
-      - "CHANGELOG.md"
-      - "AGENTS.md"
-      - "ROADMAP.md"
-      - "**/*.md"
   workflow_dispatch:
-  schedule:
-    # Run every Sunday at midnight to check for dependency updates and slow/regression bugs
-    - cron: '0 0 * * 0'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -55,7 +42,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest]
+        os: [ubuntu-latest, windows-latest, macos-latest]
         python-version: ["3.10", "3.11", "3.12"]
     
     steps:
@@ -68,7 +55,7 @@ jobs:
           python-version: ${{ matrix.python-version }}
           cache: 'pip'
 
-      - name: Install Dependencies
+      - name: Install Package & Dev Dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -e ".[dev]"
@@ -79,7 +66,7 @@ jobs:
       - name: Run Hypothesis Property-Based Tests
         run: pytest tests/test_properties.py -v --tb=short
 
-  build-verification:
+  build-and-verify:
     name: Build & Package Verification
     needs: automated-testing
     runs-on: ubuntu-latest
@@ -92,11 +79,14 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Install Build Tool
-        run: pip install build
+      - name: Install Build and Twine
+        run: pip install build twine
 
       - name: Build Package (wheel & sdist)
         run: python -m build
+
+      - name: Verify Package Metadata
+        run: twine check dist/*
 
       - name: Upload Build Artifacts
         uses: actions/upload-artifact@v4
@@ -105,24 +95,22 @@ jobs:
           path: dist/
           retention-days: 5
 
-  deploy-to-huggingface:
-    name: Deploy to Hugging Face Spaces
-    needs: [lint-and-format, automated-testing, build-verification]
-    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'workflow_dispatch'
+  publish-to-pypi:
+    name: Publish to PyPI
+    needs: build-and-verify
+    # Only run on pushes of version tags (e.g. v0.9.8) to the main branch
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write
     steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
+      - name: Download Build Artifacts
+        uses: actions/download-artifact@v4
         with:
-          fetch-depth: 0
-          lfs: true
+          name: agentcache-dist
+          path: dist/
 
-      - name: Push to Hugging Face Space
-        env:
-          HF_TOKEN: ${{ secrets.HF_TOKEN }}
-        run: |
-          git config --global user.email "bot@github.com"
-          git config --global user.name "GitHub Action Bot"
-          git remote add hf https://Yash030:$HF_TOKEN@huggingface.co/spaces/Yash030/agentmemory-python
-          git push --force hf main:main
-
+      - name: Publish Package to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          print-hash: true

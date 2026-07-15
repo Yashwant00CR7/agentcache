@@ -15,14 +15,11 @@ RUN useradd -m -u 1000 user
 # Set up workdir
 WORKDIR /app
 
-# Copy python dependencies and install
-COPY requirements.txt /app/requirements.txt
-RUN pip install --no-cache-dir -r /app/requirements.txt
+# Copy all application files first to support package installation
+COPY --chown=user:user . /app
 
-# Copy application files
-COPY --chown=user:user src /app/src
-COPY --chown=user:user start.sh /app/start.sh
-COPY --chown=user:user sync.py /app/sync.py
+# Install the package directly in non-editable mode for production deployment
+RUN pip install --no-cache-dir /app
 
 # Give permissions
 RUN chmod +x /app/start.sh && chown -R user:user /app /home/user

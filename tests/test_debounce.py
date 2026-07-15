@@ -5,16 +5,12 @@ Tests:
 - flush() triggers immediate save without waiting for debounce timer.
 """
 
-import sys
-import os
 import time
 import unittest.mock as mock
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
-
-from db import StateKV
-from search import SearchIndex, VectorIndex
-from functions import IndexPersistence
+from agentcache.db import StateKV
+from agentcache.functions import IndexPersistence
+from agentcache.search import SearchIndex, VectorIndex
 
 # Speed up debounce for tests
 FAST_DEBOUNCE = 0.05

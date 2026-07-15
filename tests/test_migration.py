@@ -1,12 +1,10 @@
 """Unit tests for migrate_sessions_to_folders (REQ-058–REQ-062)."""
 
-import sys
-import os
 import datetime
+import os
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
-from db import StateKV
-from functions import migrate_sessions_to_folders, KV
+from agentcache.db import StateKV
+from agentcache.functions import KV, migrate_sessions_to_folders
 
 
 def make_kv(tmp_path):
@@ -18,7 +16,7 @@ def seed_session(
     kv, session_id="sess_001", cwd="/home/user/proj", agent="kiro", obs_count=3
 ):
     """Seed a legacy session with observations into the old schema."""
-    ts = datetime.datetime.utcnow().isoformat() + "Z"
+    ts = datetime.datetime.now(datetime.timezone.utc).isoformat().replace("+00:00", "Z")
     session = {
         "id": session_id,
         "project": cwd,
@@ -87,7 +85,9 @@ class TestMigrateActual:
             {
                 "id": "obs_0:raw",
                 "sessionId": "sess_001",
-                "timestamp": datetime.datetime.utcnow().isoformat() + "Z",
+                "timestamp": datetime.datetime.now(datetime.timezone.utc)
+                .isoformat()
+                .replace("+00:00", "Z"),
             },
         )
         result = migrate_sessions_to_folders(kv, dry_run=False)
@@ -105,7 +105,11 @@ class TestMigrateActual:
     def test_unknown_fallback(self, tmp_path):
         kv = make_kv(tmp_path)
         # Session with no cwd or project
-        ts = datetime.datetime.utcnow().isoformat() + "Z"
+        ts = (
+            datetime.datetime.now(datetime.timezone.utc)
+            .isoformat()
+            .replace("+00:00", "Z")
+        )
         kv.set(
             KV.sessions,
             "sess_no_path",

@@ -1,13 +1,12 @@
 """Unit tests for folder_observe (REQ-008, REQ-010, REQ-011, REQ-015)."""
 
-import sys
-import os
-import pytest
 import datetime
+import os
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
-from db import StateKV
-from functions import folder_observe, KV
+import pytest
+
+from agentcache.db import StateKV
+from agentcache.functions import KV, folder_observe
 
 
 def make_kv(tmp_path):
@@ -20,7 +19,9 @@ def base_payload(**overrides):
         "folderPath": "/home/user/projects/myapp",
         "agentId": "kiro",
         "text": "Edited src/app.py to add a new route",
-        "timestamp": datetime.datetime.utcnow().isoformat() + "Z",
+        "timestamp": datetime.datetime.now(datetime.timezone.utc)
+        .isoformat()
+        .replace("+00:00", "Z"),
     }
     payload.update(overrides)
     return payload

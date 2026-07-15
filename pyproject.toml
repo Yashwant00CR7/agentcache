@@ -7,8 +7,26 @@ name = "agentcache"
 version = "0.9.8"
 description = "A Python REST + WebSocket + MCP cache server for AI agents, backed by SQLite"
 readme = "README.md"
+authors = [
+    { name = "Yash Wanjarwadkar", email = "yashwanjarwadkar@gmail.com" }
+]
+maintainers = [
+    { name = "Yash Wanjarwadkar", email = "yashwanjarwadkar@gmail.com" }
+]
 license = { text = "MIT" }
 requires-python = ">=3.10"
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
 dependencies = [
     "flask>=3.0.0",
     "flask-sock>=0.7.0",
@@ -22,21 +40,37 @@ dependencies = [
 dev = [
     "pytest>=8.0.0",
     "hypothesis>=6.100.0",
+    "ruff>=0.3.0",
+    "twine>=5.0.0",
 ]
 local-embeddings = [
     "sentence-transformers>=2.7.0",
 ]
 
+[project.urls]
+Homepage = "https://github.com/Yash030/agentcache-python"
+Repository = "https://github.com/Yash030/agentcache-python.git"
+"Bug Tracker" = "https://github.com/Yash030/agentcache-python/issues"
+Documentation = "https://github.com/Yash030/agentcache-python#readme"
+
 [project.scripts]
-agentcache = "src.cli:main"
+agentcache = "agentcache.cli:main"
 
 [tool.setuptools.packages.find]
-where = ["."]
-include = ["src*"]
+where = ["src"]
+include = ["agentcache*"]
 
 [tool.setuptools.package-data]
-"src.viewer" = ["*.html", "*.svg", "*.js", "*.css"]
+"agentcache.viewer" = ["*.html", "*.svg", "*.js", "*.css"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = ["test_*.py"]
+
+[tool.ruff]
+line-length = 88
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W"]
+ignore = ["E501"]

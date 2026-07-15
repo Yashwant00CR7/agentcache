@@ -1,15 +1,10 @@
 """Unit tests for folderColor() and folder_graph_build() — REQ-023–REQ-028."""
 
-import os
-import sys
-
 import pytest
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
-
-from db import StateKV
-from functions import KV, folder_graph_build, folder_color as folderColor
-
+from agentcache.db import StateKV
+from agentcache.functions import KV, folder_graph_build
+from agentcache.functions import folder_color as folderColor
 
 # ---------------------------------------------------------------------------
 # Fixtures

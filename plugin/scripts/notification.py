@@ -2,7 +2,7 @@
 import sys
 import json
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from hook_utils import resolve_project, is_sdk_child, api_call_bg
 
 def main():
@@ -28,7 +28,7 @@ def main():
         "sessionId": session_id,
         "project": resolve_project(data.get("cwd")),
         "cwd": data.get("cwd") or "",
-        "timestamp": datetime.utcnow().isoformat() + "Z",
+        "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         "data": {
             "notification_type": notification_type,
             "title": data.get("title"),

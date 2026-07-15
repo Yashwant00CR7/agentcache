@@ -1,12 +1,10 @@
 """Unit tests for folder_timeline (REQ-020, REQ-021, REQ-022, REQ-071)."""
 
-import sys
-import os
 import datetime
+import os
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
-from db import StateKV
-from functions import folder_observe, folder_timeline
+from agentcache.db import StateKV
+from agentcache.functions import folder_observe, folder_timeline
 
 
 def make_kv(tmp_path):

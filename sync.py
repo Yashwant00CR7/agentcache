@@ -255,7 +255,7 @@ def backup():
         # C4.1/C4.2: update state with new HWM and timestamp
         import datetime
         state["last_synced_audit_id"] = current_hwm
-        state["last_sync_at"] = datetime.datetime.utcnow().isoformat() + "Z"
+        state["last_sync_at"] = datetime.datetime.now(datetime.timezone.utc).isoformat().replace("+00:00", "Z")
         state["sync_status"] = "ok"
         _save_sync_state(state)
 

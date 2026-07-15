@@ -1,12 +1,10 @@
 """Unit tests for folder_graph_build (REQ-023–REQ-028)."""
 
-import sys
-import os
 import datetime
+import os
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
-from db import StateKV
-from functions import folder_observe, folder_graph_build
+from agentcache.db import StateKV
+from agentcache.functions import folder_graph_build, folder_observe
 
 
 def make_kv(tmp_path):
@@ -21,7 +19,9 @@ def add_obs(kv, folder, agent="kiro", text="obs"):
             "folderPath": folder,
             "agentId": agent,
             "text": text,
-            "timestamp": datetime.datetime.utcnow().isoformat() + "Z",
+            "timestamp": datetime.datetime.now(datetime.timezone.utc)
+            .isoformat()
+            .replace("+00:00", "Z"),
         },
     )
 
