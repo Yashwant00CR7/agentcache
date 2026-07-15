@@ -44,7 +44,7 @@ dev = [
     "twine>=5.0.0",
 ]
 local-embeddings = [
-    "sentence-transformers>=2.7.0",
+    "sentence-transformers>=5.6.0",
 ]
 
 [project.urls]
