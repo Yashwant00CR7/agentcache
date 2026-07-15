@@ -3,6 +3,7 @@ import hashlib
 import json
 import os
 import re
+import sqlite3
 import threading
 import time
 import uuid
@@ -624,35 +625,55 @@ class IndexPersistence:
         self.kv.delete(KV.bm25Index, legacy_key)
 
         # Cleanup ALL obsolete shards starting with scope_prefix that are NOT in the current shards
-        try:
-            conn = self.kv._get_conn()
-            cursor = conn.cursor()
-            try:
-                cursor.execute(
-                    "SELECT DISTINCT scope FROM kv_store WHERE scope LIKE ?",
-                    (scope_prefix + "%",),
-                )
-                rows = cursor.fetchall()
-                current_scopes = {s["scope"] for s in shards}
-                to_delete = []
-                for row in rows:
-                    scope_name = row["scope"]
-                    if scope_name not in current_scopes:
-                        to_delete.append(scope_name)
-
-                if to_delete:
-                    for i in range(0, len(to_delete), 50):
-                        chunk_delete = to_delete[i : i + 50]
-                        format_strings = ",".join(["?"] * len(chunk_delete))
+        with self.kv._lock:
+            max_retries = 5
+            delay = 0.05
+            for attempt in range(max_retries):
+                try:
+                    conn = self.kv._get_conn()
+                    cursor = conn.cursor()
+                    try:
                         cursor.execute(
-                            f"DELETE FROM kv_store WHERE scope IN ({format_strings})",
-                            tuple(chunk_delete),
+                            "SELECT DISTINCT scope FROM kv_store WHERE scope LIKE ?",
+                            (scope_prefix + "%",),
                         )
-                        conn.commit()
-            finally:
-                cursor.close()
-        except Exception as ex:
-            print(f"[index persistence] error cleaning up obsolete shards: {ex}")
+                        rows = cursor.fetchall()
+                        current_scopes = {s["scope"] for s in shards}
+                        to_delete = []
+                        for row in rows:
+                            scope_name = row["scope"]
+                            if scope_name not in current_scopes:
+                                to_delete.append(scope_name)
+
+                        if to_delete:
+                            for i in range(0, len(to_delete), 50):
+                                chunk_delete = to_delete[i : i + 50]
+                                format_strings = ",".join(["?"] * len(chunk_delete))
+                                cursor.execute(
+                                    f"DELETE FROM kv_store WHERE scope IN ({format_strings})",
+                                    tuple(chunk_delete),
+                                )
+                                conn.commit()
+                        break  # Success
+                    finally:
+                        cursor.close()
+                except sqlite3.OperationalError as ex:
+                    err_msg = str(ex).lower()
+                    if (
+                        "locked" in err_msg or "busy" in err_msg
+                    ) and attempt < max_retries - 1:
+                        time.sleep(delay)
+                        delay *= 2
+                        continue
+                    print(
+                        f"[index persistence] error cleaning up obsolete shards: {ex}"
+                    )
+                    break
+                except Exception as ex:
+                    print(
+                        f"[index persistence] error cleaning up obsolete shards: {ex}"
+                    )
+                    break
 
         if (
             previous
@@ -3125,6 +3146,10 @@ def export_data(kv: StateKV, data: Optional[Dict[str, Any]] = None) -> Dict[str,
         datetime.datetime.now(datetime.timezone.utc).isoformat().replace("+00:00", "Z")
     )
 
+    # Check isolation
+    isolated = is_agent_scope_isolated()
+    isolated_agent_id = get_agent_id()
+
     # ---- v2 folder-based export (primary path) ----
     folder_pairs = kv.list(KV.folders)
     folders_export = []
@@ -3133,6 +3158,10 @@ def export_data(kv: StateKV, data: Optional[Dict[str, Any]] = None) -> Dict[str,
         aid = entry.get("agentId")
         if not fp or not aid:
             continue
+        # Apply isolation filter
+        if isolated and isolated_agent_id and aid != isolated_agent_id:
+            continue
+
         meta = kv.get(KV.folder_meta(fp, aid), "meta") or {
             "folderPath": fp,
             "agentId": aid,
@@ -3150,6 +3179,8 @@ def export_data(kv: StateKV, data: Optional[Dict[str, Any]] = None) -> Dict[str,
         )
 
     memories = kv.list(KV.memories)
+    if isolated and isolated_agent_id:
+        memories = [m for m in memories if m.get("agentId") == isolated_agent_id]
 
     return {
         "folders": folders_export,

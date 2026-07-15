@@ -16,6 +16,8 @@ import os
 def cmd_serve(args) -> None:
     """Start the Flask server."""
     os.environ.setdefault("III_REST_PORT", str(args.port))
+    if getattr(args, "no_workers", False):
+        os.environ["AGENTCACHE_DISABLE_WORKERS"] = "true"
     from .app import create_app
 
     flask_app = create_app()
@@ -79,6 +81,33 @@ def cmd_connect(args) -> None:
     run_connect(args)
 
 
+def cmd_worker(args) -> None:
+    """Run background worker tasks in a dedicated process."""
+    import time
+
+    tasks = [t.strip() for t in args.tasks.split(",")]
+    print(f"[worker] Starting worker process for tasks: {tasks}")
+
+    from .app import init_services
+
+    kv, _, _ = init_services()
+
+    from .workers import _shutting_down, start_background_workers
+
+    start_background_workers(kv, tasks=tasks)
+
+    try:
+        while not _shutting_down.is_set():
+            time.sleep(1)
+    except KeyboardInterrupt:
+        print("[worker] KeyboardInterrupt received. Initiating shutdown...")
+        import signal
+
+        from .workers import _shutdown_handler
+
+        _shutdown_handler(signal.SIGINT, None)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         prog="agentcache",
@@ -92,6 +121,19 @@ def main() -> None:
         "--port", type=int, default=int(os.getenv("III_REST_PORT", "3111"))
     )
     serve_parser.add_argument("--host", default="0.0.0.0")
+    serve_parser.add_argument(
+        "--no-workers", action="store_true", help="Disable background worker threads"
+    )
+
+    # worker
+    worker_parser = subparsers.add_parser(
+        "worker", help="Run background worker processes"
+    )
+    worker_parser.add_argument(
+        "--tasks",
+        default="index,forget",
+        help="Comma-separated tasks to run (index, forget)",
+    )
 
     # migrate
     migrate_parser = subparsers.add_parser(
@@ -139,6 +181,8 @@ def main() -> None:
 
     if args.command == "serve":
         cmd_serve(args)
+    elif args.command == "worker":
+        cmd_worker(args)
     elif args.command == "migrate":
         cmd_migrate(args)
     elif args.command == "export":

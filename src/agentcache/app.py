@@ -13,6 +13,8 @@ import sys
 from flask import Flask, request, send_from_directory
 from flask_sock import Sock
 
+from . import functions
+
 # Prevent double-import of app when run directly as __main__
 if __name__ == "__main__":
     sys.modules["app"] = sys.modules["__main__"]
@@ -45,20 +47,15 @@ embedding_provider = None
 persistence = None
 
 
-def create_app() -> Flask:
-    """Create and return a fully configured Flask application."""
+def init_services() -> tuple:
+    """Initialise database, embedding provider, and index persistence."""
     global kv, embedding_provider, persistence
-
-    # Check security credentials
-    if not os.getenv("AGENTCACHE_SECRET") and not os.getenv("AGENTMEMORY_SECRET"):
-        print(
-            "[security] WARNING: AGENTCACHE_SECRET/AGENTMEMORY_SECRET is not set! All API endpoints are publicly accessible without authentication."
-        )
+    if kv is not None:
+        return kv, embedding_provider, persistence
 
     from . import functions
     from . import search as search_mod
     from .db import StateKV
-    from .viewer_helpers import make_viewer_response
 
     # 1. DB
     kv = StateKV()
@@ -121,6 +118,21 @@ def create_app() -> Flask:
         functions.backfill_obs_lookup_if_needed(kv)
     except Exception as e:
         print(f"[db] Warning backfilling obs_lookup: {e}")
+
+    return kv, embedding_provider, persistence
+
+
+def create_app() -> Flask:
+    """Create and return a fully configured Flask application."""
+    # Check security credentials
+    if not os.getenv("AGENTCACHE_SECRET") and not os.getenv("AGENTMEMORY_SECRET"):
+        print(
+            "[security] WARNING: AGENTCACHE_SECRET/AGENTMEMORY_SECRET is not set! All API endpoints are publicly accessible without authentication."
+        )
+
+    init_services()
+
+    from .viewer_helpers import make_viewer_response
 
     # 4. Flask app + blueprints
     flask_app = Flask(__name__)
@@ -266,9 +278,10 @@ def create_app() -> Flask:
                 return resp
 
     # 8. Background workers
-    from .workers import start_background_workers
+    if os.getenv("AGENTCACHE_DISABLE_WORKERS") != "true":
+        from .workers import start_background_workers
 
-    start_background_workers(kv)
+        start_background_workers(kv)
 
     return flask_app
 

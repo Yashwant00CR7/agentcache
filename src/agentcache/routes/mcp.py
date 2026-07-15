@@ -430,12 +430,21 @@ def mcp_tools_call():
 
         elif name in ("cache_forget", "memory_forget"):
             obs_ids = _parse_mcp_list_arg(args.get("observationIds"))
+            request_aid = args.get("agentId")
+            if functions.is_agent_scope_isolated():
+                current_aid = functions.get_agent_id()
+                if current_aid:
+                    if request_aid and request_aid != current_aid:
+                        return jsonify(
+                            {"error": "Unauthorized: Agent scope is isolated"}
+                        ), 403
+                    request_aid = current_aid
             res = functions.forget(
                 kv,
                 {
                     "memoryId": args.get("memoryId"),
                     "folderPath": args.get("folderPath"),
-                    "agentId": args.get("agentId"),
+                    "agentId": request_aid,
                     "observationIds": obs_ids,
                 },
             )
@@ -577,10 +586,19 @@ def mcp_tools_call():
             text_out = json.dumps(res, indent=2)
 
         elif name in ("cache_dedup", "memory_dedup"):
+            request_aid = args.get("agentId")
+            if functions.is_agent_scope_isolated():
+                current_aid = functions.get_agent_id()
+                if current_aid:
+                    if request_aid and request_aid != current_aid:
+                        return jsonify(
+                            {"error": "Unauthorized: Agent scope is isolated"}
+                        ), 403
+                    request_aid = current_aid
             res = functions.dedup_folder_observations(
                 kv,
                 args.get("folderPath") or None,
-                args.get("agentId") or None,
+                request_aid or None,
             )
             text_out = json.dumps(res, indent=2)
 

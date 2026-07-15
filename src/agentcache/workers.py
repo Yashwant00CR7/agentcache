@@ -86,9 +86,13 @@ def _auto_forget_loop(kv) -> None:
     while not _shutting_down.is_set():
         try:
             if os.getenv("AUTO_FORGET_ENABLED") != "false":
-                print("[scheduler] Running auto_forget sweep...")
-                res = functions.auto_forget(kv, dry_run=False)
-                print(f"[scheduler] auto_forget sweep completed: {res}")
+                if kv.acquire_lock("auto_forget", lease_seconds=300):
+                    try:
+                        print("[scheduler] Running auto_forget sweep...")
+                        res = functions.auto_forget(kv, dry_run=False)
+                        print(f"[scheduler] auto_forget sweep completed: {res}")
+                    finally:
+                        kv.release_lock("auto_forget")
         except Exception as e:
             print(f"[scheduler] auto_forget loop error: {e}")
         # Sleep in 10-second chunks so we notice _shutting_down quickly
@@ -101,13 +105,19 @@ def _auto_forget_loop(kv) -> None:
 def _rebuild_index(kv) -> None:
     """Rebuild the BM25/vector index from scratch in a background thread."""
     try:
-        count = functions.rebuild_index(kv)
-        print(f"[persistence] Rebuild completed: indexed {count} items.")
+        if kv.acquire_lock("index_rebuild", lease_seconds=600):
+            try:
+                count = functions.rebuild_index(kv)
+                print(f"[persistence] Rebuild completed: indexed {count} items.")
+            finally:
+                kv.release_lock("index_rebuild")
+        else:
+            print("[persistence] Another process is rebuilding the index. Skipping...")
     except Exception as ex:
         print(f"[persistence] Rebuild failed: {ex}")
 
 
-def start_background_workers(kv) -> None:
+def start_background_workers(kv, tasks=None) -> None:
     """Start all background daemon threads and register signal handlers.
 
     Called once by create_app() after the DB and indexes are initialised.
@@ -115,6 +125,7 @@ def start_background_workers(kv) -> None:
 
     Args:
         kv: Initialised StateKV instance.
+        tasks: Optional list of tasks to run ("index", "forget"). Defaults to running both.
     """
     global _kv_ref, _persistence_ref
     _kv_ref = kv
@@ -125,30 +136,32 @@ def start_background_workers(kv) -> None:
     # Register graceful shutdown signal handlers (C5.1)
     _register_signal_handlers()
 
-    # Rebuild search index if empty or out of sync (Step 5)
-    index_empty = functions._bm25_index.size == 0
-    index_in_sync = True
-    if not index_empty:
-        index_in_sync = functions.verify_index_sync_on_boot(kv)
+    if tasks is None or "index" in tasks:
+        # Rebuild search index if empty or out of sync (Step 5)
+        index_empty = functions._bm25_index.size == 0
+        index_in_sync = True
+        if not index_empty:
+            index_in_sync = functions.verify_index_sync_on_boot(kv)
 
-    if index_empty or not index_in_sync:
-        reason = "empty" if index_empty else "out of sync"
-        print(
-            f"[persistence] Search index is {reason}. Rebuilding in background thread..."
-        )
-        t_rebuild = threading.Thread(
-            target=_rebuild_index,
+        if index_empty or not index_in_sync:
+            reason = "empty" if index_empty else "out of sync"
+            print(
+                f"[persistence] Search index is {reason}. Rebuilding in background thread..."
+            )
+            t_rebuild = threading.Thread(
+                target=_rebuild_index,
+                args=(kv,),
+                daemon=True,
+                name="index-rebuild",
+            )
+            t_rebuild.start()
+
+    if tasks is None or "forget" in tasks:
+        # Auto-forget sweep
+        t_forget = threading.Thread(
+            target=_auto_forget_loop,
             args=(kv,),
             daemon=True,
-            name="index-rebuild",
+            name="auto-forget",
         )
-        t_rebuild.start()
-
-    # Auto-forget sweep
-    t_forget = threading.Thread(
-        target=_auto_forget_loop,
-        args=(kv,),
-        daemon=True,
-        name="auto-forget",
-    )
-    t_forget.start()
+        t_forget.start()
