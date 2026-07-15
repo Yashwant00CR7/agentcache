@@ -26,7 +26,7 @@ enable_build_verification = true
 
 [commands]
 install_deps = "pip install -e \".[dev]\""
-lint = "python -m pip install ruff && ruff check src/ tests/"
+lint = "python -m pip install \"ruff==0.15.21\" && ruff check src/ tests/"
 format = "ruff format --check src/ tests/"
 pytest_unit = "pytest tests/ --ignore=tests/test_properties.py -v --tb=short"
 pytest_properties = "pytest tests/test_properties.py -v --tb=short"

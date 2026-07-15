@@ -1238,6 +1238,21 @@ def folder_observe(kv: StateKV, payload: Dict[str, Any]) -> Dict[str, Any]:
             "files": files,
             "importance": importance,
         }
+        if "forgetAfter" in payload:
+            obs["forgetAfter"] = payload["forgetAfter"]
+        elif (
+            payload.get("ttlDays")
+            and isinstance(payload["ttlDays"], (int, float))
+            and payload["ttlDays"] > 0
+        ):
+            try:
+                import dateutil.parser
+
+                ts_dt = dateutil.parser.parse(timestamp)
+                forget_time = ts_dt + datetime.timedelta(days=payload["ttlDays"])
+                obs["forgetAfter"] = forget_time.isoformat().replace("+00:00", "Z")
+            except Exception:
+                pass
 
         # 6. Write observation to KV (REQ-001)
         obs_scope = KV.folder_obs(folder_path, agent_id)
@@ -1683,6 +1698,8 @@ def remember(kv: StateKV, data: Dict[str, Any]) -> Dict[str, Any]:
             days=ttl_days
         )
         new_mem["forgetAfter"] = forget_time.isoformat().replace("+00:00", "Z")
+    elif "forgetAfter" in data:
+        new_mem["forgetAfter"] = data["forgetAfter"]
 
     if superseded_memory:
         superseded_memory["isLatest"] = False
@@ -3395,6 +3412,7 @@ def auto_forget(kv: StateKV, dry_run: bool = False) -> Dict[str, Any]:
     now_dt = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
     evicted_memories = []
     evicted_observations = []
+    evicted_folder_observations = []
 
     # 1. Evict expired memories
     memories = kv.list(KV.memories)
@@ -3414,7 +3432,7 @@ def auto_forget(kv: StateKV, dry_run: bool = False) -> Dict[str, Any]:
                     f"[auto_forget] Failed to parse forgetAfter '{forget_after}': {e}"
                 )
 
-    # 2. Evict low-value old observations (importance <= 2, age > 180 days)
+    # 2. Evict low-value old session-based observations (importance <= 2, age > 180 days)
     sessions = kv.list(KV.sessions)
     for sess in sessions:
         sid = sess.get("id")
@@ -3437,7 +3455,60 @@ def auto_forget(kv: StateKV, dry_run: bool = False) -> Dict[str, Any]:
                 except Exception as e:
                     print(f"[auto_forget] Failed to parse timestamp '{ts}': {e}")
 
+    # 3. Evict expired or low-value old folder-based observations
+    folder_pairs = kv.list(KV.folders)
+    for entry in folder_pairs:
+        fp = entry.get("folderPath")
+        aid = entry.get("agentId")
+        if not fp or not aid:
+            continue
+        obs_list = kv.list(KV.folder_obs(fp, aid))
+        for obs in obs_list:
+            obs_id = obs.get("id")
+            if not obs_id:
+                continue
+
+            # Case A: Explicit forgetAfter
+            forget_after = obs.get("forgetAfter")
+            is_expired = False
+            if forget_after:
+                try:
+                    import dateutil.parser
+
+                    fa_dt = dateutil.parser.parse(forget_after)
+                    if fa_dt.tzinfo:
+                        fa_dt = fa_dt.replace(tzinfo=None)
+                    if fa_dt < now_dt:
+                        is_expired = True
+                except Exception as e:
+                    print(
+                        f"[auto_forget] Failed to parse folder obs forgetAfter '{forget_after}': {e}"
+                    )
+
+            # Case B: Low-value old observations (importance <= 2, age > 180 days)
+            is_stale_low_value = False
+            importance = obs.get("importance")
+            ts = obs.get("timestamp")
+            if importance is not None and ts:
+                try:
+                    import dateutil.parser
+
+                    ts_dt = dateutil.parser.parse(ts)
+                    if ts_dt.tzinfo:
+                        ts_dt = ts_dt.replace(tzinfo=None)
+                    age_days = (now_dt - ts_dt).days
+                    if importance <= 2 and age_days > 180:
+                        is_stale_low_value = True
+                except Exception as e:
+                    print(
+                        f"[auto_forget] Failed to parse folder obs timestamp '{ts}': {e}"
+                    )
+
+            if is_expired or is_stale_low_value:
+                evicted_folder_observations.append((fp, aid, obs_id, obs))
+
     if not dry_run:
+        # Commit evictions for memories
         for mem_id in evicted_memories:
             mem = kv.get(KV.memories, mem_id)
             kv.delete(KV.memories, mem_id)
@@ -3450,6 +3521,7 @@ def auto_forget(kv: StateKV, dry_run: bool = False) -> Dict[str, Any]:
             if _vector_index:
                 _vector_index.remove(mem_id)
 
+        # Commit evictions for session-based observations
         for sid, obs_id in evicted_observations:
             base_oid = obs_id.replace(":raw", "")
             obs = kv.get(KV.observations(sid), base_oid)
@@ -3472,31 +3544,73 @@ def auto_forget(kv: StateKV, dry_run: bool = False) -> Dict[str, Any]:
                 _vector_index.remove(base_oid)
                 _vector_index.remove(f"{base_oid}:raw")
 
-        if evicted_memories or evicted_observations:
+        # Commit evictions for folder-based observations
+        folder_deletes = {}
+        for fp, aid, obs_id, obs in evicted_folder_observations:
+            kv.delete(KV.folder_obs(fp, aid), obs_id)
+            kv.delete(KV.obs_lookup, obs_id)
+
+            if obs and isinstance(obs, dict) and obs.get("text"):
+                import hashlib
+
+                fp_text = obs["text"][:4000]
+                dedup_fp = hashlib.sha256(
+                    fp_text.strip().lower().encode("utf-8")
+                ).hexdigest()
+                kv.delete(KV.obs_dedup(fp, aid), dedup_fp)
+
+            _bm25_index.remove(obs_id)
+            if _vector_index:
+                _vector_index.remove(obs_id)
+
+            pair_key = (fp, aid)
+            folder_deletes[pair_key] = folder_deletes.get(pair_key, 0) + 1
+
+        for (fp, aid), count in folder_deletes.items():
+            meta_scope = KV.folder_meta(fp, aid)
+            meta = kv.get(meta_scope, "meta")
+            if meta and isinstance(meta, dict):
+                current_count = meta.get("obsCount", 0)
+                meta["obsCount"] = max(0, current_count - count)
+                kv.set(meta_scope, "meta", meta)
+
+                index_key = f"{fp}:{aid}"
+                index_entry = kv.get(KV.folders, index_key)
+                if index_entry and isinstance(index_entry, dict):
+                    index_entry["obsCount"] = meta["obsCount"]
+                    kv.set(KV.folders, index_key, index_entry)
+
+        if evicted_memories or evicted_observations or evicted_folder_observations:
             if _index_persistence:
                 _index_persistence.schedule_save()
             safe_audit(
                 kv,
                 "auto_forget",
                 "mem::auto_forget",
-                evicted_memories + [oid for _, oid in evicted_observations],
+                evicted_memories
+                + [oid for _, oid in evicted_observations]
+                + [oid for _, _, oid, _ in evicted_folder_observations],
                 {
                     "evictedMemoriesCount": len(evicted_memories),
-                    "evictedObservationsCount": len(evicted_observations),
+                    "evictedObservationsCount": len(evicted_observations)
+                    + len(evicted_folder_observations),
                     "dryRun": False,
                 },
             )
             commit_if_enabled(
                 kv,
-                f"Auto forget: evicted {len(evicted_memories)} memories, {len(evicted_observations)} observations",
+                f"Auto forget: evicted {len(evicted_memories)} memories, {len(evicted_observations) + len(evicted_folder_observations)} observations",
                 "system",
             )
 
     return {
         "success": True,
         "evictedMemories": evicted_memories,
-        "evictedObservations": [oid for _, oid in evicted_observations],
-        "evicted": len(evicted_memories) + len(evicted_observations),
+        "evictedObservations": [oid for _, oid in evicted_observations]
+        + [oid for _, _, oid, _ in evicted_folder_observations],
+        "evicted": len(evicted_memories)
+        + len(evicted_observations)
+        + len(evicted_folder_observations),
         "dryRun": dry_run,
     }
 
