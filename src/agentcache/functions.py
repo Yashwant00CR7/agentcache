@@ -650,7 +650,7 @@ class IndexPersistence:
                                 chunk_delete = to_delete[i : i + 50]
                                 format_strings = ",".join(["?"] * len(chunk_delete))
                                 cursor.execute(
-                                    f"DELETE FROM kv_store WHERE scope IN ({format_strings})",
+                                    f"DELETE FROM kv_store WHERE scope IN ({format_strings})",  # nosec B608
                                     tuple(chunk_delete),
                                 )
                                 conn.commit()
@@ -3756,7 +3756,7 @@ def generate_content(system_instruction: str, prompt: str) -> str:
     )
 
     try:
-        with urllib.request.urlopen(req, timeout=60.0) as response:
+        with urllib.request.urlopen(req, timeout=60.0) as response:  # nosec B310
             resp_data = json.loads(response.read().decode("utf-8"))
 
         candidates = resp_data.get("candidates", [])

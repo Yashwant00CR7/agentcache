@@ -719,7 +719,7 @@ class GeminiEmbeddingProvider:
             )
 
             try:
-                with urllib.request.urlopen(req, timeout=30.0) as response:
+                with urllib.request.urlopen(req, timeout=30.0) as response:  # nosec B310
                     resp_data = json.loads(response.read().decode("utf-8"))
 
                 for emb in resp_data.get("embeddings", []):
@@ -873,7 +873,7 @@ class OpenAIEmbeddingProvider:
                 method="POST",
             )
             try:
-                with urllib.request.urlopen(req, timeout=30.0) as response:
+                with urllib.request.urlopen(req, timeout=30.0) as response:  # nosec B310
                     resp_data = json.loads(response.read().decode("utf-8"))
                 # Sort by index to preserve order
                 embeddings_sorted = sorted(

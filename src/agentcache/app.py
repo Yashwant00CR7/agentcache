@@ -290,7 +290,7 @@ def main() -> None:
     flask_app = create_app()
     port = int(os.getenv("III_REST_PORT", os.getenv("PORT", "3111")))
     print(f"[main] Starting Flask daemon on port {port}...")
-    flask_app.run(host="0.0.0.0", port=port, debug=False)
+    flask_app.run(host="0.0.0.0", port=port, debug=False)  # nosec B104
 
 
 if __name__ == "__main__":

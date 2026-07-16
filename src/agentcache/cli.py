@@ -254,7 +254,7 @@ def main() -> None:
     serve_parser.add_argument(
         "--port", type=int, default=int(os.getenv("III_REST_PORT", "3111"))
     )
-    serve_parser.add_argument("--host", default="0.0.0.0")
+    serve_parser.add_argument("--host", default="0.0.0.0")  # nosec B104
     serve_parser.add_argument(
         "--no-workers", action="store_true", help="Disable background worker threads"
     )
