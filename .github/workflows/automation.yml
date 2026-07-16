@@ -35,9 +35,27 @@ jobs:
       - name: Check Code Formatting
         run: ruff format --check src/ tests/
 
+  security-checks:
+    name: Security Scanning (Bandit)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Security Tools
+        run: pip install bandit
+
+      - name: Run Bandit (SAST Security Scan)
+        run: bandit -r src/ -ll -ii
+
   automated-testing:
     name: Run Tests (${{ matrix.os }} - Py ${{ matrix.python-version }})
-    needs: lint-and-format
+    needs: [lint-and-format, security-checks]
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false

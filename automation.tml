@@ -20,6 +20,7 @@ alternative_os = "windows-latest" # Recommended for testing Windows file locks/p
 
 [test_matrix]
 enable_linting = true
+enable_security_checks = true
 enable_unit_tests = true
 enable_property_tests = true
 enable_build_verification = true
@@ -28,6 +29,7 @@ enable_build_verification = true
 install_deps = "pip install -e \".[dev]\""
 lint = "python -m pip install \"ruff==0.15.21\" && ruff check src/ tests/"
 format = "ruff format --check src/ tests/"
+security_scan = "pip install bandit && bandit -r src/ -ll -ii"
 pytest_unit = "pytest tests/ --ignore=tests/test_properties.py -v --tb=short"
 pytest_properties = "pytest tests/test_properties.py -v --tb=short"
 build_package = "pip install build && python -m build"
