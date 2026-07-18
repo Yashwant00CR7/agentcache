@@ -48,10 +48,10 @@ local-embeddings = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/Yash030/agentcache-python"
-Repository = "https://github.com/Yash030/agentcache-python.git"
-"Bug Tracker" = "https://github.com/Yash030/agentcache-python/issues"
-Documentation = "https://github.com/Yash030/agentcache-python#readme"
+Homepage = "https://github.com/Yashwant00CR7/agentcache"
+Repository = "https://github.com/Yashwant00CR7/agentcache.git"
+"Bug Tracker" = "https://github.com/Yashwant00CR7/agentcache/issues"
+Documentation = "https://github.com/Yashwant00CR7/agentcache#readme"
 
 [project.scripts]
 agentcache = "agentcache.cli:main"

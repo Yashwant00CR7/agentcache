@@ -5,6 +5,7 @@ src/agentcache/__init__.py
 src/agentcache/app.py
 src/agentcache/cli.py
 src/agentcache/connect.py
+src/agentcache/core.py
 src/agentcache/db.py
 src/agentcache/functions.py
 src/agentcache/import_data.py
@@ -42,12 +43,15 @@ src/agentcache/viewer/favicon.svg
 src/agentcache/viewer/index.html
 tests/test_api.py
 tests/test_auth.py
+tests/test_auto_forget.py
+tests/test_cli_context.py
 tests/test_context.py
 tests/test_debounce.py
 tests/test_folder_graph_build.py
 tests/test_folder_observe.py
 tests/test_forget.py
 tests/test_graph.py
+tests/test_library.py
 tests/test_migration.py
 tests/test_normalize.py
 tests/test_obs_lookup.py
@@ -56,4 +60,5 @@ tests/test_properties.py
 tests/test_remember.py
 tests/test_route_regressions.py
 tests/test_search.py
+tests/test_security.py
 tests/test_timeline.py

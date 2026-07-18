@@ -1,14 +1,14 @@
-Metadata-Version: 2.1
+Metadata-Version: 2.4
 Name: agentcache
 Version: 0.9.8
 Summary: A Python REST + WebSocket + MCP cache server for AI agents, backed by SQLite
 Author-email: Yash Wanjarwadkar <yashwanjarwadkar@gmail.com>
 Maintainer-email: Yash Wanjarwadkar <yashwanjarwadkar@gmail.com>
 License: MIT
-Project-URL: Homepage, https://github.com/Yash030/agentcache-python
-Project-URL: Repository, https://github.com/Yash030/agentcache-python.git
-Project-URL: Bug Tracker, https://github.com/Yash030/agentcache-python/issues
-Project-URL: Documentation, https://github.com/Yash030/agentcache-python#readme
+Project-URL: Homepage, https://github.com/Yashwant00CR7/agentcache
+Project-URL: Repository, https://github.com/Yashwant00CR7/agentcache.git
+Project-URL: Bug Tracker, https://github.com/Yashwant00CR7/agentcache/issues
+Project-URL: Documentation, https://github.com/Yashwant00CR7/agentcache#readme
 Classifier: Development Status :: 4 - Beta
 Classifier: Intended Audience :: Developers
 Classifier: License :: OSI Approved :: MIT License
@@ -35,6 +35,7 @@ Requires-Dist: ruff>=0.3.0; extra == "dev"
 Requires-Dist: twine>=5.0.0; extra == "dev"
 Provides-Extra: local-embeddings
 Requires-Dist: sentence-transformers>=2.7.0; extra == "local-embeddings"
+Dynamic: license-file
 
 ---
 title: AgentCache Python

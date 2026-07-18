@@ -15,10 +15,85 @@ from .search import HybridSearch, SearchIndex, VectorIndex
 # =====================================================================
 # Global Variables / Module State
 # =====================================================================
-_bm25_index = SearchIndex()
-_vector_index = VectorIndex()
-_embedding_provider = None
-_hybrid_search = HybridSearch(_bm25_index, _vector_index, None, None)
+
+_local_context = threading.local()
+
+# Default singletons for fallback (global/server mode)
+_default_bm25_index = SearchIndex()
+_default_vector_index = VectorIndex()
+_global_embedding_provider = None
+
+
+class BM25IndexProxy:
+    def _get_target(self) -> SearchIndex:
+        return getattr(_local_context, "bm25_index", None) or _default_bm25_index
+
+    def __getattr__(self, name):
+        return getattr(self._get_target(), name)
+
+    def __bool__(self):
+        return bool(self._get_target())
+
+    def __len__(self):
+        return len(self._get_target())
+
+
+class VectorIndexProxy:
+    def _get_target(self) -> VectorIndex:
+        return getattr(_local_context, "vector_index", None) or _default_vector_index
+
+    def __getattr__(self, name):
+        return getattr(self._get_target(), name)
+
+    def __bool__(self):
+        return bool(self._get_target())
+
+    def __len__(self):
+        return len(self._get_target())
+
+
+class EmbeddingProviderProxy:
+    def _get_target(self):
+        if getattr(_local_context, "config", None) is not None:
+            return getattr(_local_context, "embedding_provider", None)
+        return (
+            getattr(_local_context, "embedding_provider", None)
+            or _global_embedding_provider
+        )
+
+    def __getattr__(self, name):
+        target = self._get_target()
+        if target is None:
+            raise AttributeError("No embedding provider set")
+        return getattr(target, name)
+
+    def __bool__(self):
+        return self._get_target() is not None
+
+
+class HybridSearchProxy:
+    def __getattr__(self, name):
+        bm25 = getattr(_local_context, "bm25_index", None) or _default_bm25_index
+        vector = getattr(_local_context, "vector_index", None) or _default_vector_index
+        if getattr(_local_context, "config", None) is not None:
+            provider = getattr(_local_context, "embedding_provider", None)
+        else:
+            provider = (
+                getattr(_local_context, "embedding_provider", None)
+                or _global_embedding_provider
+            )
+
+        hs = HybridSearch(bm25, vector, provider, None)
+        return getattr(hs, name)
+
+    def __bool__(self):
+        return True
+
+
+_bm25_index = BM25IndexProxy()
+_vector_index = VectorIndexProxy()
+_embedding_provider = EmbeddingProviderProxy()
+_hybrid_search = HybridSearchProxy()
 _index_persistence = None
 _stream_broadcaster = None  # Callable: (payload) -> None
 _dedup_locks: Dict[str, threading.Lock] = {}  # per-(folder, agent) write locks
@@ -648,10 +723,9 @@ class IndexPersistence:
                         if to_delete:
                             for i in range(0, len(to_delete), 50):
                                 chunk_delete = to_delete[i : i + 50]
-                                format_strings = ",".join(["?"] * len(chunk_delete))
-                                cursor.execute(
-                                    f"DELETE FROM kv_store WHERE scope IN ({format_strings})",  # nosec B608
-                                    tuple(chunk_delete),
+                                cursor.executemany(
+                                    "DELETE FROM kv_store WHERE scope = ?",
+                                    [(scope,) for scope in chunk_delete],
                                 )
                                 conn.commit()
                         break  # Success
@@ -1190,7 +1264,12 @@ def folder_observe(kv: StateKV, payload: Dict[str, Any]) -> Dict[str, Any]:
             return {"observationId": _existing_dedup["obsId"], "deduplicated": True}
 
         # 10. Enforce MAX_OBS_PER_FOLDER cap before writing (REQ-015)
-        max_obs = int(os.getenv("MAX_OBS_PER_FOLDER", "2000"))
+        config = getattr(_local_context, "config", None)
+        max_obs = (
+            config.max_obs_per_folder
+            if config
+            else int(os.getenv("MAX_OBS_PER_FOLDER", "2000"))
+        )
         if max_obs > 0:
             existing_obs = kv.list(KV.folder_obs(folder_path, agent_id))
             if len(existing_obs) >= max_obs:
@@ -1981,7 +2060,11 @@ def escape_xml_attr(s: str) -> str:
 def context(kv: StateKV, data: Dict[str, Any]) -> Dict[str, Any]:
     session_id = data.get("sessionId")
     project = data.get("project")
-    budget = data.get("budget") or int(os.getenv("TOKEN_BUDGET", "2000"))
+    config = getattr(_local_context, "config", None)
+    fallback_budget = (
+        config.token_budget if config else int(os.getenv("TOKEN_BUDGET", "2000"))
+    )
+    budget = data.get("budget") or fallback_budget
 
     if not session_id or not project:
         raise ValueError("sessionId and project are required")
@@ -4494,9 +4577,8 @@ def set_index_persistence(persistence: IndexPersistence) -> None:
 
 
 def set_embedding_provider(provider) -> None:
-    global _embedding_provider, _hybrid_search
-    _embedding_provider = provider
-    _hybrid_search = HybridSearch(_bm25_index, _vector_index, _embedding_provider, None)
+    global _global_embedding_provider
+    _global_embedding_provider = provider
 
 
 def set_stream_broadcaster(broadcaster) -> None:

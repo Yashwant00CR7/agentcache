@@ -6,6 +6,7 @@ __version__ = "0.9.8"
 
 from .app import create_app
 from .connect import run_connect
+from .core import AgentCache, AgentCacheConfig, AgentCacheServer
 from .db import StateKV
 from .functions import (
     folder_graph_build,
@@ -29,4 +30,7 @@ __all__ = [
     "remember",
     "forget",
     "health_check",
+    "AgentCache",
+    "AgentCacheServer",
+    "AgentCacheConfig",
 ]

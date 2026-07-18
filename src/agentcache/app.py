@@ -58,7 +58,8 @@ def init_services() -> tuple:
     from .db import StateKV
 
     # 1. DB
-    kv = StateKV()
+    db_env_path = os.getenv("AGENTCACHE_DB_PATH") or os.getenv("AGENTMEMORY_DB_PATH")
+    kv = StateKV(db_path=db_env_path) if db_env_path else StateKV()
 
     # 2. Embedding provider — auto-select by priority (D5.3):
     #    GEMINI_API_KEY → OPENAI_API_KEY → AGENTCACHE_LOCAL_EMBEDDING_MODEL → BM25-only
