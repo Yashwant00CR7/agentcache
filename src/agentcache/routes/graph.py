@@ -8,104 +8,78 @@ Handles:
   POST /agentmemory/graph/build
 """
 
-import os
-
 from flask import Blueprint, jsonify, request
 
-from .. import functions
-
-graph_bp = Blueprint("graph", __name__)
-
-
-def _check_auth():
-    import hmac
-
-    secret = os.getenv("AGENTCACHE_SECRET") or os.getenv("AGENTMEMORY_SECRET")
-    if not secret:
-        return None
-    auth = request.headers.get("Authorization") or request.headers.get("authorization")
-    if not auth or not auth.startswith("Bearer "):
-        return jsonify({"error": "unauthorized"}), 401
-    provided_token = auth[7:].strip()
-    if not hmac.compare_digest(provided_token.encode("utf-8"), secret.encode("utf-8")):
-        return jsonify({"error": "unauthorized"}), 401
-    return None
+from .. import legacy as functions
+from .auth import require_auth
 
 
-def _get_kv():
-    from .. import app as app_module
+def create_graph_bp(kv=None):
+    """Blueprint factory — receives kv at registration time."""
+    bp = Blueprint("graph", __name__)
 
-    return app_module.kv
+    def _get_kv():
+        if kv is not None:
+            return kv
+        from .. import app as app_module
+        return app_module.kv
+
+    # ------------------------------------------------------------------
+    # GET /agentcache/graph
+    # ------------------------------------------------------------------
+
+    @bp.route("/agentcache/graph", methods=["GET"])
+    @bp.route("/agentmemory/graph", methods=["GET"])
+    @require_auth
+    def api_graph():
+        result = functions.folder_graph_build(_get_kv())
+        return jsonify(result), 200
+
+    # ------------------------------------------------------------------
+    # GET /agentcache/graph/stats
+    # ------------------------------------------------------------------
+
+    @bp.route("/agentcache/graph/stats", methods=["GET"])
+    @bp.route("/agentmemory/graph/stats", methods=["GET"])
+    @require_auth
+    def api_graph_stats():
+        g = functions.folder_graph_build(_get_kv())
+        node_count = len(g.get("nodes", []))
+        edge_count = len(g.get("edges", []))
+        return jsonify({"nodes": node_count, "edges": edge_count, "success": True}), 200
+
+    # ------------------------------------------------------------------
+    # POST /agentcache/graph/query
+    # ------------------------------------------------------------------
+
+    @bp.route("/agentcache/graph/query", methods=["POST"])
+    @bp.route("/agentmemory/graph/query", methods=["POST"])
+    @require_auth
+    def api_graph_query():
+        try:
+            request.get_json(force=True) or {}
+            # start_node_id = body.get("startNodeId")  # reserved for future use
+            return jsonify({"nodes": [], "edges": [], "success": True}), 200
+        except Exception as e:
+            return jsonify({"error": str(e)}), 400
+
+    # ------------------------------------------------------------------
+    # POST /agentcache/graph/build
+    # ------------------------------------------------------------------
+
+    @bp.route("/agentcache/graph/build", methods=["POST"])
+    @bp.route("/agentmemory/graph/build", methods=["POST"])
+    @require_auth
+    def api_graph_build():
+        try:
+            if functions.is_consolidation_enabled():
+                functions.consolidate(_get_kv())
+            return jsonify({"success": True}), 200
+        except Exception as e:
+            return jsonify({"error": str(e)}), 400
+
+    return bp
 
 
-# ---------------------------------------------------------------------------
-# GET /agentcache/graph
-# ---------------------------------------------------------------------------
 
-
-@graph_bp.route("/agentcache/graph", methods=["GET"])
-@graph_bp.route("/agentmemory/graph", methods=["GET"])
-def api_graph():
-    auth_err = _check_auth()
-    if auth_err:
-        return auth_err
-    result = functions.folder_graph_build(_get_kv())
-    return jsonify(result), 200
-
-
-# ---------------------------------------------------------------------------
-# GET /agentcache/graph/stats
-# ---------------------------------------------------------------------------
-
-
-@graph_bp.route("/agentcache/graph/stats", methods=["GET"])
-@graph_bp.route("/agentmemory/graph/stats", methods=["GET"])
-def api_graph_stats():
-    auth_err = _check_auth()
-    if auth_err:
-        return auth_err
-
-    kv = _get_kv()
-    g = functions.folder_graph_build(kv)
-    node_count = len(g.get("nodes", []))
-    edge_count = len(g.get("edges", []))
-
-    return jsonify({"nodes": node_count, "edges": edge_count, "success": True}), 200
-
-
-# ---------------------------------------------------------------------------
-# POST /agentcache/graph/query
-# ---------------------------------------------------------------------------
-
-
-@graph_bp.route("/agentcache/graph/query", methods=["POST"])
-@graph_bp.route("/agentmemory/graph/query", methods=["POST"])
-def api_graph_query():
-    auth_err = _check_auth()
-    if auth_err:
-        return auth_err
-    try:
-        request.get_json(force=True) or {}
-        # start_node_id = body.get("startNodeId")  # reserved for future use
-        return jsonify({"nodes": [], "edges": [], "success": True}), 200
-    except Exception as e:
-        return jsonify({"error": str(e)}), 400
-
-
-# ---------------------------------------------------------------------------
-# POST /agentcache/graph/build
-# ---------------------------------------------------------------------------
-
-
-@graph_bp.route("/agentcache/graph/build", methods=["POST"])
-@graph_bp.route("/agentmemory/graph/build", methods=["POST"])
-def api_graph_build():
-    auth_err = _check_auth()
-    if auth_err:
-        return auth_err
-    try:
-        if functions.is_consolidation_enabled():
-            functions.consolidate(_get_kv())
-        return jsonify({"success": True}), 200
-    except Exception as e:
-        return jsonify({"error": str(e)}), 400
+graph_bp = create_graph_bp(None)

@@ -12,8 +12,9 @@ import os
 
 from flask import Blueprint, jsonify, request
 
-from .. import functions
-from ..functions import KV
+from .. import legacy
+from ..core import KV
+
 
 mcp_bp = Blueprint("mcp", __name__)
 
@@ -37,6 +38,19 @@ def _get_kv():
     from .. import app as app_module
 
     return app_module.kv
+
+
+def _get_search_service():
+    from .. import app as app_module
+
+    return app_module.search_service
+
+
+def _get_observation_store():
+    from .. import app as app_module
+
+    return app_module.observation_store
+
 
 
 def _datetime_now_iso() -> str:
@@ -376,17 +390,21 @@ def mcp_tools_call():
             limit = int(args.get("limit") or 10)
             folder_path = args.get("folderPath")
             agent_id = args.get("agentId")
-            if functions.is_agent_scope_isolated():
-                current_aid = functions.get_agent_id()
+            if legacy.is_agent_scope_isolated():
+                current_aid = legacy.get_agent_id()
                 if current_aid:
                     if agent_id and agent_id != current_aid:
                         return jsonify(
                             {"error": "Unauthorized: Agent scope is isolated"}
                         ), 403
                     agent_id = current_aid
-            res = functions.folder_search(
-                kv, q, limit, folder_path=folder_path, agent_id=agent_id
-            )
+            search_svc = _get_search_service()
+            if search_svc is not None:
+                res = search_svc.search(
+                    query=q, limit=limit, folder_path=folder_path, agent_id=agent_id, kv=kv
+                )
+            else:
+                res = []
             text_out = json.dumps(res, indent=2)
 
         elif name in ("cache_save", "memory_save"):
@@ -394,7 +412,7 @@ def mcp_tools_call():
             concepts = _parse_mcp_list_arg(args.get("concepts"))
             files = _parse_mcp_list_arg(args.get("files"))
             project = args.get("project")
-            res = functions.remember(
+            res = legacy.remember(
                 kv,
                 {
                     "content": content,
@@ -411,47 +429,55 @@ def mcp_tools_call():
             limit = int(args.get("limit") or 10)
             folder_path = args.get("folderPath")
             agent_id = args.get("agentId")
-            if functions.is_agent_scope_isolated():
-                current_aid = functions.get_agent_id()
+            if legacy.is_agent_scope_isolated():
+                current_aid = legacy.get_agent_id()
                 if current_aid:
                     if agent_id and agent_id != current_aid:
                         return jsonify(
                             {"error": "Unauthorized: Agent scope is isolated"}
                         ), 403
                     agent_id = current_aid
-            res = functions.folder_search(
-                kv, q, limit, folder_path=folder_path, agent_id=agent_id
-            )
+            search_svc = _get_search_service()
+            if search_svc is not None:
+                res = search_svc.search(
+                    query=q, limit=limit, folder_path=folder_path, agent_id=agent_id, kv=kv
+                )
+            else:
+                res = []
             text_out = json.dumps(res, indent=2)
 
         elif name in ("cache_diagnose", "memory_diagnose"):
-            res = functions.health_check(kv)
+            res = legacy.health_check(kv)
             text_out = json.dumps(res, indent=2)
 
         elif name in ("cache_forget", "memory_forget"):
             obs_ids = _parse_mcp_list_arg(args.get("observationIds"))
             request_aid = args.get("agentId")
-            if functions.is_agent_scope_isolated():
-                current_aid = functions.get_agent_id()
+            if legacy.is_agent_scope_isolated():
+                current_aid = legacy.get_agent_id()
                 if current_aid:
                     if request_aid and request_aid != current_aid:
                         return jsonify(
                             {"error": "Unauthorized: Agent scope is isolated"}
                         ), 403
                     request_aid = current_aid
-            res = functions.forget(
-                kv,
-                {
+            obs_store = _get_observation_store()
+            if obs_store is not None:
+                forget_payload = {
                     "memoryId": args.get("memoryId"),
                     "folderPath": args.get("folderPath"),
                     "agentId": request_aid,
-                    "observationIds": obs_ids,
-                },
-            )
+                }
+                if obs_ids:
+                    forget_payload["observationIds"] = obs_ids
+                res = obs_store.forget(forget_payload)
+            else:
+                res = {"success": False, "deleted": 0}
             text_out = json.dumps(res, indent=2)
 
+
         elif name in ("cache_export", "memory_export"):
-            res = functions.export_data(kv, {})
+            res = legacy.export_data(kv, {})
             text_out = json.dumps(res, indent=2)
 
         elif name == "agent_observe":
@@ -459,10 +485,7 @@ def mcp_tools_call():
             agent_id = args.get("agentId")
             text = args.get("text") or args.get("content") or ""
 
-            # Compat shim: old plugin scripts send sessionId/project/cwd instead of
-            # folderPath/agentId. Map them across so legacy callers keep working.
             if not folder_path:
-                # Use cwd first, then project, then a sensible default
                 folder_path = (
                     args.get("cwd")
                     or args.get("project")
@@ -473,13 +496,13 @@ def mcp_tools_call():
             if not agent_id:
                 agent_id = (
                     args.get("sessionId")
-                    or functions.get_agent_id()
+                    or legacy.get_agent_id()
                     or os.getenv("AGENT_ID")
                     or "agent"
                 )
 
-            if functions.is_agent_scope_isolated():
-                current_aid = functions.get_agent_id()
+            if legacy.is_agent_scope_isolated():
+                current_aid = legacy.get_agent_id()
                 if current_aid:
                     if agent_id and agent_id != current_aid:
                         return jsonify(
@@ -502,19 +525,23 @@ def mcp_tools_call():
                 "files": args.get("files"),
                 "importance": args.get("importance"),
             }
-            res = functions.folder_observe(kv, payload)
+            obs_store = _get_observation_store()
+            if obs_store is not None:
+                res = obs_store.ingest(payload)
+            else:
+                res = {"error": "ObservationStore not initialized"}
             text_out = json.dumps(res)
 
         elif name in ("agent_cache", "agent_remember"):
-            agent_id = args.get("agentId") or functions.get_agent_id() or "agent"
+            agent_id = args.get("agentId") or legacy.get_agent_id() or "agent"
             content = args.get("content")
             project = args.get("project")
             mem_type = args.get("type") or "fact"
             concepts = _parse_mcp_list_arg(args.get("concepts"))
             files = _parse_mcp_list_arg(args.get("files"))
 
-            if functions.is_agent_scope_isolated():
-                current_aid = functions.get_agent_id()
+            if legacy.is_agent_scope_isolated():
+                current_aid = legacy.get_agent_id()
                 if current_aid:
                     if agent_id and agent_id != current_aid:
                         return jsonify(
@@ -532,7 +559,7 @@ def mcp_tools_call():
                 "project": project,
                 "agentId": agent_id,
             }
-            res = functions.remember(kv, payload)
+            res = legacy.remember(kv, payload)
             text_out = json.dumps(res)
 
         elif name in ("cache_folders", "memory_folders"):
@@ -541,8 +568,8 @@ def mcp_tools_call():
                 key=lambda x: x.get("lastUpdated", ""),
                 reverse=True,
             )
-            if functions.is_agent_scope_isolated():
-                aid = functions.get_agent_id()
+            if legacy.is_agent_scope_isolated():
+                aid = legacy.get_agent_id()
                 if aid:
                     pairs = [p for p in pairs if p.get("agentId") == aid]
             text_out = json.dumps(pairs, indent=2)
@@ -552,8 +579,8 @@ def mcp_tools_call():
             aid = args.get("agentId", "")
             if not fp or not aid:
                 return jsonify({"error": "folderPath and agentId are required"}), 400
-            if functions.is_agent_scope_isolated():
-                current_aid = functions.get_agent_id()
+            if legacy.is_agent_scope_isolated():
+                current_aid = legacy.get_agent_id()
                 if current_aid and aid != current_aid:
                     return jsonify(
                         {"error": "Unauthorized: Agent scope is isolated"}
@@ -567,39 +594,47 @@ def mcp_tools_call():
 
         elif name in ("cache_timeline", "memory_timeline"):
             request_aid = args.get("agentId")
-            if functions.is_agent_scope_isolated():
-                current_aid = functions.get_agent_id()
+            if legacy.is_agent_scope_isolated():
+                current_aid = legacy.get_agent_id()
                 if current_aid:
                     if request_aid and request_aid != current_aid:
                         return jsonify(
                             {"error": "Unauthorized: Agent scope is isolated"}
                         ), 403
                     request_aid = current_aid
-            res = functions.folder_timeline(
-                kv,
-                limit=int(args.get("limit", 100)),
-                folder_path=args.get("folderPath"),
-                agent_id=request_aid,
-                before=args.get("before"),
-                after=args.get("after"),
-            )
+            obs_store = _get_observation_store()
+            if obs_store is not None:
+                res = obs_store.timeline(
+                    limit=int(args.get("limit", 100)),
+                    folder_path=args.get("folderPath"),
+                    agent_id=request_aid,
+                    before=args.get("before"),
+                    after=args.get("after"),
+                )
+            else:
+                res = []
             text_out = json.dumps(res, indent=2)
 
         elif name in ("cache_dedup", "memory_dedup"):
             request_aid = args.get("agentId")
-            if functions.is_agent_scope_isolated():
-                current_aid = functions.get_agent_id()
+            if legacy.is_agent_scope_isolated():
+                current_aid = legacy.get_agent_id()
                 if current_aid:
                     if request_aid and request_aid != current_aid:
                         return jsonify(
                             {"error": "Unauthorized: Agent scope is isolated"}
                         ), 403
                     request_aid = current_aid
-            res = functions.dedup_folder_observations(
-                kv,
-                args.get("folderPath") or None,
-                request_aid or None,
-            )
+            obs_store = _get_observation_store()
+            if obs_store is not None:
+                res = obs_store.dedup(
+                    args.get("folderPath") or None,
+                    request_aid or None,
+                )
+            else:
+                res = {"success": False}
+            text_out = json.dumps(res, indent=2)
+
             text_out = json.dumps(res, indent=2)
 
         else:
