@@ -2,11 +2,9 @@
 
 import datetime
 import hashlib
-
 import json
 import os
 import re
-import sqlite3
 import threading
 import time
 import uuid
@@ -15,7 +13,6 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 from .core.kv_scopes import KV  # noqa: F401  re-exported for backward compat
 from .core.search_service import IndexPersistence  # noqa: F401
 from .db import StateKV
-from .search import HybridSearch, SearchIndex, VectorIndex
 
 # =====================================================================
 # Global Variables / Module State
@@ -811,7 +808,8 @@ def observe(kv: StateKV, payload: Dict[str, Any]) -> Dict[str, Any]:
         if k in raw_for_synthetic:
             synthetic[k] = raw_for_synthetic[k]
     kv.set(KV.observations(session_id), obs_id, synthetic)
-    if _search_service: _search_service.bm25.add(synthetic)
+    if _search_service:
+        _search_service.bm25.add(synthetic)
 
     comb_text = synthetic["title"] + " " + (synthetic.get("narrative") or "")
     vector_index_add_guarded(
@@ -854,9 +852,11 @@ def observe(kv: StateKV, payload: Dict[str, Any]) -> Dict[str, Any]:
 
 def _get_observation_store(kv: StateKV):
     from . import app as app_module
+
     if getattr(app_module, "observation_store", None) is not None:
         return app_module.observation_store
     from .core.observation_store import ObservationStore
+
     return ObservationStore(kv, search_service=_search_service)
 
 
@@ -874,7 +874,6 @@ def dedup_folder_observations(
     """Remove duplicate observations from one or all (folder, agent) pairs."""
     store = _get_observation_store(kv)
     return store.dedup(folder_path_raw, agent_id_raw)
-
 
 
 # =====================================================================
@@ -916,7 +915,6 @@ def folder_timeline(
         before=before,
         after=after,
     )
-
 
 
 # =====================================================================
@@ -1050,7 +1048,6 @@ def forget(kv: StateKV, data: Dict[str, Any]) -> Dict[str, Any]:
     """Delete a global memory, a folder (folder_path+agent_id), or specific observations."""
     store = _get_observation_store(kv)
     return store.forget(data)
-
 
 
 # =====================================================================
@@ -1958,7 +1955,6 @@ def rebuild_index(kv: StateKV) -> int:
     return store.rebuild_index()
 
 
-
 # =====================================================================
 # Advanced Function Stubs / CRUD Operations
 # =====================================================================
@@ -2540,7 +2536,8 @@ def auto_forget(kv: StateKV, dry_run: bool = False) -> Dict[str, Any]:
                 refs = kv.get(KV.imageRefs, ref) or 0
                 if refs > 0:
                     kv.set(KV.imageRefs, ref, refs - 1)
-            if _search_service: _search_service.remove(mem_id)
+            if _search_service:
+                _search_service.remove(mem_id)
 
         # Commit evictions for session-based observations
         for sid, obs_id in evicted_observations:
@@ -2578,7 +2575,8 @@ def auto_forget(kv: StateKV, dry_run: bool = False) -> Dict[str, Any]:
                 ).hexdigest()
                 kv.delete(KV.obs_dedup(fp, aid), dedup_fp)
 
-            if _search_service: _search_service.remove(obs_id)
+            if _search_service:
+                _search_service.remove(obs_id)
 
             pair_key = (fp, aid)
             folder_deletes[pair_key] = folder_deletes.get(pair_key, 0) + 1
@@ -2727,7 +2725,6 @@ def health_check(kv: StateKV) -> Dict[str, Any]:
         "syncStatus": sync_status,
         "lastSyncAt": last_sync_at,
     }
-
 
 
 def strip_xml_wrappers(raw: str) -> str:
@@ -3543,7 +3540,9 @@ def backfill_obs_lookup_if_needed(kv: StateKV) -> None:
     store.backfill_lookup()
 
 
-def verify_index_sync_on_boot(kv: StateKV, search_service: Optional[Any] = None) -> bool:
+def verify_index_sync_on_boot(
+    kv: StateKV, search_service: Optional[Any] = None
+) -> bool:
     """Check if the search index size matches the database counts.
     Returns True if in sync, False if a rebuild is needed.
     """
@@ -3551,6 +3550,7 @@ def verify_index_sync_on_boot(kv: StateKV, search_service: Optional[Any] = None)
         svc = search_service or _search_service
         if svc is None:
             from . import app as app_module
+
             svc = getattr(app_module, "search_service", None)
 
         # 1. Total folder obs count
@@ -3577,4 +3577,3 @@ def verify_index_sync_on_boot(kv: StateKV, search_service: Optional[Any] = None)
     except Exception as e:
         print(f"[persistence] verify_index_sync_on_boot failed: {e}")
         return False
-

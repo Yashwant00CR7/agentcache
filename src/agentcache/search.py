@@ -522,6 +522,7 @@ class SearchIndex:
         parts = [
             obs.get("title", ""),
             obs.get("subtitle", "") or "",
+            obs.get("text", "") or "",
             obs.get("narrative", "") or "",
             " ".join(obs.get("facts", []) or []),
             " ".join(obs.get("concepts", []) or []),

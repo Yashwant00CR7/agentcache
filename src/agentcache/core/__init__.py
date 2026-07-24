@@ -10,5 +10,10 @@ from .kv_scopes import KV
 from .observation_store import ObservationEvents, ObservationStore
 from .search_service import IndexPersistence, SearchService
 
-__all__ = ["KV", "SearchService", "IndexPersistence", "ObservationStore", "ObservationEvents"]
-
+__all__ = [
+    "KV",
+    "SearchService",
+    "IndexPersistence",
+    "ObservationStore",
+    "ObservationEvents",
+]

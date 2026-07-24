@@ -3,8 +3,8 @@ Unit and integration tests for authentication and authorization.
 """
 
 from flask import Flask, jsonify
-from agentcache.routes.auth import require_auth, verify_token
 
+from agentcache.routes.auth import require_auth, verify_token
 
 # ------------------------------------------------------------------------------
 # Unit Tests — verify_token & require_auth
@@ -85,7 +85,11 @@ def test_protected_routes_require_auth(authed_client):
     headers = {"Authorization": f"Bearer {secret}"}
 
     protected_endpoints = [
-        ("POST", "/agentcache/observe", {"folderPath": "src/test", "agentId": "a1", "text": "test"}),
+        (
+            "POST",
+            "/agentcache/observe",
+            {"folderPath": "src/test", "agentId": "a1", "text": "test"},
+        ),
         ("POST", "/agentcache/remember", {"content": "test memory"}),
         ("POST", "/agentcache/search", {"query": "test"}),
         ("POST", "/agentcache/timeline", {}),
@@ -104,8 +108,12 @@ def test_protected_routes_require_auth(authed_client):
             res_unauth = client.get(path)
             res_auth = client.get(path, headers=headers)
 
-        assert res_unauth.status_code == 401, f"{method} {path} should require auth (got {res_unauth.status_code})"
-        assert res_auth.status_code in (200, 201), f"{method} {path} failed with valid auth (got {res_auth.status_code})"
+        assert res_unauth.status_code == 401, (
+            f"{method} {path} should require auth (got {res_unauth.status_code})"
+        )
+        assert res_auth.status_code in (200, 201), (
+            f"{method} {path} failed with valid auth (got {res_auth.status_code})"
+        )
 
 
 def test_unprotected_routes_accessible_without_auth(authed_client):
@@ -120,7 +128,9 @@ def test_unprotected_routes_accessible_without_auth(authed_client):
 
     for path in unprotected_paths:
         res = client.get(path)
-        assert res.status_code == 200, f"Unprotected route {path} failed (got {res.status_code})"
+        assert res.status_code == 200, (
+            f"Unprotected route {path} failed (got {res.status_code})"
+        )
 
 
 def test_wrong_token_on_any_blueprint_returns_401(authed_client):
@@ -129,7 +139,11 @@ def test_wrong_token_on_any_blueprint_returns_401(authed_client):
     bad_headers = {"Authorization": "Bearer wrong-token-value"}
 
     protected_endpoints = [
-        ("POST", "/agentcache/observe", {"folderPath": "src/test", "agentId": "a1", "text": "test"}),
+        (
+            "POST",
+            "/agentcache/observe",
+            {"folderPath": "src/test", "agentId": "a1", "text": "test"},
+        ),
         ("POST", "/agentcache/remember", {"content": "test memory"}),
         ("POST", "/agentcache/search", {"query": "test"}),
         ("POST", "/agentcache/timeline", {}),
@@ -138,7 +152,6 @@ def test_wrong_token_on_any_blueprint_returns_401(authed_client):
         ("GET", "/agentcache/config/flags", None),
         ("POST", "/agentcache/migrate", {}),
     ]
-
 
     for method, path, payload in protected_endpoints:
         if method == "POST":

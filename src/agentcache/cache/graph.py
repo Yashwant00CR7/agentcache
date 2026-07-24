@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import Any, Dict
 
-from .. import functions as _fn
+from .. import legacy as _fn
 from ..db import StateKV
 
 

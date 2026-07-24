@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from typing import Any, Dict
 
-from .. import functions as _fn  # access module-level globals (_bm25_index, etc.)
+from .. import legacy as _fn  # access module-level globals (_bm25_index, etc.)
 from ..db import StateKV
 
 # Re-export for backward compatibility

@@ -1,5 +1,4 @@
 LICENSE
-README.md
 pyproject.toml
 src/agentcache/__init__.py
 src/agentcache/app.py
@@ -26,6 +25,9 @@ src/agentcache/cache/health.py
 src/agentcache/cache/observe.py
 src/agentcache/cache/remember.py
 src/agentcache/cache/timeline.py
+src/agentcache/core/__init__.py
+src/agentcache/core/kv_scopes.py
+src/agentcache/core/search_service.py
 src/agentcache/routes/__init__.py
 src/agentcache/routes/graph.py
 src/agentcache/routes/health.py
@@ -42,6 +44,8 @@ src/agentcache/viewer/favicon.svg
 src/agentcache/viewer/index.html
 tests/test_api.py
 tests/test_auth.py
+tests/test_auto_forget.py
+tests/test_cli_context.py
 tests/test_context.py
 tests/test_debounce.py
 tests/test_folder_graph_build.py
@@ -56,4 +60,5 @@ tests/test_properties.py
 tests/test_remember.py
 tests/test_route_regressions.py
 tests/test_search.py
+tests/test_security.py
 tests/test_timeline.py

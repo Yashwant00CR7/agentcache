@@ -22,6 +22,7 @@ def create_graph_bp(kv=None):
         if kv is not None:
             return kv
         from .. import app as app_module
+
         return app_module.kv
 
     # ------------------------------------------------------------------
@@ -79,7 +80,6 @@ def create_graph_bp(kv=None):
             return jsonify({"error": str(e)}), 400
 
     return bp
-
 
 
 graph_bp = create_graph_bp(None)

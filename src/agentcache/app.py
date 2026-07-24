@@ -13,7 +13,7 @@ import sys
 from flask import Flask, request, send_from_directory
 from flask_sock import Sock
 
-from . import functions
+from . import legacy
 
 # Prevent double-import of app when run directly as __main__
 if __name__ == "__main__":
@@ -41,26 +41,30 @@ def _load_env() -> None:
 
 _load_env()
 
-# Module-level globals — set once by create_app(), read by blueprints via `import app`
+# Module-level singletons — set once by init_services(), read by blueprints and workers.
 kv = None
 embedding_provider = None
-persistence = None
+persistence = None  # kept for backward compat with workers; use search_service instead
+search_service = None  # SearchService instance
+observation_store = None  # ObservationStore instance
 
 
 def init_services() -> tuple:
-    """Initialise database, embedding provider, and index persistence."""
-    global kv, embedding_provider, persistence
+    """Initialise database, SearchService, ObservationStore, and legacy persistence shim."""
+    global kv, embedding_provider, persistence, search_service, observation_store
     if kv is not None:
         return kv, embedding_provider, persistence
 
-    from . import functions
     from . import search as search_mod
+    from .core.observation_store import ObservationEvents, ObservationStore
+    from .core.search_service import SearchService
     from .db import StateKV
+    from .search import SearchIndex, VectorIndex
 
     # 1. DB
     kv = StateKV()
 
-    # 2. Embedding provider — auto-select by priority (D5.3):
+    # 2. Embedding provider — auto-select by priority:
     #    GEMINI_API_KEY → OPENAI_API_KEY → AGENTCACHE_LOCAL_EMBEDDING_MODEL → BM25-only
     api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
     openai_key = os.getenv("OPENAI_API_KEY")
@@ -71,7 +75,6 @@ def init_services() -> tuple:
     if api_key:
         try:
             embedding_provider = search_mod.GeminiEmbeddingProvider(api_key)
-            functions.set_embedding_provider(embedding_provider)
             print(
                 f"[search] Embedding provider active: gemini ({embedding_provider.dimensions} dims)"
             )
@@ -80,7 +83,6 @@ def init_services() -> tuple:
     elif openai_key:
         try:
             embedding_provider = search_mod.OpenAIEmbeddingProvider(openai_key)
-            functions.set_embedding_provider(embedding_provider)
             print(
                 f"[search] Embedding provider active: openai ({embedding_provider.dimensions} dims)"
             )
@@ -89,7 +91,6 @@ def init_services() -> tuple:
     elif local_model:
         try:
             embedding_provider = search_mod.SentenceTransformerProvider(local_model)
-            functions.set_embedding_provider(embedding_provider)
             print(
                 f"[search] Embedding provider active: sentence-transformers/{local_model} ({embedding_provider.dimensions} dims)"
             )
@@ -100,22 +101,27 @@ def init_services() -> tuple:
     else:
         print("[search] No embedding API key found — running in BM25-only mode.")
 
-    # 3. Index persistence — use embedding_provider variable set above
-    has_vector = embedding_provider is not None
-    persistence = functions.IndexPersistence(
-        kv,
-        functions._bm25_index,
-        functions._vector_index if has_vector else None,
+    # 3. Construct SearchService and ObservationStore with injected dependencies.
+    bm25 = SearchIndex()
+    vector = VectorIndex() if embedding_provider is not None else None
+    search_service = SearchService(bm25, vector, embedding_provider, kv)
+    observation_store = ObservationStore(
+        kv, search_service=search_service, events=ObservationEvents()
     )
-    functions.set_index_persistence(persistence)
-    loaded = persistence.load()
+
+    # Load persisted indexes.
+    loaded = search_service.load_persisted()
     print(
         f"[persistence] Load results: BM25={loaded['bm25']}, Vector={loaded['vector']}"
     )
 
-    # Backfill coordinate lookup index if missing/incomplete
+    # Keep persistence reference for workers backward compat.
+    persistence = search_service._persistence
+
+    # Backfill coordinate lookup index if missing/incomplete.
     try:
-        functions.backfill_obs_lookup_if_needed(kv)
+        if observation_store is not None:
+            observation_store.backfill_lookup()
     except Exception as e:
         print(f"[db] Warning backfilling obs_lookup: {e}")
 
@@ -136,6 +142,9 @@ def create_app() -> Flask:
 
     # 4. Flask app + blueprints
     flask_app = Flask(__name__)
+    flask_app.extensions["observation_store"] = observation_store
+    flask_app.extensions["search_service"] = search_service
+
     from werkzeug.middleware.proxy_fix import ProxyFix
 
     flask_app.wsgi_app = ProxyFix(
@@ -143,7 +152,9 @@ def create_app() -> Flask:
     )
     from .routes import register_blueprints
 
-    register_blueprints(flask_app)
+    register_blueprints(
+        flask_app, observation_store=observation_store, search_service=search_service
+    )
 
     # 5. WebSocket broadcaster
     sock = Sock(flask_app)
@@ -176,7 +187,10 @@ def create_app() -> Flask:
             except Exception:
                 _ws_clients.discard(ws)
 
-    functions.set_stream_broadcaster(_broadcast)
+    legacy.set_stream_broadcaster(_broadcast)
+
+    if observation_store and observation_store.events:
+        observation_store.events.on_added.append(_broadcast)
 
     # 6. Viewer static routes
     from importlib.resources import files

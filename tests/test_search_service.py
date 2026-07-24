@@ -1,9 +1,5 @@
-import os
-import pytest
-from agentcache.core import KV, SearchService, IndexPersistence
-from agentcache.db import StateKV
+from agentcache.core import KV, SearchService
 from agentcache.search import SearchIndex
-from agentcache.app import create_app, init_services, search_service as global_search_service
 
 
 def test_kv_scopes_import():
@@ -37,11 +33,19 @@ def test_search_service_index_remove_and_search(tmp_db):
     }
 
     # Populate KV store for hydration
-    kv.set(KV.folders, "src/auth:agent_alpha", {"folderPath": "src/auth", "agentId": "agent_alpha"})
+    kv.set(
+        KV.folders,
+        "src/auth:agent_alpha",
+        {"folderPath": "src/auth", "agentId": "agent_alpha"},
+    )
     kv.set(KV.folder_obs("src/auth", "agent_alpha"), "obs_1", obs1)
     kv.set(KV.obs_lookup, "obs_1", {"folderPath": "src/auth", "agentId": "agent_alpha"})
 
-    kv.set(KV.folders, "src/db:agent_beta", {"folderPath": "src/db", "agentId": "agent_beta"})
+    kv.set(
+        KV.folders,
+        "src/db:agent_beta",
+        {"folderPath": "src/db", "agentId": "agent_beta"},
+    )
     kv.set(KV.folder_obs("src/db", "agent_beta"), "obs_2", obs2)
     kv.set(KV.obs_lookup, "obs_2", {"folderPath": "src/db", "agentId": "agent_beta"})
 
@@ -115,6 +119,7 @@ def test_http_search_routes_end_to_end(app_client):
     client = app_client
 
     import agentcache.app as app_mod
+
     kv = app_mod.kv
     search_svc = app_mod.search_service
 
@@ -126,9 +131,15 @@ def test_http_search_routes_end_to_end(app_client):
         "agentId": "agent_gamma",
     }
 
-    kv.set(KV.folders, "src/api:agent_gamma", {"folderPath": "src/api", "agentId": "agent_gamma"})
+    kv.set(
+        KV.folders,
+        "src/api:agent_gamma",
+        {"folderPath": "src/api", "agentId": "agent_gamma"},
+    )
     kv.set(KV.folder_obs("src/api", "agent_gamma"), "obs_http_1", obs)
-    kv.set(KV.obs_lookup, "obs_http_1", {"folderPath": "src/api", "agentId": "agent_gamma"})
+    kv.set(
+        KV.obs_lookup, "obs_http_1", {"folderPath": "src/api", "agentId": "agent_gamma"}
+    )
 
     search_svc.index(obs)
 
@@ -142,7 +153,9 @@ def test_http_search_routes_end_to_end(app_client):
     assert data[0]["folderPath"] == "src/api"
 
     # POST /agentmemory/search (alias endpoint)
-    res_alias = client.post("/agentmemory/search", json={"query": "OAuth2 bearer token", "limit": 5})
+    res_alias = client.post(
+        "/agentmemory/search", json={"query": "OAuth2 bearer token", "limit": 5}
+    )
     assert res_alias.status_code == 200
     data_alias = res_alias.get_json()
     assert len(data_alias) == 1
@@ -157,4 +170,3 @@ def test_http_search_routes_end_to_end(app_client):
 
     res_alias_no_query = client.post("/agentmemory/search", json={})
     assert res_alias_no_query.status_code == 400
-

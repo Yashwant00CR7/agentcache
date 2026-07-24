@@ -10,8 +10,6 @@ import os
 
 from flask import Blueprint, jsonify, request
 
-from .. import functions
-
 search_bp = Blueprint("search", __name__)
 
 
@@ -36,6 +34,18 @@ def _get_kv():
     return app_module.kv
 
 
+def _get_search_service():
+    from .. import app as app_module
+
+    return app_module.search_service
+
+
+def _get_observation_store():
+    from .. import app as app_module
+
+    return app_module.observation_store
+
+
 # ---------------------------------------------------------------------------
 # POST /agentcache/search
 # ---------------------------------------------------------------------------
@@ -57,9 +67,17 @@ def api_search():
         folder_path = body.get("folderPath")
         agent_id = body.get("agentId")
 
-        res = functions.folder_search(
-            _get_kv(), query, limit, folder_path=folder_path, agent_id=agent_id
-        )
+        search_svc = _get_search_service()
+        if search_svc is not None:
+            res = search_svc.search(
+                query=query,
+                limit=limit,
+                folder_path=folder_path,
+                agent_id=agent_id,
+                kv=_get_kv(),
+            )
+        else:
+            res = []
         return jsonify(res), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 400
@@ -84,9 +102,17 @@ def api_timeline():
         limit = body.get("limit") or 100
         before = body.get("before")
         after = body.get("after")
-        result = functions.folder_timeline(
-            _get_kv(), limit, folder_path, agent_id, before, after
-        )
+        obs_store = _get_observation_store()
+        if obs_store is not None:
+            result = obs_store.timeline(
+                limit=limit,
+                folder_path=folder_path,
+                agent_id=agent_id,
+                before=before,
+                after=after,
+            )
+        else:
+            result = []
         return jsonify({"observations": result}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 400

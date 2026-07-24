@@ -219,7 +219,7 @@ def derive_crystal_and_lessons(
     compressed: List[Dict[str, Any]],
     first_prompt: str = None,
 ) -> None:
-    from .functions import KV
+    from .core import KV
 
     if not raw_obs:
         return
@@ -368,7 +368,8 @@ def find_jsonl_files(root: str, limit=200) -> Tuple[List[str], bool, int, bool]:
 
 
 def import_jsonl_data(kv, path: str = None, max_files: int = None) -> Dict[str, Any]:
-    from .functions import KV, _bm25_index, build_synthetic_compression
+    from .core import KV
+    from .legacy import build_synthetic_compression
 
     default_root = os.path.expanduser(os.path.join("~", ".claude", "projects"))
     raw_path = path or default_root
@@ -481,23 +482,11 @@ def import_jsonl_data(kv, path: str = None, max_files: int = None) -> Dict[str, 
             }
             kv.set(KV.sessions, session["id"], session)
 
-        from .functions import vector_index_add_guarded
-
         compressed = []
         for obs in parsed["observations"]:
             synthetic = build_synthetic_compression(obs)
             compressed.append(synthetic)
             kv.set(KV.observations(parsed["sessionId"]), obs["id"], synthetic)
-
-            # Index
-            _bm25_index.add(synthetic)
-            comb_text = synthetic["title"] + " " + (synthetic.get("narrative") or "")
-            vector_index_add_guarded(
-                synthetic["id"],
-                synthetic["sessionId"],
-                comb_text,
-                {"kind": "synthetic", "logId": synthetic["id"]},
-            )
 
         observation_count += len(parsed["observations"])
         session_ids.append(parsed["sessionId"])
@@ -511,18 +500,9 @@ def import_jsonl_data(kv, path: str = None, max_files: int = None) -> Dict[str, 
             first_prompt,
         )
 
-    # Save the updated persistence state
-    from . import functions
-
-    if functions._index_persistence:
-        try:
-            functions._index_persistence.save()
-        except Exception as e:
-            print(f"[import-jsonl] Warning saving index persistence: {e}")
-
     # Audit trail
     try:
-        from .functions import log_audit
+        from .legacy import log_audit
 
         log_audit(
             kv,

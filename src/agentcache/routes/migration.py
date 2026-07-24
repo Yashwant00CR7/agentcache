@@ -9,7 +9,7 @@ import os
 
 from flask import Blueprint, jsonify, request
 
-from .. import functions
+from .. import legacy as functions
 
 migration_bp = Blueprint("migration", __name__)
 

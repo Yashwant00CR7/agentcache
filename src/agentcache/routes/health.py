@@ -25,6 +25,7 @@ def create_health_bp(kv=None, embedding_provider=None):
         if kv is not None:
             return kv
         from .. import app as app_module
+
         return app_module.kv
 
     # ------------------------------------------------------------------
@@ -89,7 +90,6 @@ def create_health_bp(kv=None, embedding_provider=None):
         limit = int(request.args.get("limit", "50"))
         res = query_audit(_get_kv(), {"operation": op, "limit": limit})
         return jsonify({"entries": res, "success": True}), 200
-
 
     # ------------------------------------------------------------------
     # GET /agentcache/config/flags

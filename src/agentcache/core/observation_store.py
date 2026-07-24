@@ -104,8 +104,7 @@ class ObservationStore:
         folder_path = normalize_folder_path(folder_path_raw)
         agent_id = validate_agent_id(agent_id_raw)
 
-        from ..legacy import strip_private_data, infer_type, extract_files
-
+        from ..legacy import extract_files, infer_type, strip_private_data
 
         safe_text = strip_private_data(text_raw)[:4000]
 
@@ -116,7 +115,11 @@ class ObservationStore:
         dedup_lock = self._get_dedup_lock(folder_path, agent_id)
         with dedup_lock:
             existing_dedup = self.kv.get(KV.obs_dedup(folder_path, agent_id), dedup_fp)
-            if existing_dedup and isinstance(existing_dedup, dict) and existing_dedup.get("obsId"):
+            if (
+                existing_dedup
+                and isinstance(existing_dedup, dict)
+                and existing_dedup.get("obsId")
+            ):
                 return {"observationId": existing_dedup["obsId"], "deduplicated": True}
 
             max_obs = int(os.getenv("MAX_OBS_PER_FOLDER", "2000"))
@@ -267,7 +270,6 @@ class ObservationStore:
         total_kept = 0
 
         for pair in pairs:
-
             fp = pair["folderPath"]
             aid = pair["agentId"]
             all_obs = self.kv.list(KV.folder_obs(fp, aid))
@@ -292,7 +294,9 @@ class ObservationStore:
                         duplicates.append(obs["id"])
 
             if duplicates:
-                self.forget({"folderPath": fp, "agentId": aid, "observationIds": duplicates})
+                self.forget(
+                    {"folderPath": fp, "agentId": aid, "observationIds": duplicates}
+                )
                 total_removed += len(duplicates)
 
             total_kept += len(fingerprint_map)
@@ -304,7 +308,6 @@ class ObservationStore:
                     fp_hash,
                     {"obsId": obs["id"], "timestamp": obs.get("timestamp", "")},
                 )
-
 
         return {
             "success": True,
@@ -323,7 +326,6 @@ class ObservationStore:
         deleted = 0
         deleted_mem_ids: List[str] = []
         deleted_obs_ids: List[str] = []
-        deleted_session = False
 
         if memory_id:
             mem = self.kv.get(KV.memories, memory_id)
@@ -351,8 +353,6 @@ class ObservationStore:
             if "observationIds" in data and data["observationIds"] is not None:
                 partial_deleted = 0
                 for oid in obs_ids:
-
-
                     obs = self.kv.get(obs_scope, oid)
                     existed = self.kv.delete(obs_scope, oid)
                     if existed:
@@ -385,7 +385,9 @@ class ObservationStore:
                         try:
                             cb(deleted_obs_ids)
                         except Exception as ex:
-                            print(f"[observation_store] Error in on_deleted callback: {ex}")
+                            print(
+                                f"[observation_store] Error in on_deleted callback: {ex}"
+                            )
             else:
                 all_obs = self.kv.list(obs_scope)
                 for obs in all_obs:
@@ -411,7 +413,9 @@ class ObservationStore:
                         try:
                             cb(fp, aid)
                         except Exception as ex:
-                            print(f"[observation_store] Error in on_folder_deleted callback: {ex}")
+                            print(
+                                f"[observation_store] Error in on_folder_deleted callback: {ex}"
+                            )
 
         if session_id and obs_ids:
             for oid in obs_ids:
@@ -454,7 +458,6 @@ class ObservationStore:
                 deleted += 1
             self.kv.delete(KV.sessions, session_id)
             self.kv.delete(KV.summaries, session_id)
-            deleted_session = True
             deleted += 2
 
         if deleted > 0 and self.search_service:
@@ -474,7 +477,9 @@ class ObservationStore:
         index_entries = self.kv.list(KV.folders)
 
         if folder_path is not None:
-            index_entries = [e for e in index_entries if e.get("folderPath") == folder_path]
+            index_entries = [
+                e for e in index_entries if e.get("folderPath") == folder_path
+            ]
 
         if agent_id is not None:
             index_entries = [e for e in index_entries if e.get("agentId") == agent_id]
@@ -568,5 +573,3 @@ class ObservationStore:
             self.search_service.schedule_persist()
 
         return total_indexed
-
-

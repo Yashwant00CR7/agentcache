@@ -1,10 +1,9 @@
-import pytest
-import os
 import json
-from agentcache.core import KV, ObservationStore, ObservationEvents, SearchService
-from agentcache.db import StateKV
+
+import pytest
+
+from agentcache.core import KV, ObservationEvents, ObservationStore, SearchService
 from agentcache.search import SearchIndex
-from agentcache.app import create_app
 
 
 def test_observation_events_dataclass():
@@ -72,26 +71,32 @@ def test_observation_store_max_cap(tmp_db, monkeypatch):
     kv = tmp_db
     store = ObservationStore(kv=kv)
 
-    store.ingest({
-        "folderPath": "src/cap",
-        "agentId": "agent_beta",
-        "text": "First item",
-        "timestamp": "2026-07-24T12:00:00Z",
-    })
-    store.ingest({
-        "folderPath": "src/cap",
-        "agentId": "agent_beta",
-        "text": "Second item",
-        "timestamp": "2026-07-24T12:01:00Z",
-    })
-
-    with pytest.raises(ValueError, match="Folder observation limit reached"):
-        store.ingest({
+    store.ingest(
+        {
             "folderPath": "src/cap",
             "agentId": "agent_beta",
-            "text": "Third item",
-            "timestamp": "2026-07-24T12:02:00Z",
-        })
+            "text": "First item",
+            "timestamp": "2026-07-24T12:00:00Z",
+        }
+    )
+    store.ingest(
+        {
+            "folderPath": "src/cap",
+            "agentId": "agent_beta",
+            "text": "Second item",
+            "timestamp": "2026-07-24T12:01:00Z",
+        }
+    )
+
+    with pytest.raises(ValueError, match="Folder observation limit reached"):
+        store.ingest(
+            {
+                "folderPath": "src/cap",
+                "agentId": "agent_beta",
+                "text": "Third item",
+                "timestamp": "2026-07-24T12:02:00Z",
+            }
+        )
 
 
 def test_observation_store_manual_dedup(tmp_db):
@@ -114,11 +119,23 @@ def test_observation_store_manual_dedup(tmp_db):
         "timestamp": "2026-07-24T11:00:00Z",
     }
 
-    kv.set(KV.folders, "src/dedup:agent_gamma", {"folderPath": "src/dedup", "agentId": "agent_gamma"})
+    kv.set(
+        KV.folders,
+        "src/dedup:agent_gamma",
+        {"folderPath": "src/dedup", "agentId": "agent_gamma"},
+    )
     kv.set(KV.folder_obs("src/dedup", "agent_gamma"), "fobs_dup_1", obs1)
     kv.set(KV.folder_obs("src/dedup", "agent_gamma"), "fobs_dup_2", obs2)
-    kv.set(KV.obs_lookup, "fobs_dup_1", {"folderPath": "src/dedup", "agentId": "agent_gamma"})
-    kv.set(KV.obs_lookup, "fobs_dup_2", {"folderPath": "src/dedup", "agentId": "agent_gamma"})
+    kv.set(
+        KV.obs_lookup,
+        "fobs_dup_1",
+        {"folderPath": "src/dedup", "agentId": "agent_gamma"},
+    )
+    kv.set(
+        KV.obs_lookup,
+        "fobs_dup_2",
+        {"folderPath": "src/dedup", "agentId": "agent_gamma"},
+    )
 
     res = store.dedup("src/dedup", "agent_gamma")
     assert res["success"] is True
@@ -145,35 +162,43 @@ def test_observation_store_forget_full_and_partial(tmp_db):
 
     store = ObservationStore(kv=kv, search_service=search_svc, events=events)
 
-    obs1_id = store.ingest({
-        "folderPath": "src/forget",
-        "agentId": "agent_forget",
-        "text": "First item to forget",
-        "timestamp": "2026-07-24T10:00:00Z",
-    })["observationId"]
+    obs1_id = store.ingest(
+        {
+            "folderPath": "src/forget",
+            "agentId": "agent_forget",
+            "text": "First item to forget",
+            "timestamp": "2026-07-24T10:00:00Z",
+        }
+    )["observationId"]
 
-    obs2_id = store.ingest({
-        "folderPath": "src/forget",
-        "agentId": "agent_forget",
-        "text": "Second item to keep initially",
-        "timestamp": "2026-07-24T11:00:00Z",
-    })["observationId"]
+    store.ingest(
+        {
+            "folderPath": "src/forget",
+            "agentId": "agent_forget",
+            "text": "Second item to keep initially",
+            "timestamp": "2026-07-24T11:00:00Z",
+        }
+    )["observationId"]
 
     # Explicitly empty observationIds list -> graceful handling of no-op partial delete
-    res_noop = store.forget({
-        "folderPath": "src/forget",
-        "agentId": "agent_forget",
-        "observationIds": [],
-    })
+    res_noop = store.forget(
+        {
+            "folderPath": "src/forget",
+            "agentId": "agent_forget",
+            "observationIds": [],
+        }
+    )
     assert res_noop["success"] is True
     assert res_noop["deleted"] == 0
 
     # 1. Partial deletion
-    res_part = store.forget({
-        "folderPath": "src/forget",
-        "agentId": "agent_forget",
-        "observationIds": [obs1_id],
-    })
+    res_part = store.forget(
+        {
+            "folderPath": "src/forget",
+            "agentId": "agent_forget",
+            "observationIds": [obs1_id],
+        }
+    )
     assert res_part["success"] is True
     assert res_part["deleted"] == 1
     assert deleted_obs == [obs1_id]
@@ -182,10 +207,12 @@ def test_observation_store_forget_full_and_partial(tmp_db):
     assert meta["obsCount"] == 1
 
     # 2. Full folder pair deletion
-    res_full = store.forget({
-        "folderPath": "src/forget",
-        "agentId": "agent_forget",
-    })
+    res_full = store.forget(
+        {
+            "folderPath": "src/forget",
+            "agentId": "agent_forget",
+        }
+    )
     assert res_full["success"] is True
     assert res_full["deleted"] == 1
     assert len(deleted_folders) == 1
@@ -200,24 +227,30 @@ def test_observation_store_timeline_sorting_and_filtering(tmp_db):
     kv = tmp_db
     store = ObservationStore(kv=kv)
 
-    store.ingest({
-        "folderPath": "src/t1",
-        "agentId": "agent_t",
-        "text": "Oldest observation",
-        "timestamp": "2026-07-24T10:00:00Z",
-    })
-    store.ingest({
-        "folderPath": "src/t1",
-        "agentId": "agent_t",
-        "text": "Middle observation",
-        "timestamp": "2026-07-24T12:00:00Z",
-    })
-    store.ingest({
-        "folderPath": "src/t2",
-        "agentId": "agent_t",
-        "text": "Newest observation",
-        "timestamp": "2026-07-24T14:00:00Z",
-    })
+    store.ingest(
+        {
+            "folderPath": "src/t1",
+            "agentId": "agent_t",
+            "text": "Oldest observation",
+            "timestamp": "2026-07-24T10:00:00Z",
+        }
+    )
+    store.ingest(
+        {
+            "folderPath": "src/t1",
+            "agentId": "agent_t",
+            "text": "Middle observation",
+            "timestamp": "2026-07-24T12:00:00Z",
+        }
+    )
+    store.ingest(
+        {
+            "folderPath": "src/t2",
+            "agentId": "agent_t",
+            "text": "Newest observation",
+            "timestamp": "2026-07-24T14:00:00Z",
+        }
+    )
 
     # Timeline all
     tl_all = store.timeline(limit=10)
@@ -248,14 +281,22 @@ def test_observation_store_rebuild_index_and_backfill_lookup(tmp_db):
     store = ObservationStore(kv=kv, search_service=search_svc)
 
     # 1. Backfill test: insert raw observation without lookup entry
-    kv.set(KV.folders, "src/bf:agent_bf", {"folderPath": "src/bf", "agentId": "agent_bf", "obsCount": 1})
-    kv.set(KV.folder_obs("src/bf", "agent_bf"), "fobs_bf1", {
-        "id": "fobs_bf1",
-        "folderPath": "src/bf",
-        "agentId": "agent_bf",
-        "text": "Unindexed backfill observation",
-        "timestamp": "2026-07-24T10:00:00Z",
-    })
+    kv.set(
+        KV.folders,
+        "src/bf:agent_bf",
+        {"folderPath": "src/bf", "agentId": "agent_bf", "obsCount": 1},
+    )
+    kv.set(
+        KV.folder_obs("src/bf", "agent_bf"),
+        "fobs_bf1",
+        {
+            "id": "fobs_bf1",
+            "folderPath": "src/bf",
+            "agentId": "agent_bf",
+            "text": "Unindexed backfill observation",
+            "timestamp": "2026-07-24T10:00:00Z",
+        },
+    )
 
     kv.delete(KV.obs_lookup, "fobs_bf1")
     assert kv.get(KV.obs_lookup, "fobs_bf1") is None
@@ -355,7 +396,11 @@ def test_full_lifecycle_e2e_pass(app_client):
     # 2. SEARCH via HTTP
     search_resp = client.post(
         "/agentcache/search",
-        json={"query": "observation store", "folderPath": "src/e2e", "agentId": "agent_e2e"},
+        json={
+            "query": "observation store",
+            "folderPath": "src/e2e",
+            "agentId": "agent_e2e",
+        },
     )
     assert search_resp.status_code == 200
     search_data = search_resp.get_json()
@@ -371,10 +416,13 @@ def test_full_lifecycle_e2e_pass(app_client):
         },
     )
     assert timeline_resp.status_code == 200
-    assert "Refactored observation store" in timeline_resp.get_json()["content"][0]["text"]
+    assert (
+        "Refactored observation store" in timeline_resp.get_json()["content"][0]["text"]
+    )
 
     # 4. REBUILD via ObservationStore
     import agentcache.app as app_mod
+
     obs_store = app_mod.observation_store
     count = obs_store.rebuild_index()
     assert count >= 1
@@ -388,5 +436,3 @@ def test_full_lifecycle_e2e_pass(app_client):
         },
     )
     assert forget_resp.status_code == 200
-
-

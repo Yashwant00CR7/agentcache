@@ -28,7 +28,7 @@ def cmd_serve(args) -> None:
 def cmd_migrate(args) -> None:
     """Run session → folder migration."""
     from .db import StateKV
-    from .functions import migrate_sessions_to_folders
+    from .legacy import migrate_sessions_to_folders
 
     kv = StateKV()
     result = migrate_sessions_to_folders(kv, dry_run=args.dry_run)
@@ -54,7 +54,7 @@ def cmd_migrate(args) -> None:
 def cmd_export(args) -> None:
     """Export all data as JSON."""
     from .db import StateKV
-    from .functions import export_data
+    from .legacy import export_data
 
     kv = StateKV()
     data = export_data(kv, {})
@@ -113,7 +113,8 @@ def cmd_context(args) -> None:
     import time
 
     from .app import init_services
-    from .functions import KV, normalize_folder_path
+    from .core import KV
+    from .core.observation_store import normalize_folder_path
 
     # 1. Resolve folder and agent
     cwd = os.getcwd()

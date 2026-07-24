@@ -23,6 +23,7 @@ def create_memories_bp(kv=None):
         if kv is not None:
             return kv
         from .. import app as app_module
+
         return app_module.kv
 
     # ------------------------------------------------------------------
@@ -39,9 +40,6 @@ def create_memories_bp(kv=None):
             return jsonify(res), 201
         except Exception as e:
             return jsonify({"error": str(e)}), 400
-
-
-
 
     # ------------------------------------------------------------------
     # POST /agentmemory/agent/remember
@@ -113,7 +111,6 @@ def create_memories_bp(kv=None):
             res = functions.forget(_get_kv(), body)
             return jsonify(res), 200
         except Exception as e:
-
             return jsonify({"error": str(e)}), 400
 
     return bp

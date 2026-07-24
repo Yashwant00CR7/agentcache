@@ -15,7 +15,6 @@ from flask import Blueprint, jsonify, request
 from .. import legacy
 from ..core import KV
 
-
 mcp_bp = Blueprint("mcp", __name__)
 
 
@@ -50,7 +49,6 @@ def _get_observation_store():
     from .. import app as app_module
 
     return app_module.observation_store
-
 
 
 def _datetime_now_iso() -> str:
@@ -401,7 +399,11 @@ def mcp_tools_call():
             search_svc = _get_search_service()
             if search_svc is not None:
                 res = search_svc.search(
-                    query=q, limit=limit, folder_path=folder_path, agent_id=agent_id, kv=kv
+                    query=q,
+                    limit=limit,
+                    folder_path=folder_path,
+                    agent_id=agent_id,
+                    kv=kv,
                 )
             else:
                 res = []
@@ -440,7 +442,11 @@ def mcp_tools_call():
             search_svc = _get_search_service()
             if search_svc is not None:
                 res = search_svc.search(
-                    query=q, limit=limit, folder_path=folder_path, agent_id=agent_id, kv=kv
+                    query=q,
+                    limit=limit,
+                    folder_path=folder_path,
+                    agent_id=agent_id,
+                    kv=kv,
                 )
             else:
                 res = []
@@ -474,7 +480,6 @@ def mcp_tools_call():
             else:
                 res = {"success": False, "deleted": 0}
             text_out = json.dumps(res, indent=2)
-
 
         elif name in ("cache_export", "memory_export"):
             res = legacy.export_data(kv, {})

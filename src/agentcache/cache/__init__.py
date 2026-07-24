@@ -18,7 +18,8 @@ callers may import from this package (A2.2).
 # Each name is imported lazily via a try/except so missing items don't break
 # the package import on partially-initialised environments.
 # ---------------------------------------------------------------------------
-from .. import functions as _fn  # noqa: E402
+from .. import legacy as _fn  # noqa: E402
+from ..core import KV
 from .context import context, export_data, rebuild_index
 from .graph import folder_graph_build
 from .health import auto_forget, health_check
@@ -31,14 +32,10 @@ from .observe import (
 from .remember import forget, jaccard_similarity, remember
 from .timeline import folder_search, folder_timeline
 
-KV = _fn.KV
 generate_id = _fn.generate_id
 fingerprint_id = _fn.fingerprint_id
 normalize_folder_path = _fn.normalize_folder_path
 validate_agent_id = _fn.validate_agent_id
-IndexPersistence = _fn.IndexPersistence
-set_embedding_provider = _fn.set_embedding_provider
-set_index_persistence = _fn.set_index_persistence
 set_stream_broadcaster = _fn.set_stream_broadcaster
 get_agent_id = _fn.get_agent_id
 record_audit = _fn.record_audit
@@ -72,15 +69,12 @@ __all__ = [
     # health.py
     "health_check",
     "auto_forget",
-    # functions.py shims (A2.2)
+    # legacy.py shims
     "KV",
     "generate_id",
     "fingerprint_id",
     "normalize_folder_path",
     "validate_agent_id",
-    "IndexPersistence",
-    "set_embedding_provider",
-    "set_index_persistence",
     "set_stream_broadcaster",
     "get_agent_id",
     "record_audit",

@@ -8,7 +8,6 @@ MemoryStore, routes) call this service instead of touching index globals.
 from __future__ import annotations
 
 import json
-import math
 import sqlite3
 import threading
 import time
@@ -24,7 +23,9 @@ class IndexPersistence:
 
     DEBOUNCE_SECONDS: float = 5.0
 
-    def __init__(self, kv: Any, bm25: SearchIndex, vector: Optional[VectorIndex] = None):
+    def __init__(
+        self, kv: Any, bm25: SearchIndex, vector: Optional[VectorIndex] = None
+    ):
         self.kv = kv
         self.bm25 = bm25
         self.vector = vector
@@ -149,14 +150,20 @@ class IndexPersistence:
                             cursor.close()
                     except sqlite3.OperationalError as ex:
                         err_msg = str(ex).lower()
-                        if ("locked" in err_msg or "busy" in err_msg) and attempt < max_retries - 1:
+                        if (
+                            "locked" in err_msg or "busy" in err_msg
+                        ) and attempt < max_retries - 1:
                             time.sleep(delay)
                             delay *= 2
                             continue
-                        print(f"[index persistence] error cleaning up obsolete shards: {ex}")
+                        print(
+                            f"[index persistence] error cleaning up obsolete shards: {ex}"
+                        )
                         break
                     except Exception as ex:
-                        print(f"[index persistence] error cleaning up obsolete shards: {ex}")
+                        print(
+                            f"[index persistence] error cleaning up obsolete shards: {ex}"
+                        )
                         break
 
         if (
@@ -372,7 +379,11 @@ class SearchService:
                             results.append(result)
                             seen_ids.add(obs_id)
                             # Lazy backfill lookup
-                            active_kv.set(KV.obs_lookup, obs_id, {"folderPath": fp, "agentId": aid})
+                            active_kv.set(
+                                KV.obs_lookup,
+                                obs_id,
+                                {"folderPath": fp, "agentId": aid},
+                            )
                             found = True
                             break
                     if found:

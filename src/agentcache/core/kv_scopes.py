@@ -5,8 +5,6 @@ Single source of truth for every SQLite scope string used in the system.
 Import this module wherever a KV scope key is needed — routes, stores, workers.
 """
 
-from typing import Optional
-
 
 class KV:
     # ---- Folder memory scopes ----

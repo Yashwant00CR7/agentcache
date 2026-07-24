@@ -6,13 +6,10 @@ __version__ = "0.9.8"
 
 from .app import create_app
 from .connect import run_connect
+from .core import KV, ObservationEvents, ObservationStore, SearchService
 from .db import StateKV
-from .functions import (
+from .legacy import (
     folder_graph_build,
-    folder_observe,
-    folder_search,
-    folder_timeline,
-    forget,
     health_check,
     remember,
 )
@@ -22,11 +19,11 @@ __all__ = [
     "create_app",
     "StateKV",
     "run_connect",
-    "folder_observe",
-    "folder_search",
-    "folder_timeline",
+    "KV",
+    "ObservationStore",
+    "ObservationEvents",
+    "SearchService",
     "folder_graph_build",
     "remember",
-    "forget",
     "health_check",
 ]

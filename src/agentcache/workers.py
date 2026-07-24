@@ -14,14 +14,14 @@ import sys
 import threading
 import time
 
-from . import functions
+from . import legacy
 
 # Module-level shutdown flag — set by signal handlers
 _shutting_down = threading.Event()
 
-# Reference to the persistence object (set by start_background_workers)
 _persistence_ref = None
-# Reference to the kv object (set by start_background_workers)
+_search_svc_ref = None
+_obs_store_ref = None
 _kv_ref = None
 
 
@@ -30,7 +30,7 @@ def _shutdown_handler(signum, frame) -> None:  # noqa: ARG001
 
     Steps:
     1. Set the global _shutting_down flag to stop background loops.
-    2. Flush the debounce timer and save the index synchronously.
+    2. Flush the debounce timer and save the index synchronously via SearchService.flush_persist().
     3. Run a WAL checkpoint via StateKV.teardown().
     4. Exit cleanly with code 0.
     """
@@ -39,9 +39,15 @@ def _shutdown_handler(signum, frame) -> None:  # noqa: ARG001
 
     _shutting_down.set()
 
-    # Flush in-flight persistence debounce timer and save immediately
-    global _persistence_ref
-    if _persistence_ref is not None:
+    global _search_svc_ref, _persistence_ref
+    if _search_svc_ref is not None:
+        try:
+            print("[workers] Flushing SearchService persistence...")
+            _search_svc_ref.flush_persist()
+            print("[workers] SearchService persistence flushed.")
+        except Exception as e:
+            print(f"[workers] Error flushing SearchService: {e}")
+    elif _persistence_ref is not None:
         try:
             print("[workers] Flushing index persistence...")
             _persistence_ref.flush()
@@ -89,7 +95,7 @@ def _auto_forget_loop(kv) -> None:
                 if kv.acquire_lock("auto_forget", lease_seconds=300):
                     try:
                         print("[scheduler] Running auto_forget sweep...")
-                        res = functions.auto_forget(kv, dry_run=False)
+                        res = legacy.auto_forget(kv, dry_run=False)
                         print(f"[scheduler] auto_forget sweep completed: {res}")
                     finally:
                         kv.release_lock("auto_forget")
@@ -107,7 +113,13 @@ def _rebuild_index(kv) -> None:
     try:
         if kv.acquire_lock("index_rebuild", lease_seconds=600):
             try:
-                count = functions.rebuild_index(kv)
+                from . import app as app_module
+
+                obs_store = getattr(app_module, "observation_store", None)
+                if obs_store is not None:
+                    count = obs_store.rebuild_index()
+                else:
+                    count = 0
                 print(f"[persistence] Rebuild completed: indexed {count} items.")
             finally:
                 kv.release_lock("index_rebuild")
@@ -127,21 +139,34 @@ def start_background_workers(kv, tasks=None) -> None:
         kv: Initialised StateKV instance.
         tasks: Optional list of tasks to run ("index", "forget"). Defaults to running both.
     """
-    global _kv_ref, _persistence_ref
+    global _kv_ref, _persistence_ref, _search_svc_ref, _obs_store_ref
     _kv_ref = kv
 
-    # Capture the persistence reference for the shutdown handler
-    _persistence_ref = functions._index_persistence
+    from . import app as app_module
+
+    search_svc = getattr(app_module, "search_service", None)
+    obs_store = getattr(app_module, "observation_store", None)
+
+    _search_svc_ref = search_svc
+    _obs_store_ref = obs_store
+
+    if search_svc is not None:
+        _persistence_ref = search_svc._persistence
+    else:
+        _persistence_ref = None
 
     # Register graceful shutdown signal handlers (C5.1)
     _register_signal_handlers()
 
     if tasks is None or "index" in tasks:
         # Rebuild search index if empty or out of sync (Step 5)
-        index_empty = functions._bm25_index.size == 0
+        bm25_size = search_svc.bm25_size if search_svc is not None else 0
+        index_empty = bm25_size == 0
         index_in_sync = True
         if not index_empty:
-            index_in_sync = functions.verify_index_sync_on_boot(kv)
+            index_in_sync = legacy.verify_index_sync_on_boot(
+                kv, search_service=search_svc
+            )
 
         if index_empty or not index_in_sync:
             reason = "empty" if index_empty else "out of sync"

@@ -2,21 +2,21 @@
 Observation routes blueprint.
 
 Handles:
-  POST /agentmemory/observe
-  POST /agentmemory/agent/observe
-  GET  /agentmemory/folder/observations
-  GET  /agentmemory/folders
+  POST /agentcache/observe
+  POST /agentcache/agent/observe
+  GET  /agentcache/folder/observations
+  GET  /agentcache/folders
+  POST /agentcache/folder/dedup
 """
 
 import datetime
 import os
+from typing import Optional
 
 from flask import Blueprint, jsonify, request
 
-from .. import functions
-from ..functions import KV
-
-observations_bp = Blueprint("observations", __name__)
+from ..core.kv_scopes import KV
+from ..core.observation_store import ObservationStore
 
 
 def _datetime_now_iso() -> str:
@@ -41,271 +41,255 @@ def _check_auth():
     return None
 
 
-def _get_kv():
-    """Retrieve the shared kv instance from the app module."""
-    from .. import app as app_module
+def create_observations_bp(
+    observation_store: Optional[ObservationStore] = None,
+) -> Blueprint:
+    bp = Blueprint("observations", __name__)
 
-    return app_module.kv
+    def get_store() -> ObservationStore:
+        if observation_store is not None:
+            return observation_store
+        from flask import current_app
 
+        store = current_app.extensions.get("observation_store")
+        if store is None:
+            from .. import app as app_module
 
-# ---------------------------------------------------------------------------
-# POST /agentmemory/observe  (legacy raw hook endpoint + auto-compat shim)
-# ---------------------------------------------------------------------------
+            store = getattr(app_module, "observation_store", None)
+        if store is None:
+            raise RuntimeError("ObservationStore is not initialized")
+        return store
 
+    def get_kv():
+        return get_store().kv
 
-@observations_bp.route("/agentcache/observe", methods=["POST"])
-@observations_bp.route("/agentmemory/observe", methods=["POST"])
-def api_observe():
-    auth_err = _check_auth()
-    if auth_err:
-        return auth_err
+    @bp.route("/agentcache/observe", methods=["POST"])
+    @bp.route("/agentmemory/observe", methods=["POST"])
+    def api_observe():
+        auth_err = _check_auth()
+        if auth_err:
+            return auth_err
 
-    body = {}
-    try:
-        body = request.get_json(force=True) or {}
-        folder_path = body.get("folderPath")
-        agent_id = body.get("agentId")
-        text = body.get("text") or body.get("content") or ""
+        body = {}
+        try:
+            body = request.get_json(force=True) or {}
+            folder_path = body.get("folderPath")
+            agent_id = body.get("agentId")
+            text = body.get("text") or body.get("content") or ""
 
-        if not folder_path or not agent_id or not text:
-            return jsonify({"error": "folderPath, agentId, and text are required"}), 400
+            if not folder_path or not agent_id or not text:
+                return (
+                    jsonify({"error": "folderPath, agentId, and text are required"}),
+                    400,
+                )
 
-        payload = {
-            "folderPath": folder_path,
-            "agentId": agent_id,
-            "text": text,
-            "timestamp": body.get("timestamp") or _datetime_now_iso(),
-            "type": body.get("type"),
-            "title": body.get("title"),
-            "concepts": body.get("concepts"),
-            "files": body.get("files"),
-            "importance": body.get("importance"),
-        }
-        res = functions.folder_observe(_get_kv(), payload)
-        return jsonify(res), 201
-    except Exception as e:
-        import traceback
-
-        tb = traceback.format_exc()
-        print(f"[observe] 400 — keys={list(body.keys())} {type(e).__name__}: {e}\n{tb}")
-        return jsonify(
-            {
-                "error": str(e),
-                "detail": type(e).__name__,
-                "keys": list(body.keys()),
-                "tb": tb,
+            payload = {
+                "folderPath": folder_path,
+                "agentId": agent_id,
+                "text": text,
+                "timestamp": body.get("timestamp") or _datetime_now_iso(),
+                "type": body.get("type"),
+                "title": body.get("title"),
+                "concepts": body.get("concepts"),
+                "files": body.get("files"),
+                "importance": body.get("importance"),
             }
-        ), 400
+            res = get_store().ingest(payload)
+            return jsonify(res), 201
+        except Exception as e:
+            import traceback
 
+            tb = traceback.format_exc()
+            print(
+                f"[observe] 400 — keys={list(body.keys())} {type(e).__name__}: {e}\n{tb}"
+            )
+            return (
+                jsonify(
+                    {
+                        "error": str(e),
+                        "detail": type(e).__name__,
+                        "keys": list(body.keys()),
+                        "tb": tb,
+                    }
+                ),
+                400,
+            )
 
-# ---------------------------------------------------------------------------
-# POST /agentmemory/agent/observe
-# ---------------------------------------------------------------------------
+    @bp.route("/agentcache/agent/observe", methods=["POST"])
+    @bp.route("/agentmemory/agent/observe", methods=["POST"])
+    def api_agent_observe():
+        auth_err = _check_auth()
+        if auth_err:
+            return auth_err
 
+        try:
+            body = request.get_json(force=True) or {}
+            folder_path = body.get("folderPath")
+            agent_id = body.get("agentId")
+            text = body.get("text") or body.get("content") or ""
 
-@observations_bp.route("/agentcache/agent/observe", methods=["POST"])
-@observations_bp.route("/agentmemory/agent/observe", methods=["POST"])
-def api_agent_observe():
-    auth_err = _check_auth()
-    if auth_err:
-        return auth_err
+            if not folder_path or not agent_id or not text:
+                return (
+                    jsonify({"error": "folderPath, agentId, and text are required"}),
+                    400,
+                )
 
-    try:
-        body = request.get_json(force=True) or {}
-        folder_path = body.get("folderPath")
-        agent_id = body.get("agentId")
-        text = body.get("text") or body.get("content") or ""
+            timestamp = body.get("timestamp") or _datetime_now_iso()
 
-        if not folder_path or not agent_id or not text:
-            return jsonify({"error": "folderPath, agentId, and text are required"}), 400
+            payload = {
+                "folderPath": folder_path,
+                "agentId": agent_id,
+                "text": text,
+                "timestamp": timestamp,
+                "type": body.get("type"),
+                "title": body.get("title"),
+                "concepts": body.get("concepts"),
+                "files": body.get("files"),
+                "importance": body.get("importance"),
+            }
 
-        # sessionId accepted but ignored (folder-based model)
-        timestamp = body.get("timestamp") or _datetime_now_iso()
+            res = get_store().ingest(payload)
+            return jsonify(res), 201
+        except ValueError as e:
+            print(
+                f"[agent_observe] 400 ValueError — body keys: {list(body.keys())} — {e}"
+            )
+            return jsonify({"error": str(e)}), 400
+        except Exception as e:
+            import traceback
 
-        payload = {
-            "folderPath": folder_path,
-            "agentId": agent_id,
-            "text": text,
-            "timestamp": timestamp,
-            "type": body.get("type"),
-            "title": body.get("title"),
-            "concepts": body.get("concepts"),
-            "files": body.get("files"),
-            "importance": body.get("importance"),
-        }
+            print(
+                f"[agent_observe] 400 error — body keys: {list(body.keys())} — {type(e).__name__}: {e}"
+            )
+            print(traceback.format_exc())
+            return jsonify({"error": str(e), "detail": type(e).__name__}), 400
 
-        res = functions.folder_observe(_get_kv(), payload)
-        return jsonify(res), 201
-    except ValueError as e:
-        import traceback
+    @bp.route("/agentcache/folders", methods=["GET"])
+    @bp.route("/agentmemory/folders", methods=["GET"])
+    def api_folders():
+        auth_err = _check_auth()
+        if auth_err:
+            return auth_err
+        from .. import legacy
 
-        print(f"[agent_observe] 400 ValueError — body keys: {list(body.keys())} — {e}")
-        return jsonify({"error": str(e)}), 400
-    except Exception as e:
-        import traceback
-
-        print(
-            f"[agent_observe] 400 error — body keys: {list(body.keys())} — {type(e).__name__}: {e}"
+        folders = sorted(
+            get_kv().list(KV.folders),
+            key=lambda x: x.get("lastUpdated", ""),
+            reverse=True,
         )
-        print(traceback.format_exc())
-        return jsonify({"error": str(e), "detail": type(e).__name__}), 400
+        if legacy.is_agent_scope_isolated():
+            aid = legacy.get_agent_id()
+            if aid:
+                folders = [f for f in folders if f.get("agentId") == aid]
+        return jsonify({"folders": folders}), 200
 
+    @bp.route("/agentcache/folder/observations", methods=["GET"])
+    @bp.route("/agentmemory/folder/observations", methods=["GET"])
+    def api_folder_observations():
+        auth_err = _check_auth()
+        if auth_err:
+            return auth_err
+        fp = request.args.get("folderPath")
+        aid = request.args.get("agentId")
+        if not fp or not aid:
+            return jsonify({"error": "folderPath and agentId are required"}), 400
+        from .. import legacy
 
-# ---------------------------------------------------------------------------
-# GET /agentmemory/folders
-# ---------------------------------------------------------------------------
+        if legacy.is_agent_scope_isolated():
+            current_aid = legacy.get_agent_id()
 
-
-@observations_bp.route("/agentcache/folders", methods=["GET"])
-@observations_bp.route("/agentmemory/folders", methods=["GET"])
-def api_folders():
-    auth_err = _check_auth()
-    if auth_err:
-        return auth_err
-    folders = sorted(
-        _get_kv().list(KV.folders),
-        key=lambda x: x.get("lastUpdated", ""),
-        reverse=True,
-    )
-    if functions.is_agent_scope_isolated():
-        aid = functions.get_agent_id()
-        if aid:
-            folders = [f for f in folders if f.get("agentId") == aid]
-    return jsonify({"folders": folders}), 200
-
-
-# ---------------------------------------------------------------------------
-# GET /agentmemory/folder/observations
-# ---------------------------------------------------------------------------
-
-
-@observations_bp.route("/agentcache/folder/observations", methods=["GET"])
-@observations_bp.route("/agentmemory/folder/observations", methods=["GET"])
-def api_folder_observations():
-    auth_err = _check_auth()
-    if auth_err:
-        return auth_err
-    fp = request.args.get("folderPath")
-    aid = request.args.get("agentId")
-    if not fp or not aid:
-        return jsonify({"error": "folderPath and agentId are required"}), 400
-    if functions.is_agent_scope_isolated():
-        current_aid = functions.get_agent_id()
-        if current_aid and aid != current_aid:
-            return jsonify(
-                {"error": "Unauthorized: Agent scope is isolated to another agent"}
-            ), 403
-    observations = sorted(
-        _get_kv().list(KV.folder_obs(fp, aid)),
-        key=lambda x: x.get("timestamp", ""),
-        reverse=True,
-    )
-    return jsonify(
-        {"observations": observations, "folderPath": fp, "agentId": aid}
-    ), 200
-
-
-# ---------------------------------------------------------------------------
-# POST /agentmemory/session/start  (legacy compat shim → 200 no-op)
-# ---------------------------------------------------------------------------
-
-
-@observations_bp.route("/agentcache/session/start", methods=["POST"])
-@observations_bp.route("/agentmemory/session/start", methods=["POST"])
-def api_session_start():
-    """Legacy session/start — clients in the wild still call this.
-    Return a synthetic session ID so callers don't error out.
-    """
-    auth_err = _check_auth()
-    if auth_err:
-        return auth_err
-
-    import uuid
-
-    body = request.get_json(force=True) or {}
-    session_id = body.get("sessionId") or f"compat_{uuid.uuid4().hex[:16]}"
-    return jsonify(
-        {
-            "sessionId": session_id,
-            "status": "active",
-            "message": "Session model migrated to folder-based. Use /agentmemory/agent/observe.",
-        }
-    ), 200
-
-
-# ---------------------------------------------------------------------------
-# POST /agentmemory/session/end  (legacy compat shim → 200 no-op)
-# ---------------------------------------------------------------------------
-
-
-@observations_bp.route("/agentcache/session/end", methods=["POST"])
-@observations_bp.route("/agentmemory/session/end", methods=["POST"])
-def api_session_end():
-    auth_err = _check_auth()
-    if auth_err:
-        return auth_err
-    return jsonify(
-        {"success": True, "message": "Session model is now folder-based."}
-    ), 200
-
-
-# ---------------------------------------------------------------------------
-# GET /agentmemory/observations  (legacy compat shim)
-# ---------------------------------------------------------------------------
-
-
-@observations_bp.route("/agentcache/folder/dedup", methods=["POST"])
-@observations_bp.route("/agentmemory/folder/dedup", methods=["POST"])
-def api_folder_dedup():
-    """POST /agentmemory/folder/dedup — remove duplicate observations.
-
-    Body (both optional):
-        folderPath: str  — deduplicate only this folder pair
-        agentId:    str  — deduplicate only this agent
-
-    If both are omitted all folder pairs are processed.
-    Returns: {"success": bool, "deduplicated": int, "pairs_processed": int, "kept": int}
-    """
-    auth_err = _check_auth()
-    if auth_err:
-        return auth_err
-    try:
-        body = request.get_json(force=True) or {}
-        folder_path = body.get("folderPath") or None
-        agent_id = body.get("agentId") or None
-        res = functions.dedup_folder_observations(_get_kv(), folder_path, agent_id)
-        return jsonify(res), 200
-    except Exception as e:
-        return jsonify({"error": str(e)}), 400
-
-
-# ---------------------------------------------------------------------------
-# GET /agentmemory/observations  (legacy compat shim)
-# ---------------------------------------------------------------------------
-
-
-@observations_bp.route("/agentcache/observations", methods=["GET"])
-@observations_bp.route("/agentmemory/observations", methods=["GET"])
-def api_observations_legacy():
-    """Legacy /observations?sessionId=... shim.
-    Reads from legacy KV scope if data exists, otherwise returns empty list.
-    """
-    auth_err = _check_auth()
-    if auth_err:
-        return auth_err
-
-    session_id = request.args.get("sessionId", "")
-    if not session_id:
-        return jsonify({"observations": [], "sessionId": ""}), 200
-
-    try:
-        obs = sorted(
-            _get_kv().list(functions.KV.observations(session_id)),
+            if current_aid and aid != current_aid:
+                return (
+                    jsonify(
+                        {
+                            "error": "Unauthorized: Agent scope is isolated to another agent"
+                        }
+                    ),
+                    403,
+                )
+        observations = sorted(
+            get_kv().list(KV.folder_obs(fp, aid)),
             key=lambda x: x.get("timestamp", ""),
             reverse=True,
         )
-        return jsonify({"observations": obs, "sessionId": session_id}), 200
-    except Exception as e:
-        return jsonify(
-            {"observations": [], "sessionId": session_id, "error": str(e)}
-        ), 200
+        return (
+            jsonify({"observations": observations, "folderPath": fp, "agentId": aid}),
+            200,
+        )
+
+    @bp.route("/agentcache/session/start", methods=["POST"])
+    @bp.route("/agentmemory/session/start", methods=["POST"])
+    def api_session_start():
+        auth_err = _check_auth()
+        if auth_err:
+            return auth_err
+
+        import uuid
+
+        body = request.get_json(force=True) or {}
+        session_id = body.get("sessionId") or f"compat_{uuid.uuid4().hex[:16]}"
+        return (
+            jsonify(
+                {
+                    "sessionId": session_id,
+                    "status": "active",
+                    "message": "Session model migrated to folder-based. Use /agentmemory/agent/observe.",
+                }
+            ),
+            200,
+        )
+
+    @bp.route("/agentcache/session/end", methods=["POST"])
+    @bp.route("/agentmemory/session/end", methods=["POST"])
+    def api_session_end():
+        auth_err = _check_auth()
+        if auth_err:
+            return auth_err
+        return (
+            jsonify({"success": True, "message": "Session model is now folder-based."}),
+            200,
+        )
+
+    @bp.route("/agentcache/folder/dedup", methods=["POST"])
+    @bp.route("/agentmemory/folder/dedup", methods=["POST"])
+    def api_folder_dedup():
+        auth_err = _check_auth()
+        if auth_err:
+            return auth_err
+        try:
+            body = request.get_json(force=True) or {}
+            folder_path = body.get("folderPath") or None
+            agent_id = body.get("agentId") or None
+            res = get_store().dedup(folder_path, agent_id)
+            return jsonify(res), 200
+        except Exception as e:
+            return jsonify({"error": str(e)}), 400
+
+    @bp.route("/agentcache/observations", methods=["GET"])
+    @bp.route("/agentmemory/observations", methods=["GET"])
+    def api_observations_legacy():
+        auth_err = _check_auth()
+        if auth_err:
+            return auth_err
+
+        session_id = request.args.get("sessionId", "")
+        if not session_id:
+            return jsonify({"observations": [], "sessionId": ""}), 200
+
+        try:
+            obs = sorted(
+                get_kv().list(KV.observations(session_id)),
+                key=lambda x: x.get("timestamp", ""),
+                reverse=True,
+            )
+            return jsonify({"observations": obs, "sessionId": session_id}), 200
+        except Exception as e:
+            return (
+                jsonify({"observations": [], "sessionId": session_id, "error": str(e)}),
+                200,
+            )
+
+    return bp
+
+
+observations_bp = create_observations_bp()
