@@ -32,7 +32,11 @@ def create_observations_bp(
     bp = Blueprint("observations", __name__)
 
     def get_store() -> ObservationStore:
-        return observation_store if observation_store is not None else get_observation_store()
+        return (
+            observation_store
+            if observation_store is not None
+            else get_observation_store()
+        )
 
     def get_kv():
         return get_store().kv

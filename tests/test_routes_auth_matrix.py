@@ -21,7 +21,6 @@ import pytest
 import agentcache.app as app_mod
 from agentcache.app import create_app
 
-
 UNPROTECTED_PATHS = {
     "/auth.md",
     "/agentcache/livez",
@@ -92,9 +91,7 @@ def test_every_route_requires_auth_when_secret_is_set(secured_app):
         res = _invoke(client, method, path)
         if path in UNPROTECTED_PATHS:
             if res.status_code == 401:
-                failures.append(
-                    f"{method} {path} unexpectedly required auth (401)"
-                )
+                failures.append(f"{method} {path} unexpectedly required auth (401)")
         else:
             if res.status_code != 401:
                 failures.append(
@@ -126,9 +123,7 @@ def test_every_route_open_when_no_secret_configured(open_app):
     for method, path in _iter_http_rules(open_app):
         res = _invoke(client, method, path)
         if res.status_code == 401:
-            failures.append(
-                f"{method} {path} returned 401 in open (no-secret) mode"
-            )
+            failures.append(f"{method} {path} returned 401 in open (no-secret) mode")
 
     assert not failures, "unexpected 401s in open mode:\n  " + "\n  ".join(failures)
 

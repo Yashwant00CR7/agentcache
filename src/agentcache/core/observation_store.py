@@ -104,7 +104,8 @@ class ObservationStore:
         folder_path = normalize_folder_path(folder_path_raw)
         agent_id = validate_agent_id(agent_id_raw)
 
-        from ..legacy import extract_files, infer_type, strip_private_data
+        from .infer import extract_files, infer_type
+        from .privacy import strip_private_data
 
         safe_text = strip_private_data(text_raw)[:4000]
 
