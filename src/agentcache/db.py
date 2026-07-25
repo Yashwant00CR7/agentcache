@@ -12,8 +12,8 @@ DB_PATH = os.path.join(os.path.expanduser("~"), ".agentcache", "agentcache.db")
 
 
 class StateKV:
-    def __init__(self, db_path: str = DB_PATH):
-        self.db_path = db_path
+    def __init__(self, db_path: Optional[str] = None):
+        self.db_path = db_path or os.getenv("AGENTCACHE_DB_PATH") or DB_PATH
         self._lock = threading.Lock()
         # Per-thread persistent connection pool (A3.1)
         self._local = threading.local()

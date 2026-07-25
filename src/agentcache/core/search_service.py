@@ -140,8 +140,10 @@ class IndexPersistence:
                                 for i in range(0, len(to_delete), 50):
                                     chunk_delete = to_delete[i : i + 50]
                                     format_strings = ",".join(["?"] * len(chunk_delete))
+                                    # format_strings contains only '?' placeholders derived from len();
+                                    # all values are bound via the parameter tuple below.
                                     cursor.execute(
-                                        f"DELETE FROM kv_store WHERE scope IN ({format_strings})",
+                                        f"DELETE FROM kv_store WHERE scope IN ({format_strings})",  # nosec B608
                                         tuple(chunk_delete),
                                     )
                                     conn.commit()
