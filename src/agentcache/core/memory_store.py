@@ -147,22 +147,6 @@ def remember(kv: StateKV, data: Dict[str, Any]) -> Dict[str, Any]:
     return {"success": True, "memory": new_mem}
 
 
-def forget(kv: StateKV, data: Dict[str, Any]) -> Dict[str, Any]:
-    """Delete a global memory, a folder (folder_path+agent_id), or specific observations."""
-    from .. import legacy as _legacy
-    from .observation_store import ObservationStore
-
-    def _get_store():
-        from .. import app as app_module
-
-        if getattr(app_module, "observation_store", None) is not None:
-            return app_module.observation_store
-        return ObservationStore(kv, search_service=_legacy._search_service)
-
-    store = _get_store()
-    return store.forget(data)
-
-
 def evolve_memory(kv: StateKV, data: Dict[str, Any]) -> Dict[str, Any]:
     from .. import legacy as _legacy
 

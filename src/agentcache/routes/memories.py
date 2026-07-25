@@ -12,7 +12,7 @@ from flask import Blueprint, jsonify, request
 
 from .. import legacy as functions
 from ..core import KV
-from ._deps import get_kv
+from ._deps import get_kv, get_observation_store
 from .auth import require_auth
 
 
@@ -105,7 +105,7 @@ def create_memories_bp(kv=None):
     def api_forget():
         try:
             body = request.get_json(force=True) or {}
-            res = functions.forget(_kv(), body)
+            res = get_observation_store().forget(body)
             return jsonify(res), 200
         except Exception as e:
             return jsonify({"error": str(e)}), 400

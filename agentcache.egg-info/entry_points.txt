@@ -1,2 +1,0 @@
-[console_scripts]
-agentcache = src.cli:main

@@ -53,7 +53,6 @@ SYMBOL_MAP = {
     "memory_to_observation": "agentcache.core.memory_store",
     "jaccard_similarity": "agentcache.core.memory_store",
     "evolve_memory": "agentcache.core.memory_store",
-    "forget": "agentcache.core.memory_store",
     # core/lessons.py
     "lesson_save": "agentcache.core.lessons",
     "lesson_list": "agentcache.core.lessons",
