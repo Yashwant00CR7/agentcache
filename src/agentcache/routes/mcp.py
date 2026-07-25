@@ -14,41 +14,10 @@ from flask import Blueprint, jsonify, request
 
 from .. import legacy
 from ..core import KV
+from ._deps import get_kv, get_observation_store, get_search_service
+from .auth import require_auth
 
 mcp_bp = Blueprint("mcp", __name__)
-
-
-def _check_auth():
-    import hmac
-
-    secret = os.getenv("AGENTCACHE_SECRET") or os.getenv("AGENTMEMORY_SECRET")
-    if not secret:
-        return None
-    auth = request.headers.get("Authorization") or request.headers.get("authorization")
-    if not auth or not auth.startswith("Bearer "):
-        return jsonify({"error": "unauthorized"}), 401
-    provided_token = auth[7:].strip()
-    if not hmac.compare_digest(provided_token.encode("utf-8"), secret.encode("utf-8")):
-        return jsonify({"error": "unauthorized"}), 401
-    return None
-
-
-def _get_kv():
-    from .. import app as app_module
-
-    return app_module.kv
-
-
-def _get_search_service():
-    from .. import app as app_module
-
-    return app_module.search_service
-
-
-def _get_observation_store():
-    from .. import app as app_module
-
-    return app_module.observation_store
 
 
 def _datetime_now_iso() -> str:
@@ -351,11 +320,8 @@ def get_mcp_tools_schemas():
 
 @mcp_bp.route("/agentcache/mcp/tools", methods=["GET"])
 @mcp_bp.route("/agentmemory/mcp/tools", methods=["GET"])
+@require_auth
 def mcp_tools_list():
-    auth_err = _check_auth()
-    if auth_err:
-        return auth_err
-
     tools = get_mcp_tools_schemas()
     return jsonify({"tools": tools}), 200
 
@@ -367,13 +333,10 @@ def mcp_tools_list():
 
 @mcp_bp.route("/agentcache/mcp/tools", methods=["POST"])
 @mcp_bp.route("/agentmemory/mcp/tools", methods=["POST"])
+@require_auth
 def mcp_tools_call():
-    auth_err = _check_auth()
-    if auth_err:
-        return auth_err
-
     try:
-        kv = _get_kv()
+        kv = get_kv()
         body = request.get_json(force=True) or {}
         name = body.get("name")
         args = body.get("arguments") or {}
@@ -396,7 +359,7 @@ def mcp_tools_call():
                             {"error": "Unauthorized: Agent scope is isolated"}
                         ), 403
                     agent_id = current_aid
-            search_svc = _get_search_service()
+            search_svc = get_search_service()
             if search_svc is not None:
                 res = search_svc.search(
                     query=q,
@@ -439,7 +402,7 @@ def mcp_tools_call():
                             {"error": "Unauthorized: Agent scope is isolated"}
                         ), 403
                     agent_id = current_aid
-            search_svc = _get_search_service()
+            search_svc = get_search_service()
             if search_svc is not None:
                 res = search_svc.search(
                     query=q,
@@ -467,7 +430,7 @@ def mcp_tools_call():
                             {"error": "Unauthorized: Agent scope is isolated"}
                         ), 403
                     request_aid = current_aid
-            obs_store = _get_observation_store()
+            obs_store = get_observation_store()
             if obs_store is not None:
                 forget_payload = {
                     "memoryId": args.get("memoryId"),
@@ -530,7 +493,7 @@ def mcp_tools_call():
                 "files": args.get("files"),
                 "importance": args.get("importance"),
             }
-            obs_store = _get_observation_store()
+            obs_store = get_observation_store()
             if obs_store is not None:
                 res = obs_store.ingest(payload)
             else:
@@ -607,7 +570,7 @@ def mcp_tools_call():
                             {"error": "Unauthorized: Agent scope is isolated"}
                         ), 403
                     request_aid = current_aid
-            obs_store = _get_observation_store()
+            obs_store = get_observation_store()
             if obs_store is not None:
                 res = obs_store.timeline(
                     limit=int(args.get("limit", 100)),
@@ -630,7 +593,7 @@ def mcp_tools_call():
                             {"error": "Unauthorized: Agent scope is isolated"}
                         ), 403
                     request_aid = current_aid
-            obs_store = _get_observation_store()
+            obs_store = get_observation_store()
             if obs_store is not None:
                 res = obs_store.dedup(
                     args.get("folderPath") or None,

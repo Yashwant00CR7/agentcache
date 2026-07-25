@@ -10,13 +10,14 @@ Handles:
 """
 
 import datetime
-import os
 from typing import Optional
 
 from flask import Blueprint, jsonify, request
 
 from ..core.kv_scopes import KV
 from ..core.observation_store import ObservationStore
+from ._deps import get_observation_store
+from .auth import require_auth
 
 
 def _datetime_now_iso() -> str:
@@ -25,51 +26,21 @@ def _datetime_now_iso() -> str:
     )
 
 
-def _check_auth():
-    """Replicate the check_auth() pattern from app.py."""
-    import hmac
-
-    secret = os.getenv("AGENTCACHE_SECRET") or os.getenv("AGENTMEMORY_SECRET")
-    if not secret:
-        return None
-    auth = request.headers.get("Authorization") or request.headers.get("authorization")
-    if not auth or not auth.startswith("Bearer "):
-        return jsonify({"error": "unauthorized"}), 401
-    provided_token = auth[7:].strip()
-    if not hmac.compare_digest(provided_token.encode("utf-8"), secret.encode("utf-8")):
-        return jsonify({"error": "unauthorized"}), 401
-    return None
-
-
 def create_observations_bp(
     observation_store: Optional[ObservationStore] = None,
 ) -> Blueprint:
     bp = Blueprint("observations", __name__)
 
     def get_store() -> ObservationStore:
-        if observation_store is not None:
-            return observation_store
-        from flask import current_app
-
-        store = current_app.extensions.get("observation_store")
-        if store is None:
-            from .. import app as app_module
-
-            store = getattr(app_module, "observation_store", None)
-        if store is None:
-            raise RuntimeError("ObservationStore is not initialized")
-        return store
+        return observation_store if observation_store is not None else get_observation_store()
 
     def get_kv():
         return get_store().kv
 
     @bp.route("/agentcache/observe", methods=["POST"])
     @bp.route("/agentmemory/observe", methods=["POST"])
+    @require_auth
     def api_observe():
-        auth_err = _check_auth()
-        if auth_err:
-            return auth_err
-
         body = {}
         try:
             body = request.get_json(force=True) or {}
@@ -117,11 +88,8 @@ def create_observations_bp(
 
     @bp.route("/agentcache/agent/observe", methods=["POST"])
     @bp.route("/agentmemory/agent/observe", methods=["POST"])
+    @require_auth
     def api_agent_observe():
-        auth_err = _check_auth()
-        if auth_err:
-            return auth_err
-
         try:
             body = request.get_json(force=True) or {}
             folder_path = body.get("folderPath")
@@ -166,10 +134,8 @@ def create_observations_bp(
 
     @bp.route("/agentcache/folders", methods=["GET"])
     @bp.route("/agentmemory/folders", methods=["GET"])
+    @require_auth
     def api_folders():
-        auth_err = _check_auth()
-        if auth_err:
-            return auth_err
         from .. import legacy
 
         folders = sorted(
@@ -185,10 +151,8 @@ def create_observations_bp(
 
     @bp.route("/agentcache/folder/observations", methods=["GET"])
     @bp.route("/agentmemory/folder/observations", methods=["GET"])
+    @require_auth
     def api_folder_observations():
-        auth_err = _check_auth()
-        if auth_err:
-            return auth_err
         fp = request.args.get("folderPath")
         aid = request.args.get("agentId")
         if not fp or not aid:
@@ -219,11 +183,8 @@ def create_observations_bp(
 
     @bp.route("/agentcache/session/start", methods=["POST"])
     @bp.route("/agentmemory/session/start", methods=["POST"])
+    @require_auth
     def api_session_start():
-        auth_err = _check_auth()
-        if auth_err:
-            return auth_err
-
         import uuid
 
         body = request.get_json(force=True) or {}
@@ -241,10 +202,8 @@ def create_observations_bp(
 
     @bp.route("/agentcache/session/end", methods=["POST"])
     @bp.route("/agentmemory/session/end", methods=["POST"])
+    @require_auth
     def api_session_end():
-        auth_err = _check_auth()
-        if auth_err:
-            return auth_err
         return (
             jsonify({"success": True, "message": "Session model is now folder-based."}),
             200,
@@ -252,10 +211,8 @@ def create_observations_bp(
 
     @bp.route("/agentcache/folder/dedup", methods=["POST"])
     @bp.route("/agentmemory/folder/dedup", methods=["POST"])
+    @require_auth
     def api_folder_dedup():
-        auth_err = _check_auth()
-        if auth_err:
-            return auth_err
         try:
             body = request.get_json(force=True) or {}
             folder_path = body.get("folderPath") or None
@@ -267,11 +224,8 @@ def create_observations_bp(
 
     @bp.route("/agentcache/observations", methods=["GET"])
     @bp.route("/agentmemory/observations", methods=["GET"])
+    @require_auth
     def api_observations_legacy():
-        auth_err = _check_auth()
-        if auth_err:
-            return auth_err
-
         session_id = request.args.get("sessionId", "")
         if not session_id:
             return jsonify({"observations": [], "sessionId": ""}), 200

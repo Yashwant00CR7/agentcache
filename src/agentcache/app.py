@@ -142,6 +142,7 @@ def create_app() -> Flask:
 
     # 4. Flask app + blueprints
     flask_app = Flask(__name__)
+    flask_app.extensions["kv"] = kv
     flask_app.extensions["observation_store"] = observation_store
     flask_app.extensions["search_service"] = search_service
 

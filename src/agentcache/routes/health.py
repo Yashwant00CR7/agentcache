@@ -14,6 +14,7 @@ from flask import Blueprint, Response, jsonify, request
 
 from .. import legacy as functions
 from ..legacy import query_audit
+from ._deps import get_kv
 from .auth import require_auth
 
 
@@ -21,12 +22,8 @@ def create_health_bp(kv=None, embedding_provider=None):
     """Blueprint factory — receives kv and embedding_provider at registration time."""
     bp = Blueprint("health", __name__)
 
-    def _get_kv():
-        if kv is not None:
-            return kv
-        from .. import app as app_module
-
-        return app_module.kv
+    def _kv():
+        return kv if kv is not None else get_kv()
 
     # ------------------------------------------------------------------
     # GET /auth.md  (no auth required)
@@ -76,7 +73,7 @@ def create_health_bp(kv=None, embedding_provider=None):
     @bp.route("/agentcache/health", methods=["GET"])
     @bp.route("/agentmemory/health", methods=["GET"])
     def health():
-        return jsonify(functions.health_check(_get_kv()))
+        return jsonify(functions.health_check(_kv()))
 
     # ------------------------------------------------------------------
     # GET /agentcache/audit
@@ -88,7 +85,7 @@ def create_health_bp(kv=None, embedding_provider=None):
     def api_audit():
         op = request.args.get("operation")
         limit = int(request.args.get("limit", "50"))
-        res = query_audit(_get_kv(), {"operation": op, "limit": limit})
+        res = query_audit(_kv(), {"operation": op, "limit": limit})
         return jsonify({"entries": res, "success": True}), 200
 
     # ------------------------------------------------------------------

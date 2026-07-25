@@ -12,19 +12,16 @@ from flask import Blueprint, jsonify, request
 
 from .. import legacy as functions
 from ..core import KV
+from ._deps import get_kv
 from .auth import require_auth
 
 
 def create_memories_bp(kv=None):
-    """Blueprint factory — receives kv at registration time."""
+    """Blueprint factory — receives kv at registration time (falls back to get_kv())."""
     bp = Blueprint("memories", __name__)
 
-    def _get_kv():
-        if kv is not None:
-            return kv
-        from .. import app as app_module
-
-        return app_module.kv
+    def _kv():
+        return kv if kv is not None else get_kv()
 
     # ------------------------------------------------------------------
     # POST /agentmemory/remember
@@ -36,7 +33,7 @@ def create_memories_bp(kv=None):
     def api_remember():
         try:
             body = request.get_json(force=True) or {}
-            res = functions.remember(_get_kv(), body)
+            res = functions.remember(_kv(), body)
             return jsonify(res), 201
         except Exception as e:
             return jsonify({"error": str(e)}), 400
@@ -77,7 +74,7 @@ def create_memories_bp(kv=None):
             if agent_id:
                 payload["agentId"] = agent_id
 
-            res = functions.remember(_get_kv(), payload)
+            res = functions.remember(_kv(), payload)
             return jsonify(res), 201
         except Exception as e:
             return jsonify({"error": str(e)}), 400
@@ -92,7 +89,7 @@ def create_memories_bp(kv=None):
     def api_memories_list():
         latest_only = request.args.get("latest", "false").lower() == "true"
         limit = int(request.args.get("limit", "500"))
-        all_mems = _get_kv().list(KV.memories)
+        all_mems = _kv().list(KV.memories)
         if latest_only:
             all_mems = [m for m in all_mems if m.get("isLatest") is not False]
         all_mems.sort(key=lambda m: m.get("createdAt", ""), reverse=True)
@@ -108,7 +105,7 @@ def create_memories_bp(kv=None):
     def api_forget():
         try:
             body = request.get_json(force=True) or {}
-            res = functions.forget(_get_kv(), body)
+            res = functions.forget(_kv(), body)
             return jsonify(res), 200
         except Exception as e:
             return jsonify({"error": str(e)}), 400

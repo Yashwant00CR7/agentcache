@@ -11,19 +11,16 @@ Handles:
 from flask import Blueprint, jsonify, request
 
 from .. import legacy as functions
+from ._deps import get_kv
 from .auth import require_auth
 
 
 def create_graph_bp(kv=None):
-    """Blueprint factory — receives kv at registration time."""
+    """Blueprint factory — receives kv at registration time (falls back to get_kv())."""
     bp = Blueprint("graph", __name__)
 
-    def _get_kv():
-        if kv is not None:
-            return kv
-        from .. import app as app_module
-
-        return app_module.kv
+    def _kv():
+        return kv if kv is not None else get_kv()
 
     # ------------------------------------------------------------------
     # GET /agentcache/graph
@@ -33,7 +30,7 @@ def create_graph_bp(kv=None):
     @bp.route("/agentmemory/graph", methods=["GET"])
     @require_auth
     def api_graph():
-        result = functions.folder_graph_build(_get_kv())
+        result = functions.folder_graph_build(_kv())
         return jsonify(result), 200
 
     # ------------------------------------------------------------------
@@ -44,7 +41,7 @@ def create_graph_bp(kv=None):
     @bp.route("/agentmemory/graph/stats", methods=["GET"])
     @require_auth
     def api_graph_stats():
-        g = functions.folder_graph_build(_get_kv())
+        g = functions.folder_graph_build(_kv())
         node_count = len(g.get("nodes", []))
         edge_count = len(g.get("edges", []))
         return jsonify({"nodes": node_count, "edges": edge_count, "success": True}), 200
@@ -59,7 +56,6 @@ def create_graph_bp(kv=None):
     def api_graph_query():
         try:
             request.get_json(force=True) or {}
-            # start_node_id = body.get("startNodeId")  # reserved for future use
             return jsonify({"nodes": [], "edges": [], "success": True}), 200
         except Exception as e:
             return jsonify({"error": str(e)}), 400
@@ -74,7 +70,7 @@ def create_graph_bp(kv=None):
     def api_graph_build():
         try:
             if functions.is_consolidation_enabled():
-                functions.consolidate(_get_kv())
+                functions.consolidate(_kv())
             return jsonify({"success": True}), 200
         except Exception as e:
             return jsonify({"error": str(e)}), 400
