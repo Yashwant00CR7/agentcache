@@ -7,7 +7,7 @@ if (-not (Test-Path $venvDir)) {
 }
 
 Write-Host "Installing dependencies..."
-& "$venvDir\Scripts\pip.exe" install -r requirements.txt
+& "$venvDir\Scripts\pip.exe" install -r requirements-dev.txt
 
 Write-Host ""
 Write-Host "Done. Activate with:"
