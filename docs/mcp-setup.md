@@ -33,7 +33,7 @@ Environment variables the connect command reads:
 | Codex CLI | `agentcache connect codex` | `~/.codex/config.toml` |
 | Antigravity | `agentcache connect antigravity` | `~/Library/Application Support/Antigravity/User/mcp_config.json` (macOS), `%APPDATA%\Antigravity\User\mcp_config.json` (Windows), `~/.config/Antigravity/User/mcp_config.json` (Linux); also drops tool schemas under `~/.gemini/antigravity/mcp/agentcache/` |
 | Kiro | `agentcache connect kiro` | `~/.kiro/settings/mcp.json` |
-| VS Code | `agentcache connect vscode` | `~/Library/Application Support/Code/User/mcp.json` (macOS), `%APPDATA%\Code\User\mcp.json` (Windows), `~/.config/Code/User/mcp.json` (Linux) |
+| VS Code | `agentcache connect vscode` | `.vscode/mcp.json` when run inside a VS Code workspace; otherwise `~/Library/Application Support/Code/User/mcp.json` (macOS), `%APPDATA%\Code\User\mcp.json` (Windows), `~/.config/Code/User/mcp.json` (Linux) |
 | Hermes Agent | `agentcache connect hermes` | copies plugin to `~/.hermes/plugins/agentcache/` (add `memory: { provider: agentcache }` to `~/.hermes/config.yaml`) |
 | Cursor / Cline / Windsurf | `agentcache connect cursor` | writes `.cursorrules` / `.clineskills` / `.windsurfrules` in the current workspace |
 | All detected clients | `agentcache connect --all` | wires every client whose config directory is present |
