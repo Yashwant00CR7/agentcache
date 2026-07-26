@@ -61,6 +61,7 @@ where = ["src"]
 include = ["agentcache*"]
 
 [tool.setuptools.package-data]
+"agentcache" = ["py.typed"]
 "agentcache.viewer" = ["*.html", "*.svg", "*.js", "*.css"]
 
 [tool.pytest.ini_options]
