@@ -160,8 +160,8 @@ By configuring PyPI OIDC Trusted Publishing, we authorize our GitHub Actions rep
 1. Log in to [pypi.org](https://pypi.org/).
 2. Navigate to **Account Settings** $\to$ **Publishing**.
 3. Create a **GitHub publisher**:
-   - **Repository Owner:** `Yash030`
-   - **Repository Name:** `agentcache-python`
+   - **Repository Owner:** `Yashwant00CR7`
+   - **Repository Name:** `agentcache`
    - **Workflow Name:** `automation.yml` (matching the GHA file)
    - **Environment Name:** (Leave empty)
 

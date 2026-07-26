@@ -1,130 +1,103 @@
-<p align="center">
-  <img src="../../assets/banner.png" alt="agentmemory" width="640" />
-</p>
+# agentcache for Hermes Agent
 
-<h1 align="center">
-  <img src="https://github.com/NousResearch.png?size=80" alt="Hermes Agent" width="28" height="28" align="center" />
-  &nbsp;agentmemory for Hermes Agent
-</h1>
+A memory provider plugin that lets [Hermes Agent](https://github.com/NousResearch) remember work across sessions by delegating to a locally running [agentcache](https://github.com/Yashwant00CR7/agentcache) server — REST + WebSocket + MCP, backed by SQLite.
 
-<p align="center">
-  <strong>Your Hermes agent remembers everything. No more re-explaining.</strong><br/>
-  <sub>Persistent cross-session memory via <a href="https://github.com/rohitg00/agentmemory">agentmemory</a> — 95.2% retrieval accuracy on <a href="https://arxiv.org/abs/2410.10813">LongMemEval-S</a>. Cross-agent shared with Claude Code, Cursor, OpenCode, and more.</sub>
-</p>
+Hermes ships with `MEMORY.md`/`USER.md` and SQLite FTS. This plugin adds structured observations, folder-scoped project profiles, hybrid BM25 + vector search, and six lifecycle hooks that wire memory in *around* every turn, not just alongside it.
 
-<p align="center">
-  <img src="https://img.shields.io/badge/MCP-43_tools-1f6feb?style=flat-square" alt="43 MCP tools" />
-  <img src="https://img.shields.io/badge/Hooks-6_lifecycle-1f6feb?style=flat-square" alt="6 lifecycle hooks" />
-  <img src="https://img.shields.io/badge/R@5-95.2%25-00875f?style=flat-square" alt="95.2% R@5" />
-  <img src="https://img.shields.io/badge/Self--hosted-yes-00875f?style=flat-square" alt="Self-hosted" />
-  <img src="https://img.shields.io/badge/License-Apache_2.0-blue?style=flat-square" alt="Apache 2.0" />
-</p>
+- **Provider name:** `agentcache`
+- **Transport:** HTTP against `AGENTCACHE_URL` (default `http://localhost:3111`)
+- **Hooks:** `prefetch`, `sync_turn`, `on_session_end`, `on_pre_compress`, `on_memory_write`, `system_prompt_block`
 
 ---
 
-## Install it in 30 seconds
+## Install
 
-**Paste this prompt into Hermes** and it does the whole setup for you:
+**1. Install and start agentcache** (Python 3.10+):
 
-```text
-Install agentmemory for Hermes. Run `npx @agentmemory/agentmemory` in a
-separate terminal to start the memory server on localhost:3111. Then
-add this to `~/.hermes/config.yaml` so Hermes can use agentmemory as
-an MCP server with all 43 memory tools:
-
-mcp_servers:
-  agentmemory:
-    command: npx
-    args: ["-y", "@agentmemory/mcp"]
-
-memory:
-  provider: agentmemory
-
-Verify it's working with
-`curl http://localhost:3111/agentmemory/health` — it should return
-{"status":"healthy"}. Open the real-time viewer at
-http://localhost:3113 to watch memories being captured live.
-
-If I want deeper integration — pre-LLM context injection, turn-level
-capture, memory-write mirroring to MEMORY.md, and system prompt block
-injection — copy `integrations/hermes` from the agentmemory repo to
-`~/.hermes/plugins/agentmemory` instead. That gives me the
-6-hook memory provider plugin on top of the MCP server.
+```bash
+pip install agentcache
+agentcache serve --port 3111
 ```
 
-That's it. Hermes handles the rest.
+Health check: `curl http://localhost:3111/agentcache/health` should return a JSON payload with `"version": "0.9.9"`.
 
-## Quick setup
+**2. Drop this plugin into Hermes:**
 
-### Option 1: MCP server (zero code)
+```bash
+cp -r integrations/hermes ~/.hermes/plugins/agentcache
+```
 
-Add to `~/.hermes/config.yaml`:
+**3. Wire it in `~/.hermes/config.yaml`:**
+
+```yaml
+memory:
+  provider: agentcache
+```
+
+Restart Hermes. `hermes memory status` should now list `agentcache` as available.
+
+---
+
+## Configuration
+
+Environment variables (read at plugin import; anything you set in the shell wins):
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `AGENTCACHE_URL` | `http://localhost:3111` | agentcache server URL. |
+| `AGENTCACHE_SECRET` | (unset) | Bearer token sent as `Authorization: Bearer …`. Must match `AGENTCACHE_SECRET` on the server. |
+| `AGENTCACHE_REQUIRE_HTTPS` | (unset) | When `1`, refuse to send the secret over plaintext HTTP to a non-loopback host. With it off, the plugin still sends but prints a one-time warning on stderr. |
+
+The plugin also preloads `~/.agentcache/.env` (or `$XDG_CONFIG_HOME/agentcache/.env`) via `os.environ.setdefault`, so `hermes memory status` still resolves the URL/secret when agentcache is launched by systemd or another process manager that never exports those values to the CLI shell.
+
+---
+
+## What each hook does
+
+| Hook | Endpoint hit | Effect |
+|---|---|---|
+| `system_prompt_block()` | `POST /agentcache/context` | Injects the project profile block at session start |
+| `prefetch(query)` | `POST /agentcache/smart-search` | Returns up to 5 relevant observations before the LLM call |
+| `queue_prefetch(query)` | *(background)* | Warms the cache without blocking the turn |
+| `sync_turn(user, assistant)` | `POST /agentcache/observe` | Fires-and-forgets every conversation turn as an observation |
+| `on_pre_compress(messages)` | `POST /agentcache/context` | Re-injects context immediately before Hermes compacts history |
+| `on_session_end(messages)` | `POST /agentcache/session/end` | Marks the session complete so background workers can summarise |
+| `on_memory_write(action, …)` | `POST /agentcache/remember` | Mirrors `MEMORY.md` add/update writes into agentcache as memories |
+
+## Tools exposed to the LLM
+
+`memory_recall(query, limit=10)` — keyword search over observations.
+`memory_save(content, type)` — persist an insight; `type ∈ {pattern, preference, architecture, bug, workflow, fact}`.
+`memory_search(query, limit=5)` — hybrid BM25 + vector search across all memories.
+
+All tool return values are JSON-encoded strings so Anthropic-protocol providers accept them as tool results.
+
+---
+
+## Alternative: MCP stdio instead of this plugin
+
+If you'd rather skip the plugin layer, agentcache ships an MCP stdio bridge. Add to `~/.hermes/config.yaml`:
 
 ```yaml
 mcp_servers:
-  agentmemory:
-    command: npx
-    args: ["-y", "@agentmemory/mcp"]
-
-memory:
-  provider: agentmemory
+  agentcache:
+    command: python
+    args: ["-m", "agentcache.mcp_stdio"]
 ```
 
-This gives Hermes access to all 43 MCP tools and enables the agentmemory memory provider. Start the server separately:
+You lose the six lifecycle hooks but keep the tool surface. The plugin form is stronger because it wires memory into the turn loop, not just into a tool namespace.
 
-```bash
-npx @agentmemory/agentmemory
-```
+---
 
-### Option 2: Memory provider plugin (deeper integration)
+## Troubleshooting
 
-Copy this folder to your Hermes plugins directory:
+- **`hermes memory status` shows Missing** — check `curl $AGENTCACHE_URL/agentcache/health`; if that works, the plugin isn't finding its config. Confirm `~/.agentcache/.env` is readable, or export `AGENTCACHE_URL` in the shell that launches Hermes.
+- **401/403 on every call** — server has `AGENTCACHE_SECRET` set but the plugin doesn't; export a matching `AGENTCACHE_SECRET` in Hermes' environment.
+- **Warned about plaintext bearer auth** — you're sending the secret over plain HTTP to a non-loopback host. Either terminate TLS in front of agentcache, tunnel over SSH, or unset the secret when talking to trusted local infrastructure.
+- **Turns not being captured** — `sync_turn` is fire-and-forget; a dead server won't error the turn. Tail agentcache's stdout to confirm `/agentcache/observe` is receiving traffic.
 
-```bash
-cp -r integrations/hermes ~/.hermes/plugins/agentmemory
-```
+---
 
-Start the agentmemory server:
+## Maintainer & License
 
-```bash
-npx @agentmemory/agentmemory
-```
-
-The plugin auto-detects the running server and hooks into the Hermes agent loop. Make sure `memory.provider` is set to `agentmemory` in `~/.hermes/config.yaml`:
-
-- `prefetch()` injects relevant memories before each LLM call
-- `sync_turn()` captures every conversation turn in the background
-- `on_session_end()` marks sessions complete for summarization
-- `on_pre_compress()` re-injects context before compaction
-- `on_memory_write()` mirrors MEMORY.md writes to agentmemory
-- `system_prompt_block()` injects project profile at session start
-
-### Environment variables
-
-| Variable | Default | Description |
-|---|---|---|
-| `AGENTMEMORY_URL` | `http://localhost:3111` | agentmemory server URL |
-| `AGENTMEMORY_SECRET` | (none) | Auth token for protected instances |
-| `AGENTMEMORY_REQUIRE_HTTPS` | (off) | When set to `1`, refuse to send the bearer token over plaintext HTTP to a non-loopback host. Sends only when `AGENTMEMORY_URL` is `https://...` or points at `localhost`/`127.0.0.1`/`::1`. With this off, the plugin warns once on stderr but still sends. |
-
-The plugin reads `~/.agentmemory/.env` (or `$XDG_CONFIG_HOME/agentmemory/.env`) at import time and populates any missing values into the process environment via `os.environ.setdefault`. Anything you set in the shell takes precedence; the file is only used to fill gaps. This means `hermes memory status` reports the plugin as available even when the agentmemory service is launched by systemd or another process manager that loads `~/.agentmemory/.env` directly without exporting it to the Hermes CLI shell (#250).
-
-## What Hermes gets
-
-- 95.2% retrieval accuracy (LongMemEval-S, ICLR 2025)
-- Hybrid search: BM25 + vector + knowledge graph
-- Memory versioning, decay, and auto-forget
-- Cross-agent: memories from Claude Code, Cursor, Gemini CLI all accessible
-- Real-time viewer at http://localhost:3113
-
-## How it works
-
-Hermes has two memory files (MEMORY.md, USER.md) and SQLite full-text search. agentmemory adds structured memory on top:
-
-| Hermes built-in | agentmemory adds |
-|---|---|
-| MEMORY.md (flat text) | Structured observations with facts, concepts, files |
-| USER.md (preferences) | Project profiles with top patterns and conventions |
-| SQLite FTS5 (session search) | BM25 + vector + knowledge graph (95.2% R@5) |
-| Skills (self-improving) | Skill extraction from completed sessions |
-| Single agent | Cross-agent memory via MCP + REST |
+Maintained by [Yashwant K](mailto:yashwantk0303@gmail.com). MIT — same as the parent [agentcache](../../LICENSE) project.

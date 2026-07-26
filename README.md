@@ -133,8 +133,8 @@ Details and the ongoing hardening plan live in [`docs/publishing_roadmap.md`](do
 ## Development
 
 ```bash
-git clone https://github.com/Yash030/agentcache-python
-cd agentcache-python
+git clone https://github.com/Yashwant00CR7/agentcache
+cd agentcache
 pip install -e ".[dev,local-embeddings]"
 
 pytest                     # test suite
@@ -148,6 +148,6 @@ twine check dist/*         # validate metadata before upload
 
 ## Links
 
-- **Source:** https://github.com/Yash030/agentcache-python
-- **Issues:** https://github.com/Yash030/agentcache-python/issues
+- **Source:** https://github.com/Yashwant00CR7/agentcache
+- **Issues:** https://github.com/Yashwant00CR7/agentcache/issues
 - **License:** MIT — see [LICENSE](LICENSE)
