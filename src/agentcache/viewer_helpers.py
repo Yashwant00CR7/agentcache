@@ -31,7 +31,7 @@ def make_viewer_response(base_dir: str):
     # via the Authorization header set programmatically after load.
     html = (
         template.replace("__AGENTCACHE_VIEWER_NONCE__", nonce)
-        .replace("__AGENTCACHE_VERSION__", "0.9.10")
+        .replace("__AGENTCACHE_VERSION__", "0.9.11")
         .replace("__AGENTCACHE_AUTO_TOKEN__", "")
     )
 

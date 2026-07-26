@@ -5,6 +5,11 @@ All notable changes to `agentcache` will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.11] — 2026-07-26
+
+### Fixed
+- PyPI upload bumped from 0.9.10 → 0.9.11 to sidestep [file-name-reuse](https://pypi.org/help/#file-name-reuse) after the 0.9.10 wheel was already published.
+
 ## [0.9.10] — 2026-07-26
 
 ### Added
@@ -46,5 +51,6 @@ First PyPI release. Distributed as `agentcache-core` (the bare `agentcache` name
 
 Older 0.9.x builds predate this changelog and were never published to PyPI.
 
+[0.9.11]: https://github.com/Yashwant00CR7/agentcache/releases/tag/v0.9.11
 [0.9.10]: https://github.com/Yashwant00CR7/agentcache/releases/tag/v0.9.10
 [0.9.9]: https://github.com/Yashwant00CR7/agentcache/releases/tag/v0.9.9

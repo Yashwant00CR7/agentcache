@@ -52,7 +52,7 @@ def handle(req):
                 "result": {
                     "protocolVersion": "2024-11-05",
                     "capabilities": {"tools": {}},
-                    "serverInfo": {"name": "agentcache-local", "version": "0.9.10"},
+                    "serverInfo": {"name": "agentcache-local", "version": "0.9.11"},
                 },
             }
         )

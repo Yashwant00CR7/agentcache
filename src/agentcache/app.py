@@ -109,6 +109,12 @@ def init_services() -> tuple:
         kv, search_service=search_service, events=ObservationEvents()
     )
 
+    # Register on the legacy shim so core/* modules (memory_store, llm,
+    # session_store) can reach the same SearchService via `_legacy._search_service`.
+    # Without this, `remember()` and friends silently skip BM25 indexing, and
+    # newly-saved memories become unsearchable until the next full rebuild.
+    legacy.set_search_service(search_service)
+
     # Load persisted indexes.
     loaded = search_service.load_persisted()
     print(
