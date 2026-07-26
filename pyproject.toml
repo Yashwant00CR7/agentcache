@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "agentcache"
-version = "0.9.8"
+version = "0.9.9"
 description = "A Python REST + WebSocket + MCP cache server for AI agents, backed by SQLite"
 readme = { file = "README.md", content-type = "text/markdown" }
 authors = [
