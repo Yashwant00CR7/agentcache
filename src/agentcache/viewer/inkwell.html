@@ -1,0 +1,1709 @@
+<!DOCTYPE html>
+<!--
+  Inkwell — alternate viewer theme (dark whiteboard aesthetic).
+  Served at /inkwell alongside the classic viewer at /. Shares the same
+  API surface (folders / memories / graph / timeline / tools) via
+  same-origin fetches to /agentcache/*. Auth token can be entered in the
+  ⚙ settings drawer; falls back to sample data when no server is reachable
+  so the visual identity remains legible on cold open.
+-->
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>agentcache · inkwell</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@400;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #0b0b0d;
+      --bg-elev: #131418;
+      --bg-elev-2: #17181c;
+      --bg-inset: #1a1b21;
+      --bg-toolbar: rgba(255,255,255,0.02);
+      --border: #23252b;
+      --border-soft: #1e1f24;
+      --border-strong: #2f3138;
+      --ink: #f2f2f4;
+      --ink-2: #dcdde1;
+      --ink-3: #a8abb2;
+      --ink-4: #6b6e77;
+      --ink-5: #5f6169;
+      --pink: #ff6ea3;
+      --blue: #5fa8ff;
+      --purple: #a78bfa;
+      --green: #4ade80;
+      --orange: #f0b64e;
+      --red: #ef4d76;
+      --cyan: #6ee7f7;
+      --yellow: #ffd166;
+      --font-hand: 'Caveat', ui-serif, Georgia, serif;
+      --font-ui: 'Inter', -apple-system, system-ui, sans-serif;
+      --font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Consolas, monospace;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { height: 100%; }
+    body {
+      font-family: var(--font-ui);
+      background:
+        radial-gradient(circle at 1px 1px, rgba(255,255,255,0.045) 1px, transparent 0) 0 0/18px 18px,
+        var(--bg);
+      color: var(--ink-2);
+      line-height: 1.55;
+      overflow: hidden;
+      display: flex; flex-direction: column;
+    }
+
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--ink-5); }
+
+    a { color: var(--blue); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    code { font-family: var(--font-mono); font-size: 0.9em; background: var(--bg-inset); padding: 1px 6px; border-radius: 4px; color: var(--ink-2); }
+    pre { font-family: var(--font-mono); font-size: 12px; background: var(--bg-inset); padding: 12px 14px; border-radius: 8px; color: var(--ink-2); overflow-x: auto; line-height: 1.5; }
+    input, select, textarea, button { font-family: inherit; color: inherit; }
+
+    /* ============ HEADER ============ */
+    .app-header {
+      padding: 12px 24px;
+      border-bottom: 1px solid var(--border-soft);
+      display: flex; align-items: center; gap: 14px;
+      background: var(--bg);
+      flex: 0 0 auto;
+      z-index: 5;
+    }
+    .brand { display: flex; align-items: baseline; gap: 10px; }
+    .brand h1 {
+      font-family: var(--font-hand); font-size: 34px; font-weight: 700;
+      color: var(--ink); letter-spacing: -0.01em; line-height: 1;
+    }
+    .brand .ver {
+      font-family: var(--font-mono); font-size: 10px; color: var(--ink-5);
+      letter-spacing: 0.14em; text-transform: uppercase;
+    }
+    .grow { flex: 1; }
+    .ws-status {
+      display: inline-flex; align-items: center; gap: 6px;
+      font-family: var(--font-mono); font-size: 10px; color: var(--ink-3);
+      letter-spacing: 0.12em; text-transform: uppercase;
+      padding: 4px 10px; border-radius: 999px; background: var(--bg-elev);
+      border: 1px solid var(--border-soft);
+    }
+    .ws-status::before {
+      content: ''; width: 6px; height: 6px; border-radius: 50%;
+      background: var(--green); box-shadow: 0 0 8px var(--green);
+    }
+    .ws-status.off::before { background: var(--ink-5); box-shadow: none; }
+    .ws-status.err::before { background: var(--red); box-shadow: 0 0 8px var(--red); }
+
+    .icon-btn {
+      background: var(--bg-elev); color: var(--ink-2);
+      border: 1px solid var(--border-soft); cursor: pointer;
+      padding: 6px 12px; border-radius: 999px; font-size: 11px;
+      display: inline-flex; align-items: center; gap: 6px;
+    }
+    .icon-btn:hover { border-color: var(--border-strong); color: var(--ink); }
+
+    /* ============ SETTINGS DRAWER ============ */
+    .settings {
+      display: none;
+      padding: 14px 24px;
+      background: var(--bg-elev);
+      border-bottom: 1px solid var(--border-soft);
+      flex: 0 0 auto;
+      align-items: center; gap: 10px; flex-wrap: wrap;
+    }
+    .settings.open { display: flex; }
+    .settings label {
+      font-family: var(--font-mono); font-size: 10px; color: var(--ink-4);
+      letter-spacing: 0.1em; text-transform: uppercase;
+    }
+    .settings input {
+      background: var(--bg); border: 1px solid var(--border);
+      padding: 7px 11px; border-radius: 8px; color: var(--ink);
+      font-family: var(--font-mono); font-size: 12px; min-width: 220px;
+      outline: none;
+    }
+    .settings input:focus { border-color: var(--blue); }
+    .settings .ping-out {
+      font-family: var(--font-mono); font-size: 11px; color: var(--ink-4);
+      padding: 4px 10px; border-radius: 999px; border: 1px solid var(--border-soft);
+    }
+    .settings .ping-out.ok { color: var(--green); border-color: rgba(74,222,128,0.3); }
+    .settings .ping-out.err { color: var(--red); border-color: rgba(239,77,118,0.3); }
+
+    /* ============ TABS ============ */
+    .tabs {
+      padding: 14px 24px 0;
+      display: flex; gap: 6px; flex: 0 0 auto;
+      background: var(--bg);
+      border-bottom: 1px solid var(--border-soft);
+    }
+    .tabs button {
+      background: transparent; border: 1px solid transparent; color: var(--ink-3);
+      cursor: pointer; padding: 7px 16px; border-radius: 999px 999px 0 0;
+      font-family: var(--font-ui); font-size: 12px; font-weight: 500;
+      position: relative; margin-bottom: -1px;
+    }
+    .tabs button:hover { color: var(--ink); }
+    .tabs button.on {
+      color: var(--ink); background: var(--bg-elev);
+      border-color: var(--border-soft); border-bottom-color: var(--bg-elev);
+    }
+
+    /* ============ MAIN SCROLL AREA ============ */
+    .main { flex: 1; overflow: auto; padding: 22px 24px 60px; position: relative; }
+    .view { display: none; }
+    .view.active { display: block; }
+
+    /* ============ SECTION HEADS ============ */
+    h2.section {
+      font-family: var(--font-hand); font-size: 26px; color: var(--ink); font-weight: 700;
+      margin: 4px 0 14px; letter-spacing: -0.01em;
+      display: flex; align-items: baseline; gap: 12px;
+    }
+    h2.section .count {
+      font-family: var(--font-mono); font-size: 10px; color: var(--ink-5);
+      letter-spacing: 0.12em; text-transform: uppercase; font-weight: 500;
+    }
+    .info-card {
+      padding: 12px 14px; background: var(--bg-elev);
+      border: 1px solid var(--border-soft); border-radius: 10px;
+      font-size: 13px; color: var(--ink-3); line-height: 1.55;
+      margin-bottom: 14px;
+    }
+    .info-card strong { color: var(--ink-2); }
+    .info-card .muted { color: var(--ink-5); }
+
+    /* ============ TOOLBAR / INPUTS ============ */
+    .toolbar {
+      display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; align-items: center;
+    }
+    .toolbar input[type="text"], .toolbar input[type="search"], .toolbar select {
+      background: var(--bg-elev); border: 1px solid var(--border);
+      padding: 8px 12px; border-radius: 10px; color: var(--ink);
+      font-family: var(--font-ui); font-size: 13px; outline: none;
+    }
+    .toolbar input[type="text"]:focus, .toolbar input[type="search"]:focus, .toolbar select:focus { border-color: var(--blue); }
+    .toolbar input[type="text"]::placeholder { color: var(--ink-5); }
+    .toolbar .count { font-size: 11px; color: var(--ink-4); font-family: var(--font-mono); margin-left: auto; }
+
+    /* ============ BUTTONS ============ */
+    .btn {
+      background: var(--bg-elev); border: 1px solid var(--border);
+      color: var(--ink-2); cursor: pointer;
+      padding: 6px 14px; border-radius: 999px;
+      font-family: var(--font-ui); font-size: 12px; font-weight: 500;
+    }
+    .btn:hover { border-color: var(--border-strong); color: var(--ink); }
+    .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .btn.primary {
+      background: var(--ink); color: #0b0b0d; border-color: transparent;
+    }
+    .btn.primary:hover { color: #0b0b0d; }
+    .btn.danger {
+      color: var(--red); border-color: rgba(239,77,118,0.35);
+    }
+    .btn.danger:hover { background: rgba(239,77,118,0.08); border-color: var(--red); }
+    .btn.small { padding: 4px 10px; font-size: 11px; }
+
+    /* ============ TABLES ============ */
+    table.data {
+      width: 100%; border-collapse: separate; border-spacing: 0;
+      background: var(--bg-elev); border: 1px solid var(--border-soft); border-radius: 12px;
+      overflow: hidden;
+    }
+    table.data th {
+      text-align: left; padding: 10px 14px;
+      font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase;
+      color: var(--ink-4); background: var(--bg-elev-2); border-bottom: 1px solid var(--border-soft);
+      font-weight: 600;
+    }
+    table.data td {
+      padding: 12px 14px; border-bottom: 1px solid var(--border-soft);
+      font-size: 13px; color: var(--ink-2); vertical-align: middle;
+    }
+    table.data tr:last-child td { border-bottom: 0; }
+    table.data tr.clickable { cursor: pointer; transition: background .12s ease; }
+    table.data tr.clickable:hover { background: var(--bg-elev-2); }
+    table.data td.mono { font-family: var(--font-mono); font-size: 12px; }
+    table.data td.right { text-align: right; }
+
+    /* ============ CHIPS / TAGS / BADGES ============ */
+    .chip {
+      display: inline-flex; align-items: center; gap: 4px;
+      font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.06em;
+      padding: 2px 8px; border-radius: 999px;
+      background: rgba(255,255,255,0.04); color: var(--ink-3);
+      border: 1px solid rgba(255,255,255,0.06);
+    }
+    .agent-chip {
+      font-family: var(--font-mono); font-size: 10px;
+      background: var(--bg-inset); color: var(--ink-2);
+      padding: 2px 8px; border-radius: 4px; letter-spacing: 0.04em;
+    }
+    .type-badge {
+      font-family: var(--font-mono); font-size: 9px; font-weight: 700;
+      letter-spacing: 0.12em; text-transform: uppercase;
+      padding: 3px 8px; border-radius: 999px;
+      background: rgba(255,255,255,0.04); color: var(--ink-3);
+      border: 1px solid rgba(255,255,255,0.06);
+    }
+    .type-badge.file_edit, .type-badge.file_write, .type-badge.architecture { color: var(--blue); border-color: rgba(95,168,255,0.3); background: rgba(95,168,255,0.06); }
+    .type-badge.file_read, .type-badge.fact { color: var(--cyan); border-color: rgba(110,231,247,0.3); background: rgba(110,231,247,0.06); }
+    .type-badge.command_run, .type-badge.preference { color: var(--orange); border-color: rgba(240,182,78,0.3); background: rgba(240,182,78,0.06); }
+    .type-badge.search, .type-badge.lesson { color: var(--green); border-color: rgba(74,222,128,0.3); background: rgba(74,222,128,0.06); }
+    .type-badge.error { color: var(--red); border-color: rgba(239,77,118,0.3); background: rgba(239,77,118,0.06); }
+    .type-badge.conversation, .type-badge.convention { color: var(--purple); border-color: rgba(167,139,250,0.3); background: rgba(167,139,250,0.06); }
+    .type-badge.subagent { color: var(--yellow); border-color: rgba(255,209,102,0.3); background: rgba(255,209,102,0.06); }
+    .type-badge.decision { color: var(--pink); border-color: rgba(255,110,163,0.3); background: rgba(255,110,163,0.06); }
+
+    .tag {
+      font-family: var(--font-mono); font-size: 10px;
+      padding: 1px 7px; border-radius: 999px;
+      background: transparent; color: var(--ink-4);
+      border: 1px solid var(--border);
+    }
+    .tag::before { content: '#'; margin-right: 1px; color: var(--ink-5); }
+
+    .strength-bar {
+      display: inline-block; width: 90px; height: 6px;
+      background: var(--bg-inset); border-radius: 999px; overflow: hidden;
+      vertical-align: middle; margin-right: 6px;
+    }
+    .strength-bar .fill { height: 100%; border-radius: 999px; }
+
+    mark {
+      background: rgba(255,209,102,0.22); color: var(--yellow);
+      padding: 0 2px; border-radius: 3px;
+    }
+
+    /* ============ EMPTY STATE ============ */
+    .empty-state {
+      text-align: center; padding: 60px 20px;
+      max-width: 520px; margin: 40px auto;
+      background: var(--bg-elev); border: 1px dashed var(--border);
+      border-radius: 16px;
+    }
+    .empty-state .icon {
+      font-family: var(--font-hand); font-size: 56px; color: var(--ink-4);
+      margin-bottom: 8px; line-height: 1;
+    }
+    .empty-state .title {
+      font-family: var(--font-hand); font-size: 30px; color: var(--ink);
+      margin-bottom: 8px;
+    }
+    .empty-state .lead {
+      font-size: 13.5px; color: var(--ink-3); line-height: 1.6;
+      margin-bottom: 14px;
+    }
+    .empty-state pre { text-align: left; margin: 0 auto 14px; max-width: 400px; }
+    .empty-state a { font-size: 13px; }
+
+    /* ============ SKELETON ============ */
+    @keyframes shimmer { 0% { background-position: -200px 0; } 100% { background-position: 200px 0; } }
+    .skel {
+      background: var(--bg-elev);
+      background-image: linear-gradient(90deg, transparent 0, rgba(255,255,255,0.04) 40px, transparent 80px);
+      background-size: 200px 100%; background-repeat: no-repeat;
+      animation: shimmer 1.4s linear infinite;
+      border: 1px solid var(--border-soft); border-radius: 10px;
+    }
+    .skel-row { height: 42px; margin-bottom: 8px; }
+    .skel-card { height: 74px; margin-bottom: 10px; }
+    .skel-h { height: 24px; width: 40%; margin-bottom: 14px; }
+
+    /* ============ ERROR BLOCK ============ */
+    .error-block {
+      padding: 14px 16px; border-radius: 12px;
+      background: rgba(239,77,118,0.04); border: 1px solid rgba(239,77,118,0.25);
+      color: var(--ink-2); font-size: 13px; line-height: 1.55;
+    }
+    .error-block .head {
+      display: flex; align-items: center; gap: 8px;
+      font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase;
+      color: var(--red); margin-bottom: 6px;
+    }
+    .error-block code { background: rgba(239,77,118,0.06); color: var(--ink-2); }
+
+    /* ============ MODAL ============ */
+    .modal-overlay {
+      display: none;
+      position: fixed; inset: 0; background: rgba(0,0,0,0.6);
+      z-index: 40; align-items: center; justify-content: center;
+      backdrop-filter: blur(4px);
+    }
+    .modal-overlay.open { display: flex; }
+    .modal {
+      background: var(--bg-elev); border: 1px solid var(--border);
+      border-radius: 16px; padding: 22px 24px 20px;
+      max-width: 460px; width: 90%; box-shadow: 0 24px 80px rgba(0,0,0,0.6);
+    }
+    .modal h3 {
+      font-family: var(--font-hand); font-size: 26px; font-weight: 700; color: var(--ink);
+      margin-bottom: 10px; letter-spacing: -0.01em;
+    }
+    .modal p { font-size: 13.5px; color: var(--ink-3); line-height: 1.6; margin-bottom: 16px; }
+    .modal .actions { display: flex; gap: 8px; justify-content: flex-end; }
+
+    /* ============ OBSERVATION / MEMORY CARDS ============ */
+    .obs-card {
+      display: flex; gap: 12px; align-items: flex-start;
+      padding: 14px 16px;
+      background: var(--bg-elev); border: 1px solid var(--border-soft);
+      border-radius: 12px; margin-bottom: 8px;
+      transition: border-color .12s ease, transform .12s ease;
+    }
+    .obs-card:hover { border-color: var(--border-strong); }
+    .obs-card input[type="checkbox"] { accent-color: var(--blue); margin-top: 3px; }
+    .obs-card .body { flex: 1; min-width: 0; }
+    .obs-card .head {
+      display: flex; align-items: center; gap: 8px; margin-bottom: 6px; flex-wrap: wrap;
+    }
+    .obs-card .ts { font-family: var(--font-mono); font-size: 10px; color: var(--ink-4); letter-spacing: 0.06em; }
+    .obs-card .path { font-family: var(--font-mono); font-size: 10px; color: var(--ink-4); }
+    .obs-card .title { font-weight: 600; font-size: 13.5px; color: var(--ink); margin-bottom: 3px; }
+    .obs-card .text {
+      font-size: 12.5px; color: var(--ink-3); line-height: 1.55; white-space: pre-wrap; word-break: break-word;
+      max-height: 90px; overflow: hidden;
+    }
+
+    .drill-header {
+      display: flex; align-items: center; gap: 12px; margin-bottom: 16px; flex-wrap: wrap;
+    }
+    .drill-header .path { font-family: var(--font-mono); font-size: 13px; color: var(--ink); }
+    .drill-header .count { font-size: 12px; color: var(--ink-4); font-family: var(--font-mono); }
+    .drill-header .grow { flex: 1; }
+
+    .bulk-bar {
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px 14px; margin-bottom: 14px;
+      background: var(--bg-toolbar); border: 1px solid var(--border-soft); border-radius: 10px;
+    }
+    .bulk-bar label {
+      display: flex; align-items: center; gap: 6px;
+      font-family: var(--font-ui); font-size: 12px; color: var(--ink-3);
+      cursor: pointer;
+    }
+
+    /* ============ GRAPH ============ */
+    .graph-wrap {
+      display: grid;
+      grid-template-columns: 1fr 260px;
+      gap: 14px;
+      height: calc(100vh - 260px);
+      min-height: 480px;
+    }
+    .graph-canvas-wrap {
+      position: relative;
+      background: var(--bg-elev); border: 1px solid var(--border-soft);
+      border-radius: 14px;
+      overflow: hidden;
+    }
+    .graph-canvas-wrap canvas { display: block; width: 100%; height: 100%; cursor: grab; }
+    .graph-canvas-wrap canvas:active { cursor: grabbing; }
+    .graph-controls {
+      position: absolute; bottom: 14px; right: 14px;
+      display: flex; flex-direction: column; gap: 4px; z-index: 3;
+    }
+    .graph-controls button {
+      width: 34px; height: 34px; border-radius: 8px;
+      background: rgba(23,24,28,0.85); backdrop-filter: blur(8px);
+      border: 1px solid var(--border-soft); color: var(--ink-2);
+      cursor: pointer; font-size: 16px;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .graph-controls button:hover { background: var(--bg-elev-2); border-color: var(--border); color: var(--ink); }
+    .graph-tooltip {
+      position: absolute; pointer-events: none; z-index: 4;
+      background: rgba(23,24,28,0.95); border: 1px solid var(--border);
+      color: var(--ink); font-family: var(--font-mono); font-size: 11px;
+      padding: 6px 10px; border-radius: 8px;
+      display: none; box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+    }
+    .graph-tooltip.show { display: block; }
+    .graph-sidebar {
+      background: var(--bg-elev); border: 1px solid var(--border-soft);
+      border-radius: 14px; padding: 14px 14px 16px;
+      overflow: auto; display: flex; flex-direction: column; gap: 12px;
+    }
+    .graph-sidebar h3 {
+      font-family: var(--font-mono); font-size: 10px; color: var(--ink-4);
+      letter-spacing: 0.14em; text-transform: uppercase; font-weight: 600;
+      margin-bottom: 6px;
+    }
+    .graph-sidebar input.search {
+      background: var(--bg); border: 1px solid var(--border);
+      padding: 7px 11px; border-radius: 8px; color: var(--ink);
+      font-family: var(--font-ui); font-size: 12px; outline: none; width: 100%;
+    }
+    .graph-sidebar input.search:focus { border-color: var(--blue); }
+    .stats-grid {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
+    }
+    .stat {
+      background: var(--bg); border: 1px solid var(--border-soft); border-radius: 10px;
+      padding: 10px; text-align: center;
+    }
+    .stat .n {
+      font-family: var(--font-hand); font-size: 34px; font-weight: 700; color: var(--ink); line-height: 1;
+    }
+    .stat .l {
+      font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.14em;
+      text-transform: uppercase; color: var(--ink-5); margin-top: 4px;
+    }
+    .filter-item {
+      display: flex; align-items: center; gap: 8px;
+      font-size: 12px; color: var(--ink-2); cursor: pointer;
+      padding: 3px 0;
+    }
+    .filter-item input[type="checkbox"] { accent-color: var(--blue); }
+    .filter-dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; }
+    .legend {
+      display: flex; flex-direction: column; gap: 4px;
+      font-size: 11px; color: var(--ink-3);
+    }
+    .legend .row { display: flex; align-items: center; gap: 8px; }
+    .legend .shape { color: var(--ink-2); font-size: 14px; line-height: 1; }
+    .node-panel {
+      background: var(--bg); border: 1px solid var(--border-soft); border-radius: 10px;
+      padding: 10px 12px; font-size: 12px;
+    }
+    .node-panel .n { font-family: var(--font-mono); font-size: 12px; color: var(--ink); margin-bottom: 4px; }
+    .node-panel .meta { font-size: 10px; color: var(--ink-4); font-family: var(--font-mono); }
+
+    /* ============ TOOLS ============ */
+    .tools-grid {
+      display: grid; grid-template-columns: 300px 1fr; gap: 14px;
+      min-height: 480px;
+    }
+    .tools-list {
+      background: var(--bg-elev); border: 1px solid var(--border-soft);
+      border-radius: 14px; overflow: hidden;
+      display: flex; flex-direction: column;
+    }
+    .tool-row {
+      padding: 10px 14px; border-bottom: 1px solid var(--border-soft);
+      cursor: pointer; transition: background .1s ease;
+    }
+    .tool-row:last-child { border-bottom: 0; }
+    .tool-row:hover { background: var(--bg-elev-2); }
+    .tool-row.on { background: var(--bg-elev-2); box-shadow: inset 3px 0 0 var(--blue); }
+    .tool-row .name {
+      font-family: var(--font-mono); font-size: 12px; font-weight: 600; color: var(--ink);
+      margin-bottom: 3px;
+    }
+    .tool-row .desc { font-size: 11.5px; color: var(--ink-4); line-height: 1.4; }
+    .tool-panel {
+      background: var(--bg-elev); border: 1px solid var(--border-soft);
+      border-radius: 14px; padding: 16px 18px;
+      display: flex; flex-direction: column; gap: 12px;
+    }
+    .tool-panel h3 {
+      font-family: var(--font-mono); font-size: 14px; color: var(--ink); font-weight: 600;
+    }
+    .tool-panel .placeholder {
+      text-align: center; color: var(--ink-5); font-family: var(--font-hand); font-size: 22px;
+      padding: 60px 0;
+    }
+    .tool-panel textarea {
+      width: 100%; min-height: 160px; resize: vertical;
+      background: var(--bg); border: 1px solid var(--border); border-radius: 10px;
+      padding: 10px 12px;
+      font-family: var(--font-mono); font-size: 12px; color: var(--ink); outline: none;
+      line-height: 1.5;
+    }
+    .tool-panel textarea:focus { border-color: var(--blue); }
+    .tool-panel .response {
+      background: var(--bg); border: 1px solid var(--border-soft); border-radius: 10px;
+      padding: 10px 12px; font-family: var(--font-mono); font-size: 11.5px;
+      max-height: 220px; overflow: auto; color: var(--ink-2);
+      white-space: pre-wrap; word-break: break-word;
+      line-height: 1.55;
+    }
+    .tool-panel .response.err { border-color: rgba(239,77,118,0.35); color: var(--red); background: rgba(239,77,118,0.03); }
+    .tool-panel details.history { border: 1px solid var(--border-soft); border-radius: 10px; overflow: hidden; }
+    .tool-panel details.history > summary { padding: 8px 12px; cursor: pointer; font-family: var(--font-mono); font-size: 11px; color: var(--ink-3); }
+    .tool-panel details.history > summary:hover { background: var(--bg-elev-2); color: var(--ink); }
+    .tool-panel details.history[open] > summary { border-bottom: 1px solid var(--border-soft); }
+    .tool-panel .h-entry { padding: 8px 12px; border-bottom: 1px solid var(--border-soft); font-size: 11px; }
+    .tool-panel .h-entry:last-child { border-bottom: 0; }
+    .tool-panel .h-entry .h-head { display: flex; align-items: center; gap: 6px; font-family: var(--font-mono); color: var(--ink-3); }
+    .badge-ok { color: var(--green); font-family: var(--font-mono); font-size: 10px; }
+    .badge-err { color: var(--red); font-family: var(--font-mono); font-size: 10px; }
+
+    /* ============ FOOTER ============ */
+    .footer {
+      padding: 8px 24px;
+      border-top: 1px solid var(--border-soft);
+      display: flex; align-items: center; gap: 14px;
+      background: var(--bg);
+      flex: 0 0 auto;
+      font-family: var(--font-mono); font-size: 10px; color: var(--ink-4);
+      letter-spacing: 0.06em;
+    }
+    .footer .dot { color: var(--ink-5); }
+    .footer .grow { flex: 1; }
+
+    /* ============ NARROW SCREENS ============ */
+    @media (max-width: 900px) {
+      .graph-wrap { grid-template-columns: 1fr; height: auto; }
+      .graph-canvas-wrap { height: 420px; }
+      .tools-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ==================== HEADER ==================== -->
+  <header class="app-header">
+    <div class="brand">
+      <h1>agentcache</h1>
+      <span class="ver">v0.9.11 · inkwell</span>
+    </div>
+    <span class="grow"></span>
+    <span id="ws-status" class="ws-status off">idle</span>
+    <button class="icon-btn" id="settings-btn">&#9881; server</button>
+  </header>
+
+  <!-- ==================== SETTINGS DRAWER ==================== -->
+  <div class="settings" id="settings">
+    <label>Base URL</label>
+    <input id="cfg-base" type="text" value="http://localhost:3111" spellcheck="false">
+    <label>Token</label>
+    <input id="cfg-token" type="text" placeholder="AGENTCACHE_SECRET (optional)" spellcheck="false">
+    <button class="btn" id="ping-btn">Ping</button>
+    <span class="ping-out" id="ping-out">not tried</span>
+    <span style="flex:1"></span>
+    <button class="btn" id="close-settings">Close</button>
+  </div>
+
+  <!-- ==================== TABS ==================== -->
+  <nav class="tabs" role="tablist">
+    <button data-tab="folders" class="on">Folders</button>
+    <button data-tab="memories">Memories</button>
+    <button data-tab="graph">Graph</button>
+    <button data-tab="timeline">Timeline</button>
+    <button data-tab="tools">Tools</button>
+  </nav>
+
+  <!-- ==================== MAIN ==================== -->
+  <main class="main">
+    <section id="view-folders"  class="view active"></section>
+    <section id="view-memories" class="view"></section>
+    <section id="view-graph"    class="view"></section>
+    <section id="view-timeline" class="view"></section>
+    <section id="view-tools"    class="view"></section>
+  </main>
+
+  <!-- ==================== MODAL ==================== -->
+  <div class="modal-overlay" id="modal-overlay">
+    <div class="modal" id="modal"></div>
+  </div>
+
+  <!-- ==================== FOOTER ==================== -->
+  <footer class="footer">
+    <span id="footer-src">source · sample data</span>
+    <span class="dot">·</span>
+    <span id="footer-counts">6 folders · 6 memories · 12 tools</span>
+    <span class="grow"></span>
+    <span>ac.viewer.proto</span>
+  </footer>
+
+  <script nonce="__INKWELL_NONCE__">
+  (function () {
+    'use strict';
+
+    // ------------------------------------------------------------------
+    // Config + persisted settings
+    // ------------------------------------------------------------------
+    const LS_KEY = 'ac-proto-cfg';
+    const CFG = Object.assign(
+      { baseURL: 'http://localhost:3111', token: '' },
+      loadCfg()
+    );
+
+    function loadCfg() {
+      try { return JSON.parse(localStorage.getItem(LS_KEY) || '{}'); }
+      catch (e) { return {}; }
+    }
+    function saveCfg() {
+      try { localStorage.setItem(LS_KEY, JSON.stringify(CFG)); } catch (e) {}
+    }
+
+    // ------------------------------------------------------------------
+    // Global UI state
+    // ------------------------------------------------------------------
+    const S = {
+      tab: 'folders',
+      // live-fetch status: null=in-flight, true=server reachable, false=unreachable
+      live: null,
+      // populated by tryLiveLoad() when live===true; each key is the tab's data
+      liveData: {},
+      // set to a short human message when tryLiveLoad() throws entirely
+      liveError: null,
+      folderDrill: null, // { path, agentId } when drilled into a folder
+      selectedTool: null,
+      toolHistory: []
+    };
+
+    // ------------------------------------------------------------------
+    // Utilities
+    // ------------------------------------------------------------------
+    function esc(s) {
+      return String(s == null ? '' : s)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+    }
+    function truncate(s, n) {
+      if (!s) return '';
+      s = String(s);
+      return s.length > n ? s.slice(0, n) + '…' : s;
+    }
+    function timeAgo(ts) {
+      if (!ts) return '—';
+      const t = typeof ts === 'number' ? ts : new Date(ts).getTime();
+      const d = Math.floor((Date.now() - t) / 1000);
+      if (d < 5)   return 'just now';
+      if (d < 60)  return d + 's ago';
+      if (d < 3600) return Math.floor(d/60)  + 'm ago';
+      if (d < 86400) return Math.floor(d/3600) + 'h ago';
+      if (d < 86400 * 7) return Math.floor(d/86400) + 'd ago';
+      return new Date(t).toLocaleDateString();
+    }
+
+    // ------------------------------------------------------------------
+    // Sample data — realistic agentcache-flavored fakes
+    // ------------------------------------------------------------------
+    const now = Date.now();
+    const MIN = 60_000, HOUR = 60 * MIN, DAY = 24 * HOUR;
+
+    const SAMPLE = {
+      folders: [
+        { folderPath: 'D:/Downloads/Projects/Other Projects/agentcache/src/agentcache/viewer', agentId: 'claude-4-7',   obsCount: 118, lastUpdated: now - 5 * MIN },
+        { folderPath: 'D:/Downloads/Projects/Other Projects/agentcache/src/agentcache/routes', agentId: 'claude-4-7',   obsCount: 42,  lastUpdated: now - 12 * MIN },
+        { folderPath: 'D:/Downloads/Projects/Other Projects/agentcache/tests',                  agentId: 'claude-4-6',   obsCount: 27,  lastUpdated: now - 1  * HOUR },
+        { folderPath: 'D:/Downloads/Projects/Other Projects/agentcache/benchmark',              agentId: 'gpt-5-turbo',  obsCount: 8,   lastUpdated: now - 3  * HOUR },
+        { folderPath: 'D:/Downloads/Projects/Other Projects/agentcache/plugin',                 agentId: 'claude-4-7',   obsCount: 14,  lastUpdated: now - 1  * DAY  },
+        { folderPath: 'D:/Downloads/Projects/Other Projects/agentcache/docs',                   agentId: 'claude-4-7',   obsCount: 5,   lastUpdated: now - 2  * DAY  }
+      ],
+      folderObs: [
+        { id: 'o-1',  type: 'file_edit',   agentId: 'claude-4-7', title: 'Update inkwell theme tokens', text: 'Rewrote --bg to use dot-grid gradient at 18px; added --pink/--blue/--purple/--green/--orange/--red for card accents.', timestamp: now - 2 * MIN },
+        { id: 'o-2',  type: 'command_run', agentId: 'claude-4-7', title: 'python -m agentcache.cli serve --port 3111', text: 'Server started on 0.0.0.0:3111 with CORS defaults http://localhost,http://127.0.0.1.', timestamp: now - 5 * MIN },
+        { id: 'o-3',  type: 'error',       agentId: 'claude-4-6', title: 'CSP violation on external font load', text: 'Blocked by Content-Security-Policy: style-src \'unsafe-inline\' — fonts.googleapis.com stylesheet refused.', timestamp: now - 8 * MIN },
+        { id: 'o-4',  type: 'search',      agentId: 'claude-4-7', title: 'grep for renderMemories', text: '3 matches in src/agentcache/viewer/index.html (line 2672, 2791, 2798).', timestamp: now - 14 * MIN },
+        { id: 'o-5',  type: 'file_read',   agentId: 'claude-4-7', title: 'Read src/agentcache/viewer/index.html', text: 'Loaded 4235 lines, extracted render function boundaries and NODE_COLORS.', timestamp: now - 20 * MIN },
+        { id: 'o-6',  type: 'conversation',agentId: 'user',       title: 'Refactor to whiteboard theme', text: 'User picked variant 4 (Inkwell); wants real content from codebase across all tabs and all states.', timestamp: now - 32 * MIN },
+        { id: 'o-7',  type: 'subagent',    agentId: 'explore-4-5',title: 'Located folderColor implementation', text: 'src/agentcache/core/graph.py:14 — mirrors the JS folderColor(id) function in the viewer.', timestamp: now - 45 * MIN }
+      ],
+      memories: [
+        { id: 'm-1', title: 'viewer CSP forbids external stylesheets', type: 'architecture', strength: 0.92, version: 3, updatedAt: now - 3 * MIN, project: 'src/agentcache/viewer',
+          content: 'The viewer index.html sets default-src \'none\'; style-src \'unsafe-inline\'; font-src \'self\'. External stylesheets from fonts.googleapis.com were blocked, producing console CSP violations that Edge escalated. System-font fallbacks are declared on every --font-* variable.',
+          concepts: ['viewer', 'csp', 'fonts'] },
+        { id: 'm-2', title: 'memory save/fetch flows through observation_store', type: 'architecture', strength: 0.88, version: 1, updatedAt: now - 2 * HOUR, project: 'src/agentcache/storage',
+          content: 'Both cache_save and cache_recall pass through storage.observation_store; the kv layer only backs durable memories, not observations.',
+          concepts: ['storage', 'mcp'] },
+        { id: 'm-3', title: 'PyPI dist renamed to agentcache-core', type: 'convention', strength: 0.76, version: 2, updatedAt: now - 1 * DAY, project: '',
+          content: 'Wheel is published as agentcache-core to avoid squatting on the shorter name; import path stays `agentcache`. See pyproject.toml.',
+          concepts: ['packaging', 'pypi'] },
+        { id: 'm-4', title: 'agentcache defaults to port 3111', type: 'fact', strength: 0.65, version: 1, updatedAt: now - 3 * DAY, project: 'src/agentcache',
+          content: 'III_REST_PORT=3111 env override; cli.py:256 sets the default. Prior branches used 5000 but 3111 is canonical.',
+          concepts: ['server', 'config'] },
+        { id: 'm-5', title: 'requirements.txt renamed to requirements-dev.txt', type: 'preference', strength: 0.42, version: 1, updatedAt: now - 5 * DAY, project: '',
+          content: 'To signal these are dev/CI dependencies only; runtime deps are declared in pyproject.toml. Landed in b49143b.',
+          concepts: ['tooling', 'packaging'] },
+        { id: 'm-6', title: 'never skip --no-verify on git hooks', type: 'lesson', strength: 0.88, version: 1, updatedAt: now - 7 * DAY, project: '',
+          content: 'CLAUDE.md rule: never bypass pre-commit hooks unless explicitly asked. If a hook fails, fix the underlying issue and create a NEW commit — do not --amend.',
+          concepts: ['git', 'safety'] }
+      ],
+      timeline: null, // built from folderObs at render time (with folderPath)
+      tools: [
+        { name: 'agent_cache',              description: 'Save a durable memory (fact, decision, convention, lesson).' },
+        { name: 'agent_observe',            description: 'Record an observation to a folder-scoped log.' },
+        { name: 'cache_dedup',              description: 'Remove duplicate observations from a folder.' },
+        { name: 'cache_diagnose',           description: 'Inspect internal state, health, index sizes.' },
+        { name: 'cache_export',             description: 'Export a bundle of memories + observations.' },
+        { name: 'cache_folder_observations',description: 'List observations for a given folderPath.' },
+        { name: 'cache_folders',            description: 'List all folder-scoped memories with counts.' },
+        { name: 'cache_forget',             description: 'Delete a memory, an observation, or a folder.' },
+        { name: 'cache_recall',             description: 'Fetch memories matching a query.' },
+        { name: 'cache_save',               description: 'Persist a fact / lesson / decision.' },
+        { name: 'cache_smart_search',       description: 'Hybrid semantic + keyword search across memories.' },
+        { name: 'cache_timeline',           description: 'Retrieve activity feed of observations.' }
+      ],
+      graph: (function () {
+        // Node types: folder, concept, library, error, decision, person
+        const nodes = [
+          { id: 'f-viewer',   type: 'folder',   name: 'viewer',   obsCount: 118, color: '#5fa8ff' },
+          { id: 'f-routes',   type: 'folder',   name: 'routes',   obsCount: 42,  color: '#a78bfa' },
+          { id: 'f-tests',    type: 'folder',   name: 'tests',    obsCount: 27,  color: '#4ade80' },
+          { id: 'f-bench',    type: 'folder',   name: 'benchmark',obsCount: 8,   color: '#f0b64e' },
+          { id: 'f-plugin',   type: 'folder',   name: 'plugin',   obsCount: 14,  color: '#ff6ea3' },
+          { id: 'f-storage',  type: 'folder',   name: 'storage',  obsCount: 21,  color: '#6ee7f7' },
+          { id: 'c-mcp',      type: 'concept',  name: 'MCP Protocol' },
+          { id: 'c-csp',      type: 'concept',  name: 'CSP' },
+          { id: 'c-embed',    type: 'concept',  name: 'Embeddings' },
+          { id: 'l-flask',    type: 'library',  name: 'Flask' },
+          { id: 'l-cyto',     type: 'library',  name: 'Cytoscape' },
+          { id: 'e-cors',     type: 'error',    name: 'CORS null origin' },
+          { id: 'd-port',     type: 'decision', name: 'Port 3111 canonical' },
+          { id: 'p-user',     type: 'person',   name: 'user' }
+        ];
+        const edges = [
+          ['f-viewer',  'c-csp',    'ref'],
+          ['f-viewer',  'f-routes', 'cross-ref'],
+          ['f-routes',  'c-mcp',    'ref'],
+          ['f-routes',  'l-flask',  'uses'],
+          ['f-tests',   'f-routes', 'tests'],
+          ['f-tests',   'f-viewer', 'tests'],
+          ['f-storage', 'c-embed',  'ref'],
+          ['f-storage', 'f-routes', 'cross-ref'],
+          ['f-viewer',  'l-cyto',   'uses'],
+          ['f-viewer',  'e-cors',   'raises'],
+          ['f-routes',  'd-port',   'decides'],
+          ['p-user',    'f-viewer', 'observes'],
+          ['p-user',    'd-port',   'sets'],
+          ['f-plugin',  'c-mcp',    'ref'],
+          ['f-bench',   'f-storage','benchmarks']
+        ].map(([s, t, ty]) => ({ source: s, target: t, type: ty }));
+        return { nodes, edges };
+      })()
+    };
+
+    const NODE_COLORS = {
+      folder:   '#5fa8ff', concept: '#a78bfa', library: '#f0b64e',
+      error:    '#ef4d76', decision:'#ff6ea3', person:  '#4ade80'
+    };
+    const NODE_SHAPES = {
+      folder: 'rect', concept: 'circle', library: 'diamond',
+      error:  'circle', decision: 'hex', person: 'circle'
+    };
+    const SHAPE_GLYPH = { rect: '▭', circle: '●', diamond: '◆', hex: '⬢' };
+
+    // Build timeline entries from folderObs, adding folderPath
+    SAMPLE.timeline = SAMPLE.folderObs.map(function (o) {
+      const paths = [
+        'src/agentcache/viewer/index.html',
+        'src/agentcache/app.py',
+        'src/agentcache/routes/observations.py',
+        'src/agentcache/viewer/theme-prototype.html',
+        'src/agentcache/viewer/index.html',
+        'CLAUDE.md',
+        'src/agentcache/core/graph.py'
+      ];
+      return Object.assign({}, o, { folderPath: paths[SAMPLE.folderObs.indexOf(o)] || 'src/agentcache' });
+    });
+
+    // ------------------------------------------------------------------
+    // API — attempts live fetch, silently falls back
+    // ------------------------------------------------------------------
+    async function api(path, opts) {
+      opts = opts || {};
+      const headers = Object.assign({ 'Content-Type': 'application/json' }, opts.headers || {});
+      if (CFG.token) headers['Authorization'] = 'Bearer ' + CFG.token;
+      const url = CFG.baseURL.replace(/\/+$/, '') + path;
+      const res = await fetch(url, { method: opts.method || 'GET', headers, body: opts.body });
+      if (!res.ok) throw new Error(res.status + ' ' + res.statusText);
+      const ct = res.headers.get('content-type') || '';
+      return ct.includes('application/json') ? res.json() : res.text();
+    }
+
+    async function ping() {
+      try {
+        await api('/agentcache/livez');
+        return { ok: true };
+      } catch (e) { return { ok: false, err: String(e) }; }
+    }
+
+    async function tryLiveLoad() {
+      // Probe /livez first so we distinguish "server down" (sample fallback)
+      // from "server up but no data yet" (empty state for that tab).
+      const alive = await ping();
+      if (!alive.ok) {
+        S.live = false;
+        S.liveError = null;
+        setSource('sample');
+        return;
+      }
+
+      try {
+        const [foldersRes, memRes, graphRes, toolsRes] = await Promise.all([
+          api('/agentcache/folders').catch(() => null),
+          api('/agentcache/memories').catch(() => null),
+          api('/agentcache/graph').catch(() => null),
+          api('/agentcache/mcp/tools').catch(() => null)
+        ]);
+
+        let tlRes = null;
+        try {
+          tlRes = await api('/agentcache/timeline', { method: 'POST', body: JSON.stringify({ limit: 50 }) });
+        } catch (e) { /* silent */ }
+
+        S.liveData = {
+          folders:  (foldersRes && (foldersRes.folders  || foldersRes)) || [],
+          memories: (memRes     && (memRes.memories     || memRes))     || [],
+          graph:    graphRes    || { nodes: [], edges: [] },
+          tools:    (toolsRes   && (toolsRes.tools      || toolsRes))   || [],
+          timeline: (tlRes      && (tlRes.observations  || tlRes))      || []
+        };
+        S.live = true;
+        S.liveError = null;
+        setSource('live');
+      } catch (e) {
+        S.live = false;
+        S.liveError = String(e);
+        setSource('sample');
+      }
+    }
+
+    function setSource(src) {
+      document.getElementById('footer-src').textContent = 'source · ' + src + ' data';
+      const wsEl = document.getElementById('ws-status');
+      wsEl.className = 'ws-status ' + (src === 'live' ? '' : 'off');
+      wsEl.textContent = src === 'live' ? 'live' : 'sample';
+    }
+
+    // ------------------------------------------------------------------
+    // Rendering — one dispatch per tab; the current state override picks
+    // which shape of content is drawn.
+    // ------------------------------------------------------------------
+    const renderers = {
+      folders:  renderFolders,
+      memories: renderMemories,
+      graph:    renderGraph,
+      timeline: renderTimeline,
+      tools:    renderTools
+    };
+
+    function renderCurrent() {
+      const tab = S.tab;
+      const el = document.getElementById('view-' + tab);
+      el.innerHTML = '';
+      const { state, data } = pickView(tab);
+      renderers[tab](el, state, data);
+    }
+
+    function pickView(tab) {
+      // Fetch still in flight → skeleton.
+      if (S.live === null) return { state: 'loading', data: null };
+
+      // Server unreachable → visual fallback with sample data, footer says
+      // "source · sample data" so the discrepancy is honest.
+      if (S.live === false) return { state: 'populated', data: SAMPLE[tab] };
+
+      // Server reachable but the specific fetch threw at boot.
+      if (S.liveError && !S.liveData[tab]) {
+        return { state: 'error', data: null };
+      }
+
+      // Server reachable and returned a payload — even if empty.
+      const d = S.liveData[tab];
+      if (isEmpty(tab, d)) return { state: 'empty', data: d };
+      return { state: 'populated', data: d };
+    }
+
+    function isEmpty(tab, d) {
+      if (tab === 'graph') return !d || ((d.nodes || []).length === 0);
+      return !d || d.length === 0;
+    }
+
+    // ============================================================
+    // FOLDERS TAB
+    // ============================================================
+    function renderFolders(el, state, folders) {
+      if (state === 'loading') return el.appendChild(loadingBlock(['skel-h', 'skel-row', 'skel-row', 'skel-row', 'skel-row']));
+      if (state === 'empty')    return el.appendChild(foldersEmpty());
+      if (state === 'error')    return el.appendChild(errorBlock('Folders query failed', S.liveError || 'GET /agentcache/folders returned no data.'));
+
+      renderFoldersPopulated(el, folders);
+    }
+
+    function renderFoldersPopulated(el, folders) {
+      if (S.folderDrill) return renderFolderDetail(el, S.folderDrill);
+
+      const wrap = document.createElement('div');
+      wrap.innerHTML =
+        '<h2 class="section">Folder Memories <span class="count">' + folders.length + ' folder' + (folders.length !== 1 ? 's' : '') + '</span></h2>' +
+        '<div class="info-card">Folder-scoped observation logs recorded via <code>agent_observe</code>. Click a row to drill into observations, run dedup, or delete.</div>' +
+        '<table class="data"><thead><tr>' +
+          '<th>Folder</th><th>Agent</th><th class="right">Observations</th><th>Last Updated</th>' +
+        '</tr></thead><tbody>' +
+        folders.map(function (f) {
+          const fp = f.folderPath || '';
+          const aid = f.agentId || '';
+          const obs = f.obsCount || 0;
+          const updated = f.lastUpdated ? timeAgo(f.lastUpdated) : '—';
+          const short = fp.split(/[\\/]/).slice(-3).join('/');
+          return '<tr class="clickable" data-folder="' + esc(fp) + '" data-agent="' + esc(aid) + '">' +
+            '<td class="mono" title="' + esc(fp) + '">' + esc(short) + '</td>' +
+            '<td><span class="agent-chip">' + esc(aid) + '</span></td>' +
+            '<td class="right" style="color:var(--blue);font-family:var(--font-mono);font-weight:600;">' + obs + '</td>' +
+            '<td style="color:var(--ink-4);font-family:var(--font-mono);font-size:12px;">' + esc(updated) + '</td>' +
+          '</tr>';
+        }).join('') +
+        '</tbody></table>';
+      el.appendChild(wrap);
+
+      wrap.querySelectorAll('tr.clickable').forEach(function (row) {
+        row.addEventListener('click', function () {
+          S.folderDrill = { path: row.dataset.folder, agentId: row.dataset.agent };
+          renderCurrent();
+        });
+      });
+    }
+
+    function renderFolderDetail(el, drill) {
+      const obs = SAMPLE.folderObs;
+      const div = document.createElement('div');
+      div.innerHTML =
+        '<div class="drill-header">' +
+          '<button class="btn" id="back-folders">&larr; Back</button>' +
+          '<span class="path">' + esc(drill.path) + '</span>' +
+          '<span class="agent-chip">' + esc(drill.agentId) + '</span>' +
+          '<span class="count">' + obs.length + ' observation' + (obs.length !== 1 ? 's' : '') + '</span>' +
+          '<span class="grow"></span>' +
+          '<button class="btn danger" id="delete-folder-btn">Delete folder</button>' +
+        '</div>' +
+        '<div class="bulk-bar">' +
+          '<label><input type="checkbox"> Select all</label>' +
+          '<button class="btn small danger" disabled>Delete selected (0)</button>' +
+          '<button class="btn small" title="Remove duplicate observations">&#x2728; Dedup</button>' +
+        '</div>' +
+        obs.map(function (o) { return obsCardHTML(o, true); }).join('');
+      el.appendChild(div);
+
+      div.querySelector('#back-folders').addEventListener('click', function () {
+        S.folderDrill = null;
+        renderCurrent();
+      });
+      div.querySelector('#delete-folder-btn').addEventListener('click', function () {
+        showDeleteFolderModal({ folderPath: drill.path, agentId: drill.agentId });
+      });
+    }
+
+    function obsCardHTML(o, withCheckbox) {
+      const ts = o.timestamp ? timeAgo(o.timestamp) : '';
+      const t = o.type || 'other';
+      return '<div class="obs-card">' +
+        (withCheckbox ? '<input type="checkbox">' : '') +
+        '<div class="body">' +
+          '<div class="head">' +
+            '<span class="type-badge ' + esc(t) + '">' + esc(t) + '</span>' +
+            '<span class="agent-chip">' + esc(o.agentId || '') + '</span>' +
+            '<span class="ts">' + esc(ts) + '</span>' +
+          '</div>' +
+          (o.title ? '<div class="title">' + esc(o.title) + '</div>' : '') +
+          (o.text  ? '<div class="text">' + esc(truncate(o.text, 300)) + '</div>' : '') +
+        '</div>' +
+      '</div>';
+    }
+
+    function foldersEmpty() {
+      const div = document.createElement('div');
+      div.className = 'empty-state';
+      div.innerHTML =
+        '<div class="icon">&#128193;</div>' +
+        '<div class="title">No folder memories yet.</div>' +
+        '<div class="lead">Use <code>agent_observe</code> with a <code>folderPath</code> to start recording. Each observation is stamped with agentId, type, and timestamp — enough to reconstruct what happened where.</div>' +
+        '<pre>agent_observe {\n  folderPath: "src/agentcache/viewer",\n  agentId: "claude-4-7",\n  type: "file_edit",\n  title: "restyle theme"\n}</pre>';
+      return div;
+    }
+
+    // ============================================================
+    // MEMORIES TAB
+    // ============================================================
+    function renderMemories(el, state, memories) {
+      if (state === 'loading') return el.appendChild(loadingBlock(['skel-h', 'skel-row', 'skel-row', 'skel-row', 'skel-row']));
+      if (state === 'empty')    return el.appendChild(memoriesEmpty());
+      if (state === 'error')    return el.appendChild(errorBlock('Memories query failed', S.liveError || 'GET /agentcache/memories returned no data.'));
+
+      renderMemoriesPopulated(el, memories);
+    }
+
+    function renderMemoriesPopulated(el, memories) {
+      const projects = [...new Set(memories.map(m => (m.project || '').trim()).filter(Boolean))].sort();
+      const types    = [...new Set(memories.map(m => m.type))].sort();
+
+      const wrap = document.createElement('div');
+      wrap.innerHTML =
+        '<h2 class="section">Memories <span class="count">' + memories.length + ' total</span></h2>' +
+        '<div class="info-card"><strong>Memories</strong> are durable facts, architecture notes, conventions, and lessons saved via <code>agent_cache</code>. They survive across sessions and supersede each other as v1, v2, ... <span class="muted">Shown: ' + memories.length + '.</span></div>' +
+        '<div class="toolbar">' +
+          '<input type="text" placeholder="Search memories..." style="min-width:240px;">' +
+          '<select><option value="">All types</option>' + types.map(t => '<option>' + esc(t) + '</option>').join('') + '</select>' +
+          '<select><option value="">All folders</option>' + projects.map(p => '<option>' + esc(p) + '</option>').join('') + '</select>' +
+          '<span class="count">' + memories.length + ' shown</span>' +
+        '</div>' +
+        '<table class="data"><thead><tr>' +
+          '<th>Title</th><th>Type</th><th>Strength</th><th>Version</th><th>Updated</th><th></th>' +
+        '</tr></thead><tbody>' +
+        memories.map(function (m) {
+          const raw = m.strength || 0;
+          const strength = Math.round(raw <= 1 ? raw * 100 : raw);
+          const bar = strength > 70 ? 'var(--green)' : strength > 40 ? 'var(--orange)' : 'var(--red)';
+          const preview = (m.content || '').split('\n').slice(0, 2).join(' ').trim();
+          return '<tr>' +
+            '<td>' +
+              '<div style="color:var(--ink);font-weight:600;">' + esc(truncate(m.title, 60)) + '</div>' +
+              '<div style="font-size:12px;color:var(--ink-4);margin-top:3px;line-height:1.5;max-height:36px;overflow:hidden;">' + esc(truncate(preview, 150)) + '</div>' +
+              ((m.concepts && m.concepts.length) ? '<div style="margin-top:5px;display:flex;gap:4px;flex-wrap:wrap;">' +
+                m.concepts.slice(0, 4).map(c => '<span class="tag">' + esc(c) + '</span>').join('') + '</div>' : '') +
+            '</td>' +
+            '<td><span class="type-badge ' + esc(m.type) + '">' + esc(m.type) + '</span></td>' +
+            '<td><span class="strength-bar"><span class="fill" style="width:' + strength + '%;background:' + bar + ';display:block;"></span></span>' +
+                '<span style="font-family:var(--font-mono);font-size:10px;color:var(--ink-5);">' + strength + '%</span></td>' +
+            '<td style="color:var(--ink-4);font-family:var(--font-mono);font-size:12px;">v' + (m.version || 1) + '</td>' +
+            '<td style="color:var(--ink-4);font-family:var(--font-mono);font-size:11px;">' + esc(timeAgo(m.updatedAt)) + '</td>' +
+            '<td class="right"><button class="btn small danger" data-mem="' + esc(m.id) + '">Delete</button></td>' +
+          '</tr>';
+        }).join('') +
+        '</tbody></table>';
+      el.appendChild(wrap);
+
+      wrap.querySelectorAll('button[data-mem]').forEach(function (b) {
+        b.addEventListener('click', function () {
+          const m = memories.find(x => x.id === b.dataset.mem);
+          if (m) showDeleteMemoryModal(m);
+        });
+      });
+    }
+
+    function memoriesEmpty() {
+      const div = document.createElement('div');
+      div.className = 'empty-state';
+      div.innerHTML =
+        '<div class="icon">&#128218;</div>' +
+        '<div class="title">No memories yet</div>' +
+        '<div class="lead">Memories are the distilled facts agentcache keeps across sessions &mdash; file paths, architectural decisions, user preferences. Hooks capture them automatically; you can also save one directly.</div>' +
+        '<pre>agent_cache {\n  title: "auth uses jose middleware",\n  content: "src/middleware/auth.ts handles JWT validation",\n  type: "architecture"\n}</pre>' +
+        '<a href="https://github.com/rohitg00/agentmemory#memories" target="_blank" rel="noopener">Memory types &rarr;</a>';
+      return div;
+    }
+
+    // ============================================================
+    // GRAPH TAB
+    // ============================================================
+    function renderGraph(el, state, graphData) {
+      if (state === 'loading') return el.appendChild(loadingBlock(['skel-h', 'skel-card', 'skel-card']));
+      if (state === 'empty')   { renderGraphShell(el, graphData, { empty: true });  return; }
+      if (state === 'error')   { renderGraphShell(el, graphData || { nodes: [], edges: [] }, { error: S.liveError || 'Graph build failed. Retry, or run <code>cache_dedup</code> first.' }); return; }
+
+      renderGraphShell(el, graphData, {});
+    }
+
+    function renderGraphShell(el, data, opts) {
+      opts = opts || {};
+      const wrap = document.createElement('div');
+      wrap.innerHTML =
+        '<h2 class="section">Knowledge Graph <span class="count">' + (data.nodes || []).length + ' nodes · ' + (data.edges || []).length + ' edges</span></h2>' +
+        '<div class="info-card">Force-directed layout of folder-scoped nodes and cross-references. Drag nodes, scroll to zoom, click to inspect. Filters and legend on the right.</div>' +
+        '<div class="graph-wrap">' +
+          '<div class="graph-canvas-wrap">' +
+            (opts.empty ? '<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--ink-4);font-family:var(--font-hand);font-size:26px;">No graph nodes yet.</div>' :
+              '<canvas id="graph-canvas"></canvas>' +
+              '<div class="graph-controls">' +
+                '<button data-zoom="1"  title="Zoom in">+</button>' +
+                '<button data-zoom="-1" title="Zoom out">&minus;</button>' +
+                '<button data-zoom="0"  title="Recenter">&#x2316;</button>' +
+              '</div>' +
+              '<div class="graph-tooltip" id="graph-tooltip"></div>') +
+          '</div>' +
+          '<div class="graph-sidebar">' +
+            (opts.error ? '<div class="error-block"><div class="head">&#9888; graph error</div><div>' + opts.error + '</div><div style="margin-top:8px;"><button class="btn small">Retry</button></div></div>' : '') +
+            '<input class="search" type="text" placeholder="Search nodes...">' +
+            '<div>' +
+              '<h3>Stats</h3>' +
+              '<div class="stats-grid">' +
+                '<div class="stat"><div class="n">' + (data.nodes || []).length + '</div><div class="l">nodes</div></div>' +
+                '<div class="stat"><div class="n">' + (data.edges || []).length + '</div><div class="l">edges</div></div>' +
+              '</div>' +
+            '</div>' +
+            '<div>' +
+              '<h3>Filter by type</h3>' +
+              Object.keys(NODE_COLORS).map(function (t) {
+                return '<label class="filter-item"><input type="checkbox" checked>' +
+                  '<span class="filter-dot" style="background:' + NODE_COLORS[t] + ';"></span>' + esc(t) + '</label>';
+              }).join('') +
+            '</div>' +
+            '<div>' +
+              '<h3>Legend</h3>' +
+              '<div class="legend">' +
+                Object.keys(NODE_COLORS).map(function (t) {
+                  return '<div class="row"><span class="shape" style="color:' + NODE_COLORS[t] + ';">' + SHAPE_GLYPH[NODE_SHAPES[t]] + '</span>' + esc(t) + '</div>';
+                }).join('') +
+              '</div>' +
+            '</div>' +
+            '<button class="btn" id="rebuild-graph-btn">&#x21bb; Rebuild graph</button>' +
+            '<div class="node-panel" id="node-panel" style="display:none;">' +
+              '<div class="n" id="node-panel-name"></div>' +
+              '<div class="meta" id="node-panel-meta"></div>' +
+            '</div>' +
+          '</div>' +
+        '</div>';
+      el.appendChild(wrap);
+
+      if (opts.empty) return;
+
+      const canvas = wrap.querySelector('#graph-canvas');
+      const tooltip = wrap.querySelector('#graph-tooltip');
+      initGraphSim(canvas, tooltip, data);
+
+      wrap.querySelectorAll('[data-zoom]').forEach(function (b) {
+        b.addEventListener('click', function () {
+          const dir = parseInt(b.dataset.zoom, 10);
+          if (dir === 0) sim.recenter();
+          else sim.zoomBy(dir > 0 ? 1.2 : 1 / 1.2);
+        });
+      });
+      wrap.querySelector('#rebuild-graph-btn').addEventListener('click', showRebuildModal);
+    }
+
+    // ------------------------------------------------------------------
+    // Force-directed graph sim (canvas + physics)
+    // ------------------------------------------------------------------
+    const sim = {
+      raf: 0, canvas: null, ctx: null, tooltip: null,
+      nodes: [], edges: [],
+      pan: { x: 0, y: 0 }, zoom: 1,
+      drag: null, hover: null, selected: null,
+      mouse: { x: 0, y: 0 },
+      dragging: false, dragStart: null
+    };
+
+    function initGraphSim(canvas, tooltip, data) {
+      cancelAnimationFrame(sim.raf);
+      sim.canvas = canvas;
+      sim.tooltip = tooltip;
+      sim.ctx = canvas.getContext('2d');
+      const dpr = window.devicePixelRatio || 1;
+      function resize() {
+        const r = canvas.parentElement.getBoundingClientRect();
+        canvas.width = r.width * dpr;
+        canvas.height = r.height * dpr;
+        canvas.style.width = r.width + 'px';
+        canvas.style.height = r.height + 'px';
+        sim.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      }
+      resize();
+      window.addEventListener('resize', resize);
+      const cw = canvas.width / dpr, ch = canvas.height / dpr;
+      sim.pan = { x: cw / 2, y: ch / 2 };
+      sim.zoom = 1;
+
+      const nodeById = {};
+      sim.nodes = (data.nodes || []).map(function (n, i) {
+        const angle = (2 * Math.PI * i) / Math.max((data.nodes || []).length, 1);
+        const r = Math.min(cw, ch) * 0.28;
+        const nn = {
+          id: n.id, type: n.type || 'folder', name: n.name || n.id,
+          color: n.color || NODE_COLORS[n.type] || NODE_COLORS.folder,
+          shape: NODE_SHAPES[n.type] || 'circle',
+          obsCount: n.obsCount || 0,
+          x: Math.cos(angle) * r, y: Math.sin(angle) * r,
+          vx: 0, vy: 0,
+          r: n.type === 'folder' ? Math.max(18, Math.min(38, 18 + Math.sqrt((n.obsCount || 0) + 1) * 2.5)) : 14
+        };
+        nodeById[nn.id] = nn;
+        return nn;
+      });
+      sim.edges = (data.edges || []).map(function (e) {
+        return { s: nodeById[e.source], t: nodeById[e.target], type: e.type };
+      }).filter(function (e) { return e.s && e.t; });
+
+      wireCanvas(canvas);
+      step();
+    }
+
+    function wireCanvas(canvas) {
+      canvas.addEventListener('mousedown', function (ev) {
+        const p = eventPt(ev);
+        const n = pick(p.x, p.y);
+        if (n) { sim.drag = n; }
+        else { sim.dragging = true; sim.dragStart = { x: ev.clientX - sim.pan.x, y: ev.clientY - sim.pan.y }; }
+      });
+      canvas.addEventListener('mousemove', function (ev) {
+        const rect = canvas.getBoundingClientRect();
+        sim.mouse.x = ev.clientX - rect.left;
+        sim.mouse.y = ev.clientY - rect.top;
+        const p = eventPt(ev);
+        if (sim.drag) {
+          sim.drag.x = p.x; sim.drag.y = p.y;
+          sim.drag.vx = 0; sim.drag.vy = 0;
+        } else if (sim.dragging) {
+          sim.pan.x = ev.clientX - sim.dragStart.x;
+          sim.pan.y = ev.clientY - sim.dragStart.y;
+        } else {
+          const n = pick(p.x, p.y);
+          sim.hover = n;
+          if (n) {
+            sim.tooltip.textContent = n.name + '  ·  ' + n.type + (n.obsCount ? '  ·  ' + n.obsCount + ' obs' : '');
+            sim.tooltip.style.left = (sim.mouse.x + 12) + 'px';
+            sim.tooltip.style.top  = (sim.mouse.y + 12) + 'px';
+            sim.tooltip.classList.add('show');
+            canvas.style.cursor = 'pointer';
+          } else {
+            sim.tooltip.classList.remove('show');
+            canvas.style.cursor = 'grab';
+          }
+        }
+      });
+      canvas.addEventListener('mouseup', function (ev) {
+        if (sim.drag) {
+          const p = eventPt(ev);
+          const n = pick(p.x, p.y);
+          if (n && n === sim.drag) {
+            sim.selected = n;
+            const panel = document.getElementById('node-panel');
+            document.getElementById('node-panel-name').textContent = n.name;
+            document.getElementById('node-panel-meta').textContent = n.type + (n.obsCount ? ' · ' + n.obsCount + ' obs' : '');
+            panel.style.display = '';
+          }
+        }
+        sim.drag = null;
+        sim.dragging = false;
+      });
+      canvas.addEventListener('mouseleave', function () {
+        sim.tooltip.classList.remove('show');
+        sim.drag = null;
+        sim.dragging = false;
+      });
+      canvas.addEventListener('wheel', function (ev) {
+        ev.preventDefault();
+        sim.zoomBy(ev.deltaY < 0 ? 1.1 : 1 / 1.1);
+      }, { passive: false });
+    }
+
+    function eventPt(ev) {
+      const rect = sim.canvas.getBoundingClientRect();
+      const cx = ev.clientX - rect.left;
+      const cy = ev.clientY - rect.top;
+      return { x: (cx - sim.pan.x) / sim.zoom, y: (cy - sim.pan.y) / sim.zoom };
+    }
+    function pick(x, y) {
+      for (let i = sim.nodes.length - 1; i >= 0; i--) {
+        const n = sim.nodes[i];
+        const dx = n.x - x, dy = n.y - y;
+        if (dx * dx + dy * dy <= (n.r + 4) * (n.r + 4)) return n;
+      }
+      return null;
+    }
+    sim.zoomBy = function (f) { sim.zoom = Math.max(0.3, Math.min(3, sim.zoom * f)); };
+    sim.recenter = function () {
+      const cw = sim.canvas.clientWidth, ch = sim.canvas.clientHeight;
+      sim.pan = { x: cw / 2, y: ch / 2 };
+      sim.zoom = 1;
+    };
+
+    function step() {
+      // physics
+      const K_REP = 2200;
+      const K_SPR = 0.02;
+      const REST = 90;
+      const DAMP = 0.86;
+      const CENTER = 0.005;
+      for (let i = 0; i < sim.nodes.length; i++) {
+        const a = sim.nodes[i];
+        if (a === sim.drag) continue;
+        let fx = -a.x * CENTER, fy = -a.y * CENTER;
+        for (let j = 0; j < sim.nodes.length; j++) {
+          if (i === j) continue;
+          const b = sim.nodes[j];
+          const dx = a.x - b.x, dy = a.y - b.y;
+          const d2 = dx * dx + dy * dy + 0.01;
+          const d = Math.sqrt(d2);
+          const f = K_REP / d2;
+          fx += (dx / d) * f;
+          fy += (dy / d) * f;
+        }
+        a.vx = (a.vx + fx) * DAMP;
+        a.vy = (a.vy + fy) * DAMP;
+      }
+      for (let k = 0; k < sim.edges.length; k++) {
+        const e = sim.edges[k];
+        const dx = e.t.x - e.s.x, dy = e.t.y - e.s.y;
+        const d = Math.sqrt(dx * dx + dy * dy) + 0.01;
+        const f = (d - REST) * K_SPR;
+        const ux = dx / d, uy = dy / d;
+        if (e.s !== sim.drag) { e.s.vx += ux * f; e.s.vy += uy * f; }
+        if (e.t !== sim.drag) { e.t.vx -= ux * f; e.t.vy -= uy * f; }
+      }
+      for (let i = 0; i < sim.nodes.length; i++) {
+        const n = sim.nodes[i];
+        if (n === sim.drag) continue;
+        n.x += n.vx; n.y += n.vy;
+      }
+      draw();
+      sim.raf = requestAnimationFrame(step);
+    }
+
+    function draw() {
+      const ctx = sim.ctx;
+      const cw = sim.canvas.clientWidth, ch = sim.canvas.clientHeight;
+      ctx.clearRect(0, 0, cw, ch);
+      ctx.save();
+      ctx.translate(sim.pan.x, sim.pan.y);
+      ctx.scale(sim.zoom, sim.zoom);
+
+      // edges
+      ctx.lineWidth = 1;
+      ctx.strokeStyle = 'rgba(255,255,255,0.09)';
+      for (let i = 0; i < sim.edges.length; i++) {
+        const e = sim.edges[i];
+        ctx.beginPath();
+        ctx.moveTo(e.s.x, e.s.y);
+        ctx.lineTo(e.t.x, e.t.y);
+        ctx.stroke();
+      }
+
+      // nodes
+      for (let i = 0; i < sim.nodes.length; i++) {
+        const n = sim.nodes[i];
+        const color = n.color || NODE_COLORS[n.type] || NODE_COLORS.folder;
+        drawNode(ctx, n, color, n === sim.selected, n === sim.hover);
+      }
+
+      ctx.restore();
+    }
+
+    function drawNode(ctx, n, color, isSelected, isHover) {
+      ctx.save();
+      ctx.translate(n.x, n.y);
+
+      // shadow ring on hover/select
+      if (isSelected || isHover) {
+        ctx.beginPath();
+        ctx.arc(0, 0, n.r + (isSelected ? 6 : 4), 0, Math.PI * 2);
+        ctx.strokeStyle = color;
+        ctx.globalAlpha = isSelected ? 0.9 : 0.4;
+        ctx.lineWidth = isSelected ? 2 : 1.5;
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+      }
+
+      // shape fill
+      ctx.fillStyle = 'rgba(19,20,24,0.95)';
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 1.8;
+
+      if (n.shape === 'rect') {
+        const r = n.r;
+        roundRect(ctx, -r, -r * 0.7, r * 2, r * 1.4, 6);
+        ctx.fill(); ctx.stroke();
+      } else if (n.shape === 'diamond') {
+        ctx.beginPath();
+        ctx.moveTo(0, -n.r); ctx.lineTo(n.r, 0); ctx.lineTo(0, n.r); ctx.lineTo(-n.r, 0);
+        ctx.closePath();
+        ctx.fill(); ctx.stroke();
+      } else if (n.shape === 'hex') {
+        ctx.beginPath();
+        for (let i = 0; i < 6; i++) {
+          const a = Math.PI / 3 * i - Math.PI / 2;
+          const px = Math.cos(a) * n.r, py = Math.sin(a) * n.r;
+          if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+        }
+        ctx.closePath();
+        ctx.fill(); ctx.stroke();
+      } else {
+        ctx.beginPath();
+        ctx.arc(0, 0, n.r, 0, Math.PI * 2);
+        ctx.fill(); ctx.stroke();
+      }
+
+      // label
+      ctx.fillStyle = '#f2f2f4';
+      ctx.font = "600 11px 'JetBrains Mono', monospace";
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'top';
+      ctx.fillText(n.name, 0, n.r + 5);
+      ctx.restore();
+    }
+
+    function roundRect(ctx, x, y, w, h, r) {
+      ctx.beginPath();
+      ctx.moveTo(x + r, y);
+      ctx.arcTo(x + w, y, x + w, y + h, r);
+      ctx.arcTo(x + w, y + h, x, y + h, r);
+      ctx.arcTo(x, y + h, x, y, r);
+      ctx.arcTo(x, y, x + w, y, r);
+      ctx.closePath();
+    }
+
+    function showRebuildModal() {
+      showModal(
+        '<h3>Rebuild knowledge graph?</h3>' +
+        '<p>This re-indexes all observations and rebuilds folder cross-refs. On a large workspace this can take several seconds — the current graph will stay visible until the rebuild finishes.</p>' +
+        '<div class="actions">' +
+          '<button class="btn" data-close>Cancel</button>' +
+          '<button class="btn primary" data-close>Rebuild</button>' +
+        '</div>'
+      );
+    }
+
+    // ============================================================
+    // TIMELINE TAB
+    // ============================================================
+    function renderTimeline(el, state, obs) {
+      if (state === 'loading') return el.appendChild(loadingBlock(['skel-h', 'skel-card', 'skel-card', 'skel-card']));
+      if (state === 'empty')    return el.appendChild(timelineEmpty());
+      if (state === 'error')    return el.appendChild(errorBlock('Timeline query failed', S.liveError || 'POST /agentcache/timeline returned no data.'));
+
+      renderTimelinePopulated(el, obs);
+    }
+
+    function renderTimelinePopulated(el, obs) {
+      const agents = [...new Set(obs.map(o => o.agentId).filter(Boolean))];
+      const wrap = document.createElement('div');
+      wrap.innerHTML =
+        '<h2 class="section">Activity Timeline <span class="count">' + obs.length + ' observations</span></h2>' +
+        '<div class="info-card">Live feed of observations across every folder — file edits, commands, errors, searches, sub-agent runs. Filter by folder path or agent to isolate a session.</div>' +
+        '<div class="toolbar">' +
+          '<input type="text" placeholder="Filter by folder path..." style="flex:1;min-width:220px;">' +
+          '<select><option>All agents</option>' + agents.map(a => '<option>' + esc(a) + '</option>').join('') + '</select>' +
+          '<span class="count">' + obs.length + ' observations</span>' +
+        '</div>' +
+        obs.map(function (o) {
+          const ts = o.timestamp ? timeAgo(o.timestamp) : '';
+          const fp = o.folderPath || '';
+          const short = fp.split(/[\\/]/).slice(-2).join('/');
+          const t = o.type || 'other';
+          return '<div class="obs-card">' +
+            '<div class="body">' +
+              '<div class="head">' +
+                '<span class="type-badge ' + esc(t) + '">' + esc(t) + '</span>' +
+                '<span class="agent-chip">' + esc(o.agentId || '') + '</span>' +
+                '<span class="path" title="' + esc(fp) + '">' + esc(short) + '</span>' +
+                '<span style="flex:1;"></span>' +
+                '<span class="ts">' + esc(ts) + '</span>' +
+              '</div>' +
+              (o.title ? '<div class="title">' + esc(o.title) + '</div>' : '') +
+              (o.text  ? '<div class="text">' + esc(truncate(o.text, 200)) + '</div>' : '') +
+            '</div>' +
+          '</div>';
+        }).join('');
+      el.appendChild(wrap);
+    }
+
+    function timelineEmpty() {
+      const div = document.createElement('div');
+      div.className = 'empty-state';
+      div.innerHTML =
+        '<div class="icon">&#9200;</div>' +
+        '<div class="title">Nothing to show — yet.</div>' +
+        '<div class="lead">Once you (or an agent) call <code>agent_observe</code>, entries stream here in real time. Hooks in <code>~/.claude/hooks/</code> can wire this up automatically for every file edit, command, or search.</div>';
+      return div;
+    }
+
+    // ============================================================
+    // TOOLS TAB
+    // ============================================================
+    function renderTools(el, state, tools) {
+      if (state === 'loading') return el.appendChild(loadingBlock(['skel-h', 'skel-row', 'skel-row', 'skel-row']));
+      if (state === 'empty')    return el.appendChild(toolsEmpty());
+      if (state === 'error')    return el.appendChild(errorBlock('MCP tools list failed', S.liveError || 'GET /agentcache/mcp/tools returned no data.'));
+
+      renderToolsPopulated(el, tools);
+    }
+
+    function renderToolsPopulated(el, tools) {
+      const wrap = document.createElement('div');
+      wrap.innerHTML =
+        '<h2 class="section">MCP Tool Tester <span class="count">' + tools.length + ' tools</span></h2>' +
+        '<div class="info-card">Every MCP tool exposed by agentcache is listed here. Select one to see its JSON-schema args, edit them, and hit Run to dispatch against <code>' + esc(CFG.baseURL) + '/agentcache/mcp/tools</code>.</div>' +
+        '<div class="tools-grid">' +
+          '<div class="tools-list" id="tools-list">' +
+            tools.map(function (t) {
+              return '<div class="tool-row" data-tool="' + esc(t.name) + '">' +
+                '<div class="name">' + esc(t.name) + '</div>' +
+                '<div class="desc">' + esc(t.description || '') + '</div>' +
+              '</div>';
+            }).join('') +
+          '</div>' +
+          '<div class="tool-panel" id="tool-panel">' +
+            (S.selectedTool
+              ? toolPanelHTML(tools.find(x => x.name === S.selectedTool) || tools[0])
+              : '<div class="placeholder">Pick a tool to see its schema →</div>') +
+          '</div>' +
+        '</div>';
+      el.appendChild(wrap);
+
+      wrap.querySelectorAll('.tool-row').forEach(function (row) {
+        if (row.dataset.tool === S.selectedTool) row.classList.add('on');
+        row.addEventListener('click', function () {
+          S.selectedTool = row.dataset.tool;
+          renderCurrent();
+        });
+      });
+    }
+
+    function toolPanelHTML(t) {
+      const seed = seedArgs(t.name);
+      return '<h3>' + esc(t.name) + '</h3>' +
+        '<div style="font-size:12.5px;color:var(--ink-3);line-height:1.55;">' + esc(t.description || '') + '</div>' +
+        '<textarea spellcheck="false">' + esc(JSON.stringify(seed, null, 2)) + '</textarea>' +
+        '<div style="display:flex;gap:8px;align-items:center;">' +
+          '<button class="btn primary" id="run-tool">Run &#9654;</button>' +
+          '<span style="font-family:var(--font-mono);font-size:10px;color:var(--ink-5);">POST /agentcache/mcp/tools</span>' +
+        '</div>' +
+        '<div class="response" id="tool-response" style="display:none;"></div>' +
+        (S.toolHistory.length
+          ? '<details class="history"><summary>History (' + S.toolHistory.length + ')</summary>' +
+              S.toolHistory.map(function (h) {
+                return '<div class="h-entry"><div class="h-head">' +
+                  (h.ok ? '<span class="badge-ok">&#10003; ok</span>' : '<span class="badge-err">&#10007; err</span>') +
+                  '<span style="color:var(--ink);">' + esc(h.name) + '</span>' +
+                  '<span style="color:var(--ink-5);">' + esc(h.ts) + '</span>' +
+                '</div></div>';
+              }).join('') +
+            '</details>'
+          : '');
+    }
+
+    function seedArgs(name) {
+      const seeds = {
+        agent_cache:               { title: '', content: '', type: 'architecture' },
+        agent_observe:             { folderPath: '', agentId: '', type: 'file_edit', title: '' },
+        cache_dedup:               { folderPath: '', agentId: '' },
+        cache_diagnose:            {},
+        cache_export:              { format: 'json' },
+        cache_folder_observations: { folderPath: '', agentId: '', limit: 50 },
+        cache_folders:             {},
+        cache_forget:              { memoryId: '' },
+        cache_recall:              { query: '', limit: 10 },
+        cache_save:                { title: '', content: '', type: 'fact' },
+        cache_smart_search:        { query: '', k: 10 },
+        cache_timeline:            { limit: 50 }
+      };
+      return seeds[name] || {};
+    }
+
+    function toolsEmpty() {
+      const div = document.createElement('div');
+      div.className = 'empty-state';
+      div.innerHTML =
+        '<div class="icon">&#128295;</div>' +
+        '<div class="title">MCP registry empty</div>' +
+        '<div class="lead">No tools are registered against this server. Make sure agentcache was launched with the MCP dispatcher on, or that <code>src/agentcache/routes/mcp.py</code> is registering its blueprint.</div>';
+      return div;
+    }
+
+    // ------------------------------------------------------------------
+    // Shared blocks
+    // ------------------------------------------------------------------
+    function loadingBlock(classes) {
+      const wrap = document.createElement('div');
+      classes.forEach(function (c) {
+        const d = document.createElement('div');
+        d.className = 'skel ' + c;
+        wrap.appendChild(d);
+      });
+      return wrap;
+    }
+
+    function errorBlock(head, body) {
+      const wrap = document.createElement('div');
+      wrap.className = 'error-block';
+      wrap.innerHTML = '<div class="head">&#9888; ' + esc(head) + '</div><div>' +
+        (body.includes('<code>') ? body : esc(body).replace(/\n/g, '<br>')) +
+        '</div><div style="margin-top:10px;"><button class="btn small">Retry</button></div>';
+      return wrap;
+    }
+
+    // ------------------------------------------------------------------
+    // Modal
+    // ------------------------------------------------------------------
+    function showModal(html) {
+      const overlay = document.getElementById('modal-overlay');
+      const modal = document.getElementById('modal');
+      modal.innerHTML = html;
+      overlay.classList.add('open');
+      modal.querySelectorAll('[data-close]').forEach(function (b) {
+        b.addEventListener('click', closeModal);
+      });
+    }
+    function closeModal() {
+      document.getElementById('modal-overlay').classList.remove('open');
+    }
+    document.getElementById('modal-overlay').addEventListener('click', function (ev) {
+      if (ev.target === this) closeModal();
+    });
+
+    function showDeleteMemoryModal(m) {
+      showModal(
+        '<h3>Delete memory?</h3>' +
+        '<p>Delete <strong>"' + esc(m.title) + '"</strong>? This is version <code>v' + (m.version || 1) + '</code> and cannot be undone.</p>' +
+        '<div class="actions">' +
+          '<button class="btn" data-close>Cancel</button>' +
+          '<button class="btn danger" data-close>Delete</button>' +
+        '</div>'
+      );
+    }
+    function showDeleteFolderModal(f) {
+      showModal(
+        '<h3>Delete folder memory?</h3>' +
+        '<p>Delete <strong>all observations</strong> for<br><code>' + esc(f.folderPath) + '</code> / <code>' + esc(f.agentId) + '</code>?<br><br>This cannot be undone.</p>' +
+        '<div class="actions">' +
+          '<button class="btn" data-close>Cancel</button>' +
+          '<button class="btn danger" data-close>Delete all</button>' +
+        '</div>'
+      );
+    }
+
+    // ------------------------------------------------------------------
+    // Tab + state picker wiring
+    // ------------------------------------------------------------------
+    document.querySelectorAll('.tabs button').forEach(function (b) {
+      b.addEventListener('click', function () {
+        document.querySelectorAll('.tabs button').forEach(x => x.classList.remove('on'));
+        b.classList.add('on');
+        S.tab = b.dataset.tab;
+        S.folderDrill = null;
+        document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+        document.getElementById('view-' + S.tab).classList.add('active');
+        renderCurrent();
+      });
+    });
+
+    // ------------------------------------------------------------------
+    // Settings drawer wiring
+    // ------------------------------------------------------------------
+    const settingsEl = document.getElementById('settings');
+    document.getElementById('settings-btn').addEventListener('click', function () {
+      settingsEl.classList.toggle('open');
+    });
+    document.getElementById('close-settings').addEventListener('click', function () {
+      settingsEl.classList.remove('open');
+    });
+    document.getElementById('cfg-base').value = CFG.baseURL;
+    document.getElementById('cfg-token').value = CFG.token;
+    document.getElementById('cfg-base').addEventListener('input', function () { CFG.baseURL = this.value; saveCfg(); });
+    document.getElementById('cfg-token').addEventListener('input', function () { CFG.token = this.value; saveCfg(); });
+
+    document.getElementById('ping-btn').addEventListener('click', async function () {
+      const out = document.getElementById('ping-out');
+      out.textContent = 'pinging...'; out.className = 'ping-out';
+      const r = await ping();
+      if (r.ok) {
+        out.textContent = 'OK'; out.className = 'ping-out ok';
+        await tryLiveLoad();
+        renderCurrent();
+      } else {
+        out.textContent = 'unreachable'; out.className = 'ping-out err';
+      }
+    });
+
+    // ------------------------------------------------------------------
+    // Boot
+    // ------------------------------------------------------------------
+    (async function boot() {
+      renderCurrent();          // paints loading skeleton (S.live === null)
+      await tryLiveLoad();      // resolves S.live to true or false
+      renderCurrent();          // repaints with live or sample
+    })();
+  })();
+  </script>
+</body>
+</html>
