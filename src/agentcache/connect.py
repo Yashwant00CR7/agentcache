@@ -4,6 +4,7 @@ import json
 import os
 import shutil
 import sys
+from importlib import resources
 
 # Helper functions for connect module
 
@@ -60,6 +61,244 @@ def get_mcp_stdio_path():
     if os.path.exists(mcp_path):
         return mcp_path
     raise RuntimeError("Could not find mcp_stdio.py.")
+
+
+# Env keys we consider required to exist on every agentcache MCP entry,
+# independent of what the ambient shell currently exports. AGENTCACHE_SECRET
+# is optional at the server level, so we treat it as required-if-user-has-it
+# via `desired_env` rather than adding it here.
+REQUIRED_MCP_ENV_KEYS = frozenset({"AGENTCACHE_URL"})
+
+
+def _norm_path_for_compare(p):
+    """Normalize a path for cross-platform equality checks (case + slash)."""
+    return os.path.normcase(os.path.normpath(str(p))) if p else ""
+
+
+def build_desired_mcp_env():
+    """Build the env dict we would write into an MCP server entry."""
+    env = {
+        "AGENTCACHE_URL": os.environ.get("AGENTCACHE_URL")
+        or os.environ.get("AGENTMEMORY_URL")
+        or "http://localhost:3111"
+    }
+    secret = os.environ.get("AGENTCACHE_SECRET") or os.environ.get("AGENTMEMORY_SECRET")
+    if secret:
+        env["AGENTCACHE_SECRET"] = secret
+    return env
+
+
+def build_desired_json_entry(mcp_stdio_path):
+    """Build the full JSON MCP server entry we would write for `agentcache`."""
+    return {
+        "command": sys.executable,
+        "args": [mcp_stdio_path],
+        "env": build_desired_mcp_env(),
+    }
+
+
+def json_entry_matches(existing, desired):
+    """Return True if `existing` MCP entry is functionally equivalent to `desired`.
+
+    Command and args are compared with OS path normalization. Env keys are
+    validated in two passes: (1) every key in REQUIRED_MCP_ENV_KEYS must be
+    present on `existing`, regardless of what the current shell exports; and
+    (2) every key in `desired["env"]` (which reflects what would be written
+    now, e.g. an AGENTCACHE_SECRET picked up from the current shell) must
+    also exist on `existing`. Env *values* are not compared, so a user who
+    customised AGENTCACHE_URL after install isn't considered stale on that
+    basis alone.
+    """
+    if not isinstance(existing, dict):
+        return False
+    if _norm_path_for_compare(existing.get("command")) != _norm_path_for_compare(
+        desired.get("command")
+    ):
+        return False
+    existing_args = existing.get("args") or []
+    desired_args = desired.get("args") or []
+    if not isinstance(existing_args, list) or len(existing_args) != len(desired_args):
+        return False
+    for a, b in zip(existing_args, desired_args):
+        if _norm_path_for_compare(a) != _norm_path_for_compare(b):
+            return False
+    existing_env = existing.get("env") or {}
+    if not isinstance(existing_env, dict):
+        return False
+    for key in REQUIRED_MCP_ENV_KEYS:
+        if key not in existing_env:
+            return False
+    for key in desired.get("env") or {}:
+        if key not in existing_env:
+            return False
+    return True
+
+
+def _split_toml_list(raw):
+    """Parse a TOML string-array literal like `["a", "b"]` into a Python list.
+
+    Falls back to a single-element list if the value isn't array-shaped, so
+    callers can still reason about it. Not a full TOML parser — just enough
+    for the shapes agentcache writes.
+    """
+    if raw is None:
+        return None
+    s = raw.strip()
+    if s.startswith("[") and s.endswith("]"):
+        inner = s[1:-1].strip()
+        if not inner:
+            return []
+        parts = [p.strip() for p in inner.split(",")]
+        return [p.strip().strip('"').strip("'") for p in parts if p]
+    return [s.strip().strip('"').strip("'")]
+
+
+def parse_codex_agentcache_block(text):
+    """Extract the `[mcp_servers.agentcache]` and `.env` sub-block from a TOML string.
+
+    Returns a dict with keys `command` (str|None), `args` (list[str]|None),
+    and `env` (dict[str, str]), or None if the block is not present.
+    """
+    if "[mcp_servers.agentcache]" not in text:
+        return None
+    result = {"command": None, "args": None, "env": {}}
+    in_block = False
+    in_env = False
+    for line in text.splitlines():
+        trimmed = line.strip()
+        if trimmed == "[mcp_servers.agentcache]":
+            in_block, in_env = True, False
+            continue
+        if trimmed == "[mcp_servers.agentcache.env]":
+            in_block, in_env = False, True
+            continue
+        if trimmed.startswith("["):
+            in_block, in_env = False, False
+            continue
+        if not trimmed or trimmed.startswith("#"):
+            continue
+        if in_block and "=" in trimmed:
+            key, _, val = trimmed.partition("=")
+            key, val = key.strip(), val.strip()
+            if key == "command":
+                result["command"] = val.strip().strip('"')
+            elif key == "args":
+                result["args"] = _split_toml_list(val)
+        elif in_env and "=" in trimmed:
+            key, _, val = trimmed.partition("=")
+            result["env"][key.strip()] = val.strip().strip('"')
+    return result
+
+
+def codex_entry_matches(text, python_exe_posix, mcp_stdio_posix):
+    """Check whether the Codex TOML already contains an equivalent agentcache block."""
+    parsed = parse_codex_agentcache_block(text)
+    if not parsed:
+        return False
+    if _norm_path_for_compare(parsed.get("command")) != _norm_path_for_compare(
+        python_exe_posix
+    ):
+        return False
+    args = parsed.get("args") or []
+    if len(args) != 1 or _norm_path_for_compare(args[0]) != _norm_path_for_compare(
+        mcp_stdio_posix
+    ):
+        return False
+    existing_env = parsed.get("env") or {}
+    for key in REQUIRED_MCP_ENV_KEYS:
+        if key not in existing_env:
+            return False
+    for key in build_desired_mcp_env():
+        if key not in existing_env:
+            return False
+    return True
+
+
+def install_json_mcp_entry(config_path, servers_key, display_name, args, backup_prefix):
+    """Shared install path for JSON-based MCP clients.
+
+    Reads `config_path` as JSON, computes the desired agentcache entry, and
+    takes one of three actions based on the diff:
+      - matches -> print already-wired message with --force hint
+      - present but stale -> back up and rewrite in place
+      - absent -> write fresh entry
+    Honors `args.dry_run` and `args.force`.
+    """
+    mcp_stdio_path = get_mcp_stdio_path()
+    existing_cfg = read_json_safe(config_path)
+    next_cfg = existing_cfg.copy()
+    servers = next_cfg.get(servers_key, {})
+
+    desired_entry = build_desired_json_entry(mcp_stdio_path)
+    existing_entry = servers.get("agentcache")
+    up_to_date = existing_entry is not None and json_entry_matches(
+        existing_entry, desired_entry
+    )
+
+    if up_to_date and not args.force:
+        print(
+            f"[OK] {display_name} already wired in {config_path} "
+            "(re-run with --force to overwrite)"
+        )
+        return
+
+    action = "update" if existing_entry else "write"
+    if args.dry_run:
+        print(f"[dry-run] Would {action} {servers_key}.agentcache in {config_path}")
+        return
+
+    backup = backup_file(config_path, backup_prefix)
+    if backup:
+        print(f"Backed up configuration to {backup}")
+
+    servers["agentcache"] = desired_entry
+    next_cfg[servers_key] = servers
+    write_json_atomic(config_path, next_cfg)
+    if existing_entry:
+        print(f"[OK] Updated existing agentcache MCP entry in {config_path}")
+    else:
+        print(f"[OK] Wired {display_name} MCP config in {config_path}")
+
+
+def verify_json_mcp_entry(config_path, servers_key, display_name):
+    """Diff on-disk agentcache entry vs desired, without touching disk.
+
+    Returns True when the entry is up to date. Prints one line per client.
+    """
+    existing_cfg = read_json_safe(config_path)
+    servers = existing_cfg.get(servers_key, {})
+    existing_entry = servers.get("agentcache")
+    if existing_entry is None:
+        print(f"[--] {display_name}: no agentcache entry in {config_path}")
+        return False
+    desired_entry = build_desired_json_entry(get_mcp_stdio_path())
+    if json_entry_matches(existing_entry, desired_entry):
+        print(f"[OK] {display_name}: up to date ({config_path})")
+        return True
+    reasons = []
+    if _norm_path_for_compare(existing_entry.get("command")) != _norm_path_for_compare(
+        desired_entry["command"]
+    ):
+        reasons.append(
+            f"command={existing_entry.get('command')!r} "
+            f"(expected {desired_entry['command']!r})"
+        )
+    existing_args = existing_entry.get("args") or []
+    if [_norm_path_for_compare(a) for a in existing_args] != [
+        _norm_path_for_compare(a) for a in desired_entry["args"]
+    ]:
+        reasons.append(f"args={existing_args!r} (expected {desired_entry['args']!r})")
+    existing_env = existing_entry.get("env") or {}
+    missing_keys = sorted(set(REQUIRED_MCP_ENV_KEYS) - set(existing_env)) + sorted(
+        set(desired_entry["env"]) - set(existing_env)
+    )
+    if missing_keys:
+        reasons.append(f"missing env keys={missing_keys}")
+    print(
+        f"[!!] {display_name}: STALE ({config_path}) — "
+        + "; ".join(reasons or ["differs from desired entry"])
+    )
+    return False
 
 
 def build_merged_hooks(existing_hooks, plugin_root, manifest_filename="hooks.json"):
@@ -127,43 +366,22 @@ class ClaudeCodeAdapter:
         claude_dir = os.path.join(get_home_dir(), ".claude")
         return os.path.exists(claude_dir)
 
+    def get_config_path(self):
+        return os.path.join(get_home_dir(), ".claude.json")
+
+    def verify(self, args):
+        return verify_json_mcp_entry(
+            self.get_config_path(), "mcpServers", self.display_name
+        )
+
     def install(self, args):
-        claude_json = os.path.join(get_home_dir(), ".claude.json")
-        mcp_stdio_path = get_mcp_stdio_path()
-
-        existing = read_json_safe(claude_json)
-        next_cfg = existing.copy()
-        servers = next_cfg.get("mcpServers", {})
-
-        already_has = "agentcache" in servers
-        if already_has and not args.force:
-            print(f"[OK] Claude Code already wired in {claude_json}")
-        else:
-            if args.dry_run:
-                print(f"[dry-run] Would write mcpServers.agentcache in {claude_json}")
-            else:
-                backup = backup_file(claude_json, "claude-code")
-                if backup:
-                    print(f"Backed up configuration to {backup}")
-
-                env = {
-                    "AGENTCACHE_URL": os.environ.get("AGENTCACHE_URL")
-                    or os.environ.get("AGENTMEMORY_URL")
-                    or "http://localhost:3111"
-                }
-                secret = os.environ.get("AGENTCACHE_SECRET") or os.environ.get(
-                    "AGENTMEMORY_SECRET"
-                )
-                if secret:
-                    env["AGENTCACHE_SECRET"] = secret
-                servers["agentcache"] = {
-                    "command": sys.executable,
-                    "args": [mcp_stdio_path],
-                    "env": env,
-                }
-                next_cfg["mcpServers"] = servers
-                write_json_atomic(claude_json, next_cfg)
-                print(f"[OK] Wired Claude Code MCP to {claude_json}")
+        install_json_mcp_entry(
+            self.get_config_path(),
+            servers_key="mcpServers",
+            display_name=self.display_name,
+            args=args,
+            backup_prefix="claude-code",
+        )
 
         if args.with_hooks:
             claude_settings = os.path.join(get_home_dir(), ".claude", "settings.json")
@@ -191,9 +409,36 @@ class CodexAdapter:
     name = "codex"
     display_name = "Codex CLI"
 
+    def get_config_path(self):
+        return os.path.join(get_home_dir(), ".codex", "config.toml")
+
     def detect(self):
         codex_dir = os.path.join(get_home_dir(), ".codex")
         return os.path.exists(codex_dir)
+
+    def verify(self, args):
+        codex_toml = self.get_config_path()
+        if not os.path.exists(codex_toml):
+            print(f"[--] {self.display_name}: no config file at {codex_toml}")
+            return False
+        with open(codex_toml, "r", encoding="utf-8") as f:
+            current = f.read()
+        if "[mcp_servers.agentcache]" not in current:
+            print(
+                f"[--] {self.display_name}: no [mcp_servers.agentcache] block in "
+                f"{codex_toml}"
+            )
+            return False
+        python_exe_posix = sys.executable.replace("\\", "/")
+        mcp_stdio_posix = get_mcp_stdio_path().replace("\\", "/")
+        if codex_entry_matches(current, python_exe_posix, mcp_stdio_posix):
+            print(f"[OK] {self.display_name}: up to date ({codex_toml})")
+            return True
+        print(
+            f"[!!] {self.display_name}: STALE ({codex_toml}) — "
+            "block does not match desired command/args/env"
+        )
+        return False
 
     def install(self, args):
         codex_toml = os.path.join(get_home_dir(), ".codex", "config.toml")
@@ -226,12 +471,19 @@ AGENTCACHE_URL = "{url}"
                 current = f.read()
 
         wired = "[mcp_servers.agentcache]" in current
-        if wired and not args.force:
-            print(f"[OK] Codex CLI already wired in {codex_toml}")
+        up_to_date = wired and codex_entry_matches(
+            current, python_exe_posix, mcp_stdio_posix
+        )
+        if up_to_date and not args.force:
+            print(
+                f"[OK] Codex CLI already wired in {codex_toml} "
+                "(re-run with --force to overwrite)"
+            )
         else:
+            action = "update" if wired else "write"
             if args.dry_run:
                 print(
-                    f"[dry-run] Would write [mcp_servers.agentcache] block to {codex_toml}"
+                    f"[dry-run] Would {action} [mcp_servers.agentcache] block in {codex_toml}"
                 )
             else:
                 backup = backup_file(codex_toml, "codex", "toml")
@@ -268,7 +520,10 @@ AGENTCACHE_URL = "{url}"
                 os.makedirs(os.path.dirname(codex_toml), exist_ok=True)
                 with open(codex_toml, "w", encoding="utf-8") as f:
                     f.write(next_toml)
-                print(f"[OK] Wired Codex CLI TOML configuration to {codex_toml}")
+                if wired:
+                    print(f"[OK] Updated existing agentcache MCP entry in {codex_toml}")
+                else:
+                    print(f"[OK] Wired Codex CLI TOML configuration to {codex_toml}")
 
         if args.with_hooks:
             codex_hooks = os.path.join(get_home_dir(), ".codex", "hooks.json")
@@ -299,25 +554,49 @@ class HermesAdapter:
         hermes_dir = os.path.join(get_home_dir(), ".hermes")
         return os.path.exists(hermes_dir)
 
+    def get_plugin_source_dir(self):
+        """Return the packaged Hermes plugin source directory.
+
+        Uses importlib.resources so the lookup survives editable installs,
+        zipapps, and any environment where __file__-relative walks lie.
+        """
+        return str(resources.files("agentcache.integrations.hermes"))
+
+    def verify(self, args):
+        dest = os.path.join(get_home_dir(), ".hermes", "plugins", "agentcache")
+        if not os.path.isdir(dest):
+            print(f"[--] {self.display_name}: plugin not installed at {dest}")
+            return False
+        expected = ("__init__.py", "plugin.yaml")
+        missing = [f for f in expected if not os.path.isfile(os.path.join(dest, f))]
+        if missing:
+            print(
+                f"[!!] {self.display_name}: STALE ({dest}) — missing files: {missing}"
+            )
+            return False
+        print(f"[OK] {self.display_name}: plugin present at {dest}")
+        return True
+
     def install(self, args):
         dest_dir = os.path.join(get_home_dir(), ".hermes", "plugins", "agentcache")
-        src_dir = os.path.dirname(os.path.abspath(__file__))
-        project_root = os.path.dirname(src_dir)
-        hermes_src = os.path.join(project_root, "integrations", "hermes")
+        hermes_src = self.get_plugin_source_dir()
 
         if not os.path.exists(hermes_src):
             print(
-                f"[FAIL] Failed: Source integrations/hermes not found at {hermes_src}"
+                f"[FAIL] Failed: Packaged Hermes plugin not found at {hermes_src}. "
+                "Reinstall agentcache-core."
             )
             return
 
         if args.dry_run:
-            print(f"[dry-run] Would copy {hermes_src} to {dest_dir}")
+            action = "overwrite" if os.path.exists(dest_dir) else "copy"
+            print(f"[dry-run] Would {action} {hermes_src} to {dest_dir}")
         else:
             if os.path.exists(dest_dir):
                 if not args.force:
                     print(
-                        f"[OK] Hermes plugin directory already exists at {dest_dir}. Use --force to overwrite."
+                        f"[OK] Hermes plugin already installed at {dest_dir} "
+                        "(re-run with --force to overwrite)"
                     )
                     return
                 shutil.rmtree(dest_dir)
@@ -325,12 +604,12 @@ class HermesAdapter:
             shutil.copytree(hermes_src, dest_dir)
             print(f"[OK] Copied Hermes cache provider plugin to {dest_dir}")
             print("To finish configuration, add to ~/.hermes/config.yaml:")
+            print("  memory:")
+            print("    provider: agentcache")
             print("  mcp_servers:")
             print("    agentcache:")
             print("      command: python")
             print(f'      args: ["{get_mcp_stdio_path()}"]')
-            print("  cache:")
-            print("    provider: agentcache")
 
 
 class AntigravityAdapter:
@@ -392,6 +671,14 @@ class AntigravityAdapter:
                 f.write("\n")
         print(f"[OK] Installed {len(tools)} tool schemas to {gemini_mcp_dir}")
 
+    def verify(self, args):
+        user_dir = self.get_user_dir()
+        return verify_json_mcp_entry(
+            os.path.join(user_dir, "mcp_config.json"),
+            "mcpServers",
+            "Antigravity VS Code client",
+        )
+
     def install(self, args):
         # 1. Install tool schemas under ~/.gemini/antigravity/mcp/agentcache
         gemini_parent = os.path.dirname(os.path.dirname(self.get_gemini_mcp_dir()))
@@ -401,48 +688,13 @@ class AntigravityAdapter:
         # 2. Wire the VS Code/User AppData client config if present
         user_dir = self.get_user_dir()
         if os.path.exists(user_dir) or args.force:
-            mcp_config_path = os.path.join(user_dir, "mcp_config.json")
-            mcp_stdio_path = get_mcp_stdio_path()
-
-            existing = read_json_safe(mcp_config_path)
-            next_cfg = existing.copy()
-            servers = next_cfg.get("mcpServers", {})
-
-            already_has = "agentcache" in servers
-            if already_has and not args.force:
-                print(
-                    f"[OK] Antigravity VS Code client already wired in {mcp_config_path}"
-                )
-            else:
-                if args.dry_run:
-                    print(
-                        f"[dry-run] Would write mcpServers.agentcache in {mcp_config_path}"
-                    )
-                else:
-                    backup = backup_file(mcp_config_path, "antigravity")
-                    if backup:
-                        print(f"Backed up config to {backup}")
-
-                    env = {
-                        "AGENTCACHE_URL": os.environ.get("AGENTCACHE_URL")
-                        or os.environ.get("AGENTMEMORY_URL")
-                        or "http://localhost:3111"
-                    }
-                    secret = os.environ.get("AGENTCACHE_SECRET") or os.environ.get(
-                        "AGENTMEMORY_SECRET"
-                    )
-                    if secret:
-                        env["AGENTCACHE_SECRET"] = secret
-                    servers["agentcache"] = {
-                        "command": sys.executable,
-                        "args": [mcp_stdio_path],
-                        "env": env,
-                    }
-                    next_cfg["mcpServers"] = servers
-                    write_json_atomic(mcp_config_path, next_cfg)
-                    print(
-                        f"[OK] Wired Antigravity VS Code client MCP config in {mcp_config_path}"
-                    )
+            install_json_mcp_entry(
+                os.path.join(user_dir, "mcp_config.json"),
+                servers_key="mcpServers",
+                display_name="Antigravity VS Code client",
+                args=args,
+                backup_prefix="antigravity",
+            )
 
 
 class KiroAdapter:
@@ -453,45 +705,22 @@ class KiroAdapter:
         kiro_dir = os.path.join(get_home_dir(), ".kiro")
         return os.path.exists(kiro_dir)
 
+    def get_config_path(self):
+        return os.path.join(get_home_dir(), ".kiro", "settings", "mcp.json")
+
+    def verify(self, args):
+        return verify_json_mcp_entry(
+            self.get_config_path(), "mcpServers", self.display_name
+        )
+
     def install(self, args):
-        mcp_config_path = os.path.join(get_home_dir(), ".kiro", "settings", "mcp.json")
-        mcp_stdio_path = get_mcp_stdio_path()
-
-        existing = read_json_safe(mcp_config_path)
-        next_cfg = existing.copy()
-        servers = next_cfg.get("mcpServers", {})
-
-        already_has = "agentcache" in servers
-        if already_has and not args.force:
-            print(f"[OK] Kiro already wired in {mcp_config_path}")
-        else:
-            if args.dry_run:
-                print(
-                    f"[dry-run] Would write mcpServers.agentcache in {mcp_config_path}"
-                )
-            else:
-                backup = backup_file(mcp_config_path, "kiro")
-                if backup:
-                    print(f"Backed up config to {backup}")
-
-                env = {
-                    "AGENTCACHE_URL": os.environ.get("AGENTCACHE_URL")
-                    or os.environ.get("AGENTMEMORY_URL")
-                    or "http://localhost:3111"
-                }
-                secret = os.environ.get("AGENTCACHE_SECRET") or os.environ.get(
-                    "AGENTMEMORY_SECRET"
-                )
-                if secret:
-                    env["AGENTCACHE_SECRET"] = secret
-                servers["agentcache"] = {
-                    "command": sys.executable,
-                    "args": [mcp_stdio_path],
-                    "env": env,
-                }
-                next_cfg["mcpServers"] = servers
-                write_json_atomic(mcp_config_path, next_cfg)
-                print(f"[OK] Wired Kiro MCP config in {mcp_config_path}")
+        install_json_mcp_entry(
+            self.get_config_path(),
+            servers_key="mcpServers",
+            display_name=self.display_name,
+            args=args,
+            backup_prefix="kiro",
+        )
 
 
 class VSCodeAdapter:
@@ -517,43 +746,19 @@ class VSCodeAdapter:
     def detect(self):
         return os.path.exists(os.path.dirname(self.get_user_config_path()))
 
+    def verify(self, args):
+        return verify_json_mcp_entry(
+            self.get_user_config_path(), "servers", self.display_name
+        )
+
     def install(self, args):
-        mcp_config_path = self.get_user_config_path()
-        mcp_stdio_path = get_mcp_stdio_path()
-
-        existing = read_json_safe(mcp_config_path)
-        next_cfg = existing.copy()
-        servers = next_cfg.get("servers", {})
-
-        already_has = "agentcache" in servers
-        if already_has and not args.force:
-            print(f"[OK] VS Code already wired in {mcp_config_path}")
-        else:
-            if args.dry_run:
-                print(f"[dry-run] Would write servers.agentcache in {mcp_config_path}")
-            else:
-                backup = backup_file(mcp_config_path, "vscode")
-                if backup:
-                    print(f"Backed up config to {backup}")
-
-                env = {
-                    "AGENTCACHE_URL": os.environ.get("AGENTCACHE_URL")
-                    or os.environ.get("AGENTMEMORY_URL")
-                    or "http://localhost:3111"
-                }
-                secret = os.environ.get("AGENTCACHE_SECRET") or os.environ.get(
-                    "AGENTMEMORY_SECRET"
-                )
-                if secret:
-                    env["AGENTCACHE_SECRET"] = secret
-                servers["agentcache"] = {
-                    "command": sys.executable,
-                    "args": [mcp_stdio_path],
-                    "env": env,
-                }
-                next_cfg["servers"] = servers
-                write_json_atomic(mcp_config_path, next_cfg)
-                print(f"[OK] Wired VS Code MCP config in {mcp_config_path}")
+        install_json_mcp_entry(
+            self.get_user_config_path(),
+            servers_key="servers",
+            display_name=self.display_name,
+            args=args,
+            backup_prefix="vscode",
+        )
 
 
 class RulesGeneratorAdapter:
@@ -654,8 +859,12 @@ def run_connect(args):
         )
         sys.exit(1)
 
+    verify_mode = getattr(args, "verify", False)
+
     targets = []
-    if getattr(args, "all", False):
+    if getattr(args, "all", False) or (verify_mode and not agent_name):
+        # In verify mode with no explicit target, inspect every detected
+        # client so the user gets a single diff report.
         targets = [a for a in ADAPTERS if a.detect() and a.name != "cursor"]
     else:
         matched = [a for a in ADAPTERS if a.name == agent_name]
@@ -671,6 +880,19 @@ def run_connect(args):
             print(
                 f"[FAIL] {target.display_name} not detected on this system. (Use --force to install anyway)"
             )
+            continue
+
+        if verify_mode:
+            verify_fn = getattr(target, "verify", None)
+            if verify_fn is None:
+                print(
+                    f"[--] {target.display_name}: --verify not supported for this adapter"
+                )
+                continue
+            try:
+                verify_fn(args)
+            except Exception as e:
+                print(f"[FAIL] Failed to verify {target.display_name}: {e}")
             continue
 
         print(f"Wiring {target.display_name}...")
@@ -707,10 +929,18 @@ def main():
     parser.add_argument(
         "--all", action="store_true", help="Attempt connection to all detected agents."
     )
+    parser.add_argument(
+        "--verify",
+        action="store_true",
+        help=(
+            "Diff each detected agentcache MCP entry against what would be "
+            "written. Read-only — no writes, backups, or hook installs."
+        ),
+    )
 
     args = parser.parse_args()
 
-    if not args.agent and not args.all:
+    if not args.agent and not args.all and not args.verify:
         parser.print_help()
         print("\nAvailable agents:")
         for a in ADAPTERS:

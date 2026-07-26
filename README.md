@@ -17,13 +17,15 @@ Status: **Beta** (`Development Status :: 4 - Beta`). API is stable enough for da
 ## Install
 
 ```bash
-pip install agentcache
+pip install agentcache-core
 ```
+
+The package installs as `agentcache-core` on PyPI but imports and runs as `agentcache` (`import agentcache`, `agentcache serve`). The plain `agentcache` name on PyPI belongs to an unrelated project.
 
 With optional local embeddings (adds `sentence-transformers`, ~1 GB of model weights on first use):
 
 ```bash
-pip install "agentcache[local-embeddings]"
+pip install "agentcache-core[local-embeddings]"
 ```
 
 Requires Python 3.10+.
@@ -89,11 +91,13 @@ Top-level exports: `create_app`, `StateKV`, `KV`, `ObservationStore`, `Observati
 ## Wire it into your agent
 
 ```bash
-agentcache connect claude-code    # or: cursor, cline, kiro, antigravity, codex
+agentcache connect claude-code    # or: cursor, cline, kiro, antigravity, codex, hermes, vscode
 agentcache connect --all          # detect and wire every supported client
 ```
 
-This registers the MCP stdio bridge (`agentcache.mcp_stdio`) and, with `--with-hooks`, installs workspace hook blocks that call `/agentcache/observe` on file events.
+This registers the MCP stdio bridge (`agentcache.mcp_stdio`) and, with `--with-hooks`, installs workspace hook blocks that call `/agentcache/observe` on file events. Re-running is safe — the CLI detects stale entries (wrong interpreter path, missing env keys, etc.) and repairs them, or prints a `--force` hint when the entry is already up to date.
+
+See [docs/mcp-setup.md](docs/mcp-setup.md) for per-client config paths, manual wiring, and troubleshooting.
 
 ---
 

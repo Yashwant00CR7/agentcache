@@ -136,7 +136,7 @@ def create_health_bp(kv=None, embedding_provider=None):
         ]
         return jsonify(
             {
-                "version": "0.9.9",
+                "version": "0.9.10",
                 "provider": provider_kind,
                 "embeddingProvider": embedding_prov,
                 "flags": flags,

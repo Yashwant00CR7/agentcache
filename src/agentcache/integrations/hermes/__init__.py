@@ -4,7 +4,7 @@ agentcache memory provider for Hermes Agent.
 Drop this folder into ~/.hermes/plugins/agentcache/
 or install via: hermes plugin install agentcache
 
-Requires the agentcache server running: `pip install agentcache && agentcache serve`.
+Requires the agentcache server running: `pip install agentcache-core && agentcache serve`.
 """
 
 from __future__ import annotations
@@ -16,9 +16,9 @@ import threading
 import time
 from pathlib import Path
 from typing import Any, Callable
+from urllib.error import URLError
 from urllib.parse import urlparse
 from urllib.request import Request, urlopen
-from urllib.error import URLError
 
 try:
     from agent.memory_provider import MemoryProvider
@@ -37,22 +37,44 @@ except ImportError:
         def get_tool_schemas(self) -> list[dict]: ...
         @abstractmethod
         def handle_tool_call(self, name: str, args: dict) -> str: ...
-        def get_config_schema(self) -> list[dict]: return []
-        def save_config(self, values: dict, hermes_home: str) -> None: pass
-        def system_prompt_block(self) -> str: return ""
-        def prefetch(self, query: str, **kwargs: Any) -> str: return ""
-        def queue_prefetch(self, query: str, **kwargs: Any) -> None: pass
-        def sync_turn(self, user: str, assistant: str, **kwargs: Any) -> None: pass
-        def on_session_end(self, messages: list, **kwargs: Any) -> None: pass
-        def on_pre_compress(self, messages: list, **kwargs: Any) -> None: pass
-        def on_memory_write(self, action: str, target: str, content: str, **kwargs: Any) -> None: pass
-        def shutdown(self, **kwargs: Any) -> None: pass
+        def get_config_schema(self) -> list[dict]:
+            return []
+
+        def save_config(self, values: dict, hermes_home: str) -> None:
+            pass
+
+        def system_prompt_block(self) -> str:
+            return ""
+
+        def prefetch(self, query: str, **kwargs: Any) -> str:
+            return ""
+
+        def queue_prefetch(self, query: str, **kwargs: Any) -> None:
+            pass
+
+        def sync_turn(self, user: str, assistant: str, **kwargs: Any) -> None:
+            pass
+
+        def on_session_end(self, messages: list, **kwargs: Any) -> None:
+            pass
+
+        def on_pre_compress(self, messages: list, **kwargs: Any) -> None:
+            pass
+
+        def on_memory_write(
+            self, action: str, target: str, content: str, **kwargs: Any
+        ) -> None:
+            pass
+
+        def shutdown(self, **kwargs: Any) -> None:
+            pass
 
 
 DEFAULT_BASE_URL = "http://localhost:3111"
 TIMEOUT = 5
 LOOPBACK_HOSTS = {"localhost", "127.0.0.1", "::1"}
 _plaintext_bearer_warned = False
+
 
 # agentcache's documented runtime config lives at ~/.agentcache/.env.
 # When agentcache is launched as a systemd user service (or any other
@@ -118,7 +140,10 @@ def _uses_plaintext_bearer_auth(base: str, secret: str = "") -> bool:
     if not secret:
         return False
     parsed = urlparse(base)
-    return parsed.scheme == "http" and (parsed.hostname or "").lower() not in LOOPBACK_HOSTS
+    return (
+        parsed.scheme == "http"
+        and (parsed.hostname or "").lower() not in LOOPBACK_HOSTS
+    )
 
 
 def _plaintext_bearer_auth_message(base: str) -> str:
@@ -150,7 +175,13 @@ def _reset_plaintext_bearer_guard_for_tests() -> None:
     _plaintext_bearer_warned = False
 
 
-def _api(base: str, path: str, body: dict | None = None, method: str = "POST", secret: str = "") -> dict | None:
+def _api(
+    base: str,
+    path: str,
+    body: dict | None = None,
+    method: str = "POST",
+    secret: str = "",
+) -> dict | None:
     if not _validate_url(base):
         return None
     url = f"{base}/agentcache/{path}"
@@ -163,7 +194,9 @@ def _api(base: str, path: str, body: dict | None = None, method: str = "POST", s
     data = json.dumps(body).encode() if body else None
     req = Request(url, data=data, headers=headers, method=method)
     try:
-        with urlopen(req, timeout=TIMEOUT) as resp:
+        # _validate_url() above restricts scheme to http/https, so urlopen
+        # cannot be steered into file://, ftp://, or custom schemes.
+        with urlopen(req, timeout=TIMEOUT) as resp:  # nosec B310
             return json.loads(resp.read().decode())
     except (URLError, TimeoutError, json.JSONDecodeError):
         return None
@@ -175,7 +208,6 @@ def _api_bg(base: str, path: str, body: dict | None = None) -> None:
 
 
 class AgentCacheProvider(MemoryProvider):
-
     @property
     def name(self) -> str:
         return "agentcache"
@@ -190,13 +222,19 @@ class AgentCacheProvider(MemoryProvider):
         self._session_id = session_id
         self._project = kwargs.get("cwd", os.getcwd())
         if os.environ.get("AGENTCACHE_REQUIRE_HTTPS") == "1":
-            _check_plaintext_bearer_guard(self._base, os.environ.get("AGENTCACHE_SECRET", ""))
+            _check_plaintext_bearer_guard(
+                self._base, os.environ.get("AGENTCACHE_SECRET", "")
+            )
 
-        _api(self._base, "session/start", {
-            "sessionId": session_id,
-            "project": self._project,
-            "cwd": self._project,
-        })
+        _api(
+            self._base,
+            "session/start",
+            {
+                "sessionId": session_id,
+                "project": self._project,
+                "cwd": self._project,
+            },
+        )
 
     def get_config_schema(self) -> list[dict]:
         return [
@@ -220,19 +258,27 @@ class AgentCacheProvider(MemoryProvider):
         config_path.write_text(json.dumps(values, indent=2))
 
     def system_prompt_block(self) -> str:
-        result = _api(self._base, "context", {
-            "sessionId": self._session_id,
-            "project": self._project,
-        })
+        result = _api(
+            self._base,
+            "context",
+            {
+                "sessionId": self._session_id,
+                "project": self._project,
+            },
+        )
         if result and result.get("context"):
             return result["context"]
         return ""
 
     def prefetch(self, query: str, **kwargs: Any) -> str:
-        result = _api(self._base, "smart-search", {
-            "query": query,
-            "limit": 5,
-        })
+        result = _api(
+            self._base,
+            "smart-search",
+            {
+                "query": query,
+                "limit": 5,
+            },
+        )
         if not result or not result.get("results"):
             return ""
 
@@ -257,7 +303,11 @@ class AgentCacheProvider(MemoryProvider):
                     "type": "object",
                     "properties": {
                         "query": {"type": "string", "description": "Search query"},
-                        "limit": {"type": "integer", "description": "Max results", "default": 10},
+                        "limit": {
+                            "type": "integer",
+                            "description": "Max results",
+                            "default": 10,
+                        },
                     },
                     "required": ["query"],
                 },
@@ -268,10 +318,20 @@ class AgentCacheProvider(MemoryProvider):
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "content": {"type": "string", "description": "What to remember"},
+                        "content": {
+                            "type": "string",
+                            "description": "What to remember",
+                        },
                         "type": {
                             "type": "string",
-                            "enum": ["pattern", "preference", "architecture", "bug", "workflow", "fact"],
+                            "enum": [
+                                "pattern",
+                                "preference",
+                                "architecture",
+                                "bug",
+                                "workflow",
+                                "fact",
+                            ],
                             "description": "Memory type",
                         },
                     },
@@ -299,86 +359,123 @@ class AgentCacheProvider(MemoryProvider):
         # JSON string here — matches what agentcache's MCP stdio bridge does
         # (`{ type: "text", text: JSON.stringify(...) }`).
         if name == "memory_recall":
-            result = _api(self._base, "search", {
-                "query": args["query"],
-                "limit": args.get("limit", 10),
-            })
+            result = _api(
+                self._base,
+                "search",
+                {
+                    "query": args["query"],
+                    "limit": args.get("limit", 10),
+                },
+            )
             if not result:
                 return json.dumps({"results": []})
             items = []
             for r in result.get("results", []):
                 obs = r.get("observation", r)
-                items.append({
-                    "title": obs.get("title", ""),
-                    "type": obs.get("type", ""),
-                    "narrative": obs.get("narrative", ""),
-                    "importance": obs.get("importance", 0),
-                    "timestamp": obs.get("timestamp", ""),
-                })
+                items.append(
+                    {
+                        "title": obs.get("title", ""),
+                        "type": obs.get("type", ""),
+                        "narrative": obs.get("narrative", ""),
+                        "importance": obs.get("importance", 0),
+                        "timestamp": obs.get("timestamp", ""),
+                    }
+                )
             return json.dumps({"results": items})
 
         if name == "memory_save":
-            result = _api(self._base, "remember", {
-                "content": args["content"],
-                "type": args.get("type", "fact"),
-            })
+            result = _api(
+                self._base,
+                "remember",
+                {
+                    "content": args["content"],
+                    "type": args.get("type", "fact"),
+                },
+            )
             return json.dumps(result or {"success": False})
 
         if name == "memory_search":
-            result = _api(self._base, "smart-search", {
-                "query": args["query"],
-                "limit": args.get("limit", 5),
-            })
+            result = _api(
+                self._base,
+                "smart-search",
+                {
+                    "query": args["query"],
+                    "limit": args.get("limit", 5),
+                },
+            )
             if not result:
                 return json.dumps({"results": []})
             items = []
             for r in result.get("results", []):
                 obs = r.get("observation", r)
-                items.append({
-                    "title": obs.get("title", ""),
-                    "narrative": obs.get("narrative", "")[:300],
-                    "score": r.get("combinedScore", r.get("score", 0)),
-                })
+                items.append(
+                    {
+                        "title": obs.get("title", ""),
+                        "narrative": obs.get("narrative", "")[:300],
+                        "score": r.get("combinedScore", r.get("score", 0)),
+                    }
+                )
             return json.dumps({"results": items})
 
         return json.dumps({"error": f"Unknown tool: {name}"})
 
     def sync_turn(self, user: str, assistant: str, **kwargs: Any) -> None:
-        _api_bg(self._base, "observe", {
-            "hookType": "post_tool_use",
-            "sessionId": kwargs.get("session_id", self._session_id),
-            "project": self._project,
-            "cwd": self._project,
-            "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-            "data": {
-                "tool_name": "conversation",
-                "tool_input": user[:500],
-                "tool_output": assistant[:2000],
+        _api_bg(
+            self._base,
+            "observe",
+            {
+                "hookType": "post_tool_use",
+                "sessionId": kwargs.get("session_id", self._session_id),
+                "project": self._project,
+                "cwd": self._project,
+                "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                "data": {
+                    "tool_name": "conversation",
+                    "tool_input": user[:500],
+                    "tool_output": assistant[:2000],
+                },
             },
-        })
+        )
 
     def on_session_end(self, messages: list, **kwargs: Any) -> None:
-        _api(self._base, "session/end", {
-            "sessionId": kwargs.get("session_id", self._session_id),
-        })
+        _api(
+            self._base,
+            "session/end",
+            {
+                "sessionId": kwargs.get("session_id", self._session_id),
+            },
+        )
 
     def on_pre_compress(self, messages: list, **kwargs: Any) -> None:
-        result = _api(self._base, "context", {
-            "sessionId": kwargs.get("session_id", self._session_id),
-            "project": self._project,
-        })
+        result = _api(
+            self._base,
+            "context",
+            {
+                "sessionId": kwargs.get("session_id", self._session_id),
+                "project": self._project,
+            },
+        )
         if result and result.get("context"):
-            messages.insert(0, {
-                "role": "user",
-                "content": f"[agentcache context before compaction]\n{result['context']}",
-            })
+            messages.insert(
+                0,
+                {
+                    "role": "user",
+                    "content": f"[agentcache context before compaction]\n{result['context']}",
+                },
+            )
 
-    def on_memory_write(self, action: str, target: str, content: str, **kwargs: Any) -> None:
+    def on_memory_write(
+        self, action: str, target: str, content: str, **kwargs: Any
+    ) -> None:
         if action in ("add", "update") and content:
-            _api_bg(self._base, "remember", {
-                "content": content,
-                "type": "fact",
-            })
+            _api_bg(
+                self._base,
+                "remember",
+                {
+                    "content": content,
+                    "type": "fact",
+                },
+            )
 
     def shutdown(self, **kwargs: Any) -> None:
         pass

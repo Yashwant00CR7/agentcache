@@ -15,17 +15,21 @@ Hermes ships with `MEMORY.md`/`USER.md` and SQLite FTS. This plugin adds structu
 **1. Install and start agentcache** (Python 3.10+):
 
 ```bash
-pip install agentcache
+pip install agentcache-core
 agentcache serve --port 3111
 ```
 
-Health check: `curl http://localhost:3111/agentcache/health` should return a JSON payload with `"version": "0.9.9"`.
+(The distribution is `agentcache-core` on PyPI but installs the `agentcache` import + CLI.)
 
-**2. Drop this plugin into Hermes:**
+Health check: `curl http://localhost:3111/agentcache/health` should return a JSON payload with `"version": "0.9.10"`.
+
+**2. Wire it into Hermes with a single command:**
 
 ```bash
-cp -r integrations/hermes ~/.hermes/plugins/agentcache
+agentcache connect hermes
 ```
+
+This copies the plugin from the installed package into `~/.hermes/plugins/agentcache/`. Add `--force` to re-copy on top of an existing install. If you'd rather do it manually, the plugin lives at `<site-packages>/agentcache/integrations/hermes/`.
 
 **3. Wire it in `~/.hermes/config.yaml`:**
 
