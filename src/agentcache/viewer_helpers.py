@@ -35,6 +35,8 @@ def make_viewer_response(base_dir: str):
         .replace("__AGENTCACHE_AUTO_TOKEN__", "")
     )
 
+    # ``style-src`` and ``font-src`` allow Google Fonts because the optional
+    # Inkwell theme fetches Caveat / Inter / JetBrains Mono on demand.
     csp = "; ".join(
         [
             "default-src 'none'",
@@ -44,13 +46,13 @@ def make_viewer_response(base_dir: str):
             "form-action 'none'",
             f"script-src 'nonce-{nonce}'",
             "script-src-attr 'none'",
-            "style-src 'unsafe-inline'",
+            "style-src 'unsafe-inline' https://fonts.googleapis.com",
             (
                 "connect-src 'self' https: http://localhost:* http://127.0.0.1:* "
                 "wss: ws://localhost:* ws://127.0.0.1:* wss://localhost:* wss://127.0.0.1:*"
             ),
             "img-src 'self' data:",
-            "font-src 'self'",
+            "font-src 'self' https://fonts.gstatic.com",
         ]
     )
 
