@@ -727,6 +727,9 @@ class VSCodeAdapter:
     name = "vscode"
     display_name = "VS Code"
 
+    def get_workspace_config_path(self):
+        return os.path.join(os.getcwd(), ".vscode", "mcp.json")
+
     def get_user_config_path(self):
         if sys.platform == "darwin":
             return os.path.join(
@@ -743,17 +746,32 @@ class VSCodeAdapter:
         else:
             return os.path.join(get_home_dir(), ".config", "Code", "User", "mcp.json")
 
+    def get_config_path(self):
+        workspace_config = self.get_workspace_config_path()
+        if os.path.isdir(os.path.dirname(workspace_config)):
+            return workspace_config
+        return self.get_user_config_path()
+
     def detect(self):
-        return os.path.exists(os.path.dirname(self.get_user_config_path()))
+        return (
+            os.path.exists(os.path.dirname(self.get_workspace_config_path()))
+            or os.path.exists(os.path.dirname(self.get_user_config_path()))
+            or shutil.which("code") is not None
+        )
 
     def verify(self, args):
         return verify_json_mcp_entry(
-            self.get_user_config_path(), "servers", self.display_name
+            self.get_config_path(), "servers", self.display_name
         )
 
     def install(self, args):
+        if getattr(args, "with_hooks", False):
+            print(
+                "[INFO] VS Code has no native hook installer; skipping hooks.",
+                file=sys.stderr,
+            )
         install_json_mcp_entry(
-            self.get_user_config_path(),
+            self.get_config_path(),
             servers_key="servers",
             display_name=self.display_name,
             args=args,

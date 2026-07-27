@@ -320,7 +320,75 @@ def test_kiro_repairs_stale_entry(fake_home, fake_mcp_stdio, capsys):
 # ------------------------------------------------------------------------------
 
 
-def test_vscode_repairs_stale_entry(fake_home, fake_mcp_stdio, capsys):
+def test_vscode_prefers_workspace_config(
+    fake_home, fake_mcp_stdio, tmp_path, monkeypatch
+):
+    monkeypatch.chdir(tmp_path)
+    workspace_config_dir = tmp_path / ".vscode"
+    workspace_config_dir.mkdir()
+    user_config_path = connect.VSCodeAdapter().get_user_config_path()
+    os.makedirs(os.path.dirname(user_config_path), exist_ok=True)
+
+    adapter = connect.VSCodeAdapter()
+
+    assert adapter.get_config_path() == str(workspace_config_dir / "mcp.json")
+
+    adapter.install(Args())
+
+    with open(workspace_config_dir / "mcp.json", "r", encoding="utf-8") as f:
+        result = json.load(f)
+    assert "agentcache" in result["servers"]
+    assert not os.path.exists(user_config_path)
+
+
+def test_vscode_workspace_config_merges_existing_servers(
+    fake_home, fake_mcp_stdio, tmp_path, monkeypatch
+):
+    monkeypatch.chdir(tmp_path)
+    workspace_config = tmp_path / ".vscode" / "mcp.json"
+    workspace_config.parent.mkdir()
+    with open(workspace_config, "w", encoding="utf-8") as f:
+        json.dump(
+            {
+                "servers": {
+                    "other": {
+                        "type": "stdio",
+                        "command": "other",
+                        "args": ["server.py"],
+                    }
+                }
+            },
+            f,
+        )
+
+    connect.VSCodeAdapter().install(Args())
+
+    with open(workspace_config, "r", encoding="utf-8") as f:
+        result = json.load(f)
+    assert result["servers"]["other"]["command"] == "other"
+    assert result["servers"]["agentcache"]["command"] == sys.executable
+    assert result["servers"]["agentcache"]["args"] == [fake_mcp_stdio]
+
+
+def test_vscode_with_hooks_is_a_noop_note(
+    fake_home, fake_mcp_stdio, tmp_path, monkeypatch, capsys
+):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".vscode").mkdir()
+
+    connect.VSCodeAdapter().install(Args(with_hooks=True))
+
+    captured = capsys.readouterr()
+    assert "VS Code has no native hook installer" in captured.err
+    assert (tmp_path / ".vscode" / "mcp.json").exists()
+
+
+def test_vscode_repairs_stale_entry(
+    fake_home, fake_mcp_stdio, tmp_path, monkeypatch, capsys
+):
+    workspace = tmp_path / "outside-workspace"
+    workspace.mkdir()
+    monkeypatch.chdir(workspace)
     adapter = connect.VSCodeAdapter()
     mcp_config_path = adapter.get_user_config_path()
     os.makedirs(os.path.dirname(mcp_config_path), exist_ok=True)
