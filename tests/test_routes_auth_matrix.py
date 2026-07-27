@@ -31,7 +31,6 @@ UNPROTECTED_PATHS = {
     "/viewer",
     "/agentcache/viewer",
     "/agentmemory/viewer",
-    "/inkwell",
     "/favicon.svg",
 }
 

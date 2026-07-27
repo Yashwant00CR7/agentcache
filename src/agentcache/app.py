@@ -144,7 +144,7 @@ def create_app() -> Flask:
 
     init_services()
 
-    from .viewer_helpers import make_inkwell_response, make_viewer_response
+    from .viewer_helpers import make_viewer_response
 
     # 4. Flask app + blueprints
     flask_app = Flask(__name__)
@@ -218,16 +218,6 @@ def create_app() -> Flask:
     @flask_app.route("/favicon.svg")
     def serve_favicon():
         return send_from_directory(str(_viewer_resources), "favicon.svg")
-
-    # Alternate "Inkwell" viewer theme — served alongside the classic viewer
-    # at /. Same feature set (folders / memories / graph / timeline / tools);
-    # dark whiteboard aesthetic. See src/agentcache/viewer/inkwell.html.
-    @flask_app.route("/inkwell")
-    def serve_inkwell():
-        try:
-            return make_inkwell_response(_base_dir)
-        except Exception as e:
-            return f"Inkwell viewer not found: {e}", 404
 
     # 7. CORS after_request — D2.1: configurable via AGENTCACHE_CORS_ORIGINS env var
     # Default allows localhost, 127.0.0.1, HuggingFace Spaces, vscode-webview://, chrome-extension://
