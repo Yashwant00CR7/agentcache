@@ -320,7 +320,9 @@ def test_kiro_repairs_stale_entry(fake_home, fake_mcp_stdio, capsys):
 # ------------------------------------------------------------------------------
 
 
-def test_vscode_prefers_workspace_config(fake_home, fake_mcp_stdio, tmp_path, monkeypatch):
+def test_vscode_prefers_workspace_config(
+    fake_home, fake_mcp_stdio, tmp_path, monkeypatch
+):
     monkeypatch.chdir(tmp_path)
     workspace_config_dir = tmp_path / ".vscode"
     workspace_config_dir.mkdir()
@@ -368,7 +370,9 @@ def test_vscode_workspace_config_merges_existing_servers(
     assert result["servers"]["agentcache"]["args"] == [fake_mcp_stdio]
 
 
-def test_vscode_with_hooks_is_a_noop_note(fake_home, fake_mcp_stdio, tmp_path, monkeypatch, capsys):
+def test_vscode_with_hooks_is_a_noop_note(
+    fake_home, fake_mcp_stdio, tmp_path, monkeypatch, capsys
+):
     monkeypatch.chdir(tmp_path)
     (tmp_path / ".vscode").mkdir()
 
@@ -379,7 +383,9 @@ def test_vscode_with_hooks_is_a_noop_note(fake_home, fake_mcp_stdio, tmp_path, m
     assert (tmp_path / ".vscode" / "mcp.json").exists()
 
 
-def test_vscode_repairs_stale_entry(fake_home, fake_mcp_stdio, tmp_path, monkeypatch, capsys):
+def test_vscode_repairs_stale_entry(
+    fake_home, fake_mcp_stdio, tmp_path, monkeypatch, capsys
+):
     workspace = tmp_path / "outside-workspace"
     workspace.mkdir()
     monkeypatch.chdir(workspace)

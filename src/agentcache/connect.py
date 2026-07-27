@@ -766,7 +766,10 @@ class VSCodeAdapter:
 
     def install(self, args):
         if getattr(args, "with_hooks", False):
-            print("[INFO] VS Code has no native hook installer; skipping hooks.", file=sys.stderr)
+            print(
+                "[INFO] VS Code has no native hook installer; skipping hooks.",
+                file=sys.stderr,
+            )
         install_json_mcp_entry(
             self.get_config_path(),
             servers_key="servers",
