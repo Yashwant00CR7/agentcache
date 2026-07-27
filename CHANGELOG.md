@@ -5,6 +5,14 @@ All notable changes to `agentcache` will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.12] — 2026-07-27
+
+### Added
+- Inkwell viewer theme (dark whiteboard aesthetic) selectable from the header dropdown alongside Light and Dark. Loading skeleton, folder-memory card, and knowledge-graph surfaces are all themed. (#40)
+
+### Fixed
+- Folder-detail view now refreshes correctly when a live-broadcast observation arrives for a currently-open **empty** folder (previously silently dropped).
+
 ## [0.9.11] — 2026-07-26
 
 ### Fixed
@@ -51,6 +59,7 @@ First PyPI release. Distributed as `agentcache-core` (the bare `agentcache` name
 
 Older 0.9.x builds predate this changelog and were never published to PyPI.
 
+[0.9.12]: https://github.com/Yashwant00CR7/agentcache/releases/tag/v0.9.12
 [0.9.11]: https://github.com/Yashwant00CR7/agentcache/releases/tag/v0.9.11
 [0.9.10]: https://github.com/Yashwant00CR7/agentcache/releases/tag/v0.9.10
 [0.9.9]: https://github.com/Yashwant00CR7/agentcache/releases/tag/v0.9.9

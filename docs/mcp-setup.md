@@ -102,7 +102,7 @@ python -m agentcache.mcp_stdio
 
 ## Verifying the connection
 
-1. **Server** — `curl http://localhost:3111/agentcache/health` should return `{"status": "ok", "version": "0.9.11", ...}`.
+1. **Server** — `curl http://localhost:3111/agentcache/health` should return `{"status": "ok", "version": "0.9.12", ...}`.
 2. **Client** — start the agent and ask it to run `cache_smart_search(query="hello")`. If wiring succeeded you'll see a JSON tool result; if not, the client's MCP log (Claude Code: **View → Output → MCP Logs**) shows exactly what it tried to spawn.
 3. **Interpreter mismatch** — if the tool call errors with `ModuleNotFoundError: No module named 'agentcache'`, the client is using a Python that doesn't have `agentcache-core` installed. Either `pip install agentcache-core` into that interpreter, or re-run `agentcache connect <agent> --force` from the interpreter you *do* want it to use.
 
