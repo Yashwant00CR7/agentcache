@@ -507,6 +507,93 @@ class ObservationStore:
         all_obs.sort(key=lambda o: o.get("timestamp", ""), reverse=True)
         return all_obs[:limit]
 
+    def _resolve_cursor_timestamp(
+        self,
+        folder_path: str,
+        agent_id: Optional[str],
+        since: Optional[str],
+    ) -> Optional[str]:
+        """Resolve a cursor (observation id or raw timestamp) to a timestamp.
+
+        If *since* matches a known observation id (via KV.obs_lookup or the
+        folder's own scope), its stored timestamp is returned. Otherwise the
+        value is treated as a raw timestamp string. ``None`` passes through.
+        """
+        if not since:
+            return None
+
+        lookup = self.kv.get(KV.obs_lookup, since)
+        if lookup and isinstance(lookup, dict):
+            fp = lookup.get("folderPath")
+            aid = lookup.get("agentId")
+            if fp and aid:
+                obs = self.kv.get(KV.folder_obs(fp, aid), since)
+                if obs and isinstance(obs, dict) and obs.get("timestamp"):
+                    return obs["timestamp"]
+
+        if agent_id is not None:
+            obs = self.kv.get(KV.folder_obs(folder_path, agent_id), since)
+            if obs and isinstance(obs, dict) and obs.get("timestamp"):
+                return obs["timestamp"]
+
+        # Not an observation id — treat as a raw timestamp cursor.
+        return since
+
+    def observations_since(
+        self,
+        folder_path: str,
+        agent_id: Optional[str] = None,
+        since: Optional[str] = None,
+        limit: int = 2000,
+    ) -> List[Dict[str, Any]]:
+        """Return a folder's observations after *since*, oldest-first.
+
+        *since* may be a timestamp string or an observation id. This is the
+        single read path shared by the context-pull (#45) and summarize-flush
+        (#46) flows so they stay aligned with the live /observe write path.
+        """
+        folder_path = normalize_folder_path(folder_path)
+        if agent_id is not None:
+            agent_id = validate_agent_id(agent_id)
+
+        since_ts = self._resolve_cursor_timestamp(folder_path, agent_id, since)
+        obs = self.timeline(
+            limit=limit,
+            folder_path=folder_path,
+            agent_id=agent_id,
+            after=since_ts,
+        )
+        obs.sort(key=lambda o: o.get("timestamp", ""))
+        return obs
+
+    def get_flush_cursor(
+        self, folder_path: str, agent_id: str
+    ) -> Optional[str]:
+        """Return the stored flush cursor timestamp for a (folder, agent) pair."""
+        folder_path = normalize_folder_path(folder_path)
+        agent_id = validate_agent_id(agent_id)
+        meta = self.kv.get(KV.folder_meta(folder_path, agent_id), "meta")
+        if meta and isinstance(meta, dict):
+            return meta.get("flushCursor")
+        return None
+
+    def set_flush_cursor(
+        self, folder_path: str, agent_id: str, timestamp: str
+    ) -> None:
+        """Persist the flush cursor timestamp into the folder's metadata."""
+        folder_path = normalize_folder_path(folder_path)
+        agent_id = validate_agent_id(agent_id)
+        meta_scope = KV.folder_meta(folder_path, agent_id)
+        meta = self.kv.get(meta_scope, "meta") or {
+            "folderPath": folder_path,
+            "agentId": agent_id,
+            "obsCount": 0,
+            "lastUpdated": timestamp,
+            "summary": None,
+        }
+        meta["flushCursor"] = timestamp
+        self.kv.set(meta_scope, "meta", meta)
+
     def backfill_lookup(self) -> None:
         """Ensure every folder observation has an entry in KV.obs_lookup."""
         folders = self.kv.list(KV.folders)

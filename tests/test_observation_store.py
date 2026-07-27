@@ -436,3 +436,107 @@ def test_full_lifecycle_e2e_pass(app_client):
         },
     )
     assert forget_resp.status_code == 200
+
+
+# ---------------------------------------------------------------------------
+# #43 — Folder-scoped "observations since cursor" query
+# ---------------------------------------------------------------------------
+
+
+def _seed_since_fixture(store):
+    """Three chronologically-ordered observations in one (folder, agent) pair."""
+    r1 = store.ingest(
+        {
+            "folderPath": "src/since",
+            "agentId": "agent_s",
+            "text": "First observation alpha",
+            "timestamp": "2026-07-24T10:00:00Z",
+        }
+    )
+    r2 = store.ingest(
+        {
+            "folderPath": "src/since",
+            "agentId": "agent_s",
+            "text": "Second observation beta",
+            "timestamp": "2026-07-24T11:00:00Z",
+        }
+    )
+    r3 = store.ingest(
+        {
+            "folderPath": "src/since",
+            "agentId": "agent_s",
+            "text": "Third observation gamma",
+            "timestamp": "2026-07-24T12:00:00Z",
+        }
+    )
+    return r1["observationId"], r2["observationId"], r3["observationId"]
+
+
+def test_observations_since_returns_all_in_chronological_order(tmp_db):
+    """With no cursor, every observation is returned oldest-first."""
+    store = ObservationStore(kv=tmp_db)
+    _seed_since_fixture(store)
+
+    obs = store.observations_since("src/since", "agent_s")
+    assert [o["text"] for o in obs] == [
+        "First observation alpha",
+        "Second observation beta",
+        "Third observation gamma",
+    ]
+
+
+def test_observations_since_timestamp_cursor(tmp_db):
+    """A timestamp cursor returns only strictly-later observations."""
+    store = ObservationStore(kv=tmp_db)
+    _seed_since_fixture(store)
+
+    obs = store.observations_since(
+        "src/since", "agent_s", since="2026-07-24T11:00:00Z"
+    )
+    assert [o["text"] for o in obs] == ["Third observation gamma"]
+
+
+def test_observations_since_observation_id_cursor(tmp_db):
+    """An observation-id cursor resolves to that obs's timestamp and excludes it."""
+    store = ObservationStore(kv=tmp_db)
+    _oid1, oid2, _oid3 = _seed_since_fixture(store)
+
+    obs = store.observations_since("src/since", "agent_s", since=oid2)
+    assert [o["text"] for o in obs] == ["Third observation gamma"]
+
+
+def test_observations_since_scoped_to_folder_and_agent(tmp_db):
+    """Observations from other folders/agents are excluded."""
+    store = ObservationStore(kv=tmp_db)
+    _seed_since_fixture(store)
+    store.ingest(
+        {
+            "folderPath": "src/other",
+            "agentId": "agent_s",
+            "text": "Different folder observation",
+            "timestamp": "2026-07-24T13:00:00Z",
+        }
+    )
+
+    obs = store.observations_since("src/since", "agent_s")
+    assert len(obs) == 3
+    assert all(o["folderPath"] == "src/since" for o in obs)
+
+
+def test_flush_cursor_get_set_roundtrip(tmp_db):
+    """Flush cursor defaults to None and persists once set."""
+    store = ObservationStore(kv=tmp_db)
+    _seed_since_fixture(store)
+
+    assert store.get_flush_cursor("src/since", "agent_s") is None
+
+    store.set_flush_cursor("src/since", "agent_s", "2026-07-24T11:00:00Z")
+    assert store.get_flush_cursor("src/since", "agent_s") == "2026-07-24T11:00:00Z"
+
+    # A stored cursor drives observations_since when passed back in.
+    obs = store.observations_since(
+        "src/since",
+        "agent_s",
+        since=store.get_flush_cursor("src/since", "agent_s"),
+    )
+    assert [o["text"] for o in obs] == ["Third observation gamma"]

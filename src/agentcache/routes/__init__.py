@@ -10,6 +10,7 @@ from .mcp import mcp_bp
 from .memories import memories_bp
 from .migration import migration_bp
 from .observations import create_observations_bp, observations_bp
+from .pipeline import pipeline_bp
 from .search import search_bp
 
 
@@ -27,3 +28,4 @@ def register_blueprints(app, observation_store=None, search_service=None):
     app.register_blueprint(health_bp)
     app.register_blueprint(mcp_bp)
     app.register_blueprint(migration_bp)
+    app.register_blueprint(pipeline_bp)

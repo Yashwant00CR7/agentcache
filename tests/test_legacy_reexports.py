@@ -62,6 +62,7 @@ SYMBOL_MAP = {
     "strip_xml_wrappers": "agentcache.core.context_builder",
     "get_xml_tag": "agentcache.core.context_builder",
     "get_xml_children": "agentcache.core.context_builder",
+    "context": "agentcache.core.context_builder",
     # core/session_store.py
     "observe": "agentcache.core.session_store",
     "list_sessions": "agentcache.core.session_store",
