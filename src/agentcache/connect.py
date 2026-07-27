@@ -748,7 +748,7 @@ class VSCodeAdapter:
 
     def get_config_path(self):
         workspace_config = self.get_workspace_config_path()
-        if os.path.exists(os.path.dirname(workspace_config)):
+        if os.path.isdir(os.path.dirname(workspace_config)):
             return workspace_config
         return self.get_user_config_path()
 
