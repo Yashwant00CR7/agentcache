@@ -72,14 +72,10 @@ class KV:
     # Lessons — confidence-scored learning entries.
     lessons = "mem:lessons"
 
-    # Legacy summary / profile / slot / image-ref scopes.
+    # Legacy summary / profile / image-ref scopes.
     summaries = "mem:summaries"
     profiles = "mem:profiles"
-    slots = "mem:slots"
     imageRefs = "mem:image-refs"
-
-    # Global (cross-project) pinned slots.
-    globalSlots = "mem:global-slots"
 
     # Semantic and procedural memory scopes (used by consolidate).
     semantic = "mem:semantic"

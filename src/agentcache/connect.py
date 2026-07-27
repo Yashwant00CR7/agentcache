@@ -789,7 +789,6 @@ You must act as your own cache manager by calling the cache MCP tools at critica
 3. **Checklist Before Ending**:
    Before stating a task is complete:
    - Reflect on whether any lessons learned should be saved.
-   - Call `cache_reflect` to automatically distribute observations into slots if needed.
 """
         cwd = os.getcwd()
 

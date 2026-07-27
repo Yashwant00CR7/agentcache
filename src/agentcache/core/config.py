@@ -28,16 +28,6 @@ def is_auto_compress_enabled() -> bool:
     ) == "true"
 
 
-def is_slots_enabled() -> bool:
-    return (os.getenv("AGENTCACHE_SLOTS") or os.getenv("AGENTMEMORY_SLOTS")) == "true"
-
-
-def is_reflect_enabled() -> bool:
-    return (
-        os.getenv("AGENTCACHE_REFLECT") or os.getenv("AGENTMEMORY_REFLECT")
-    ) == "true"
-
-
 def is_graph_extraction_enabled() -> bool:
     return os.getenv("GRAPH_EXTRACTION_ENABLED") == "true"
 

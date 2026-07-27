@@ -21,7 +21,6 @@ from .core.privacy import *  # noqa: F401,F403
 from .core.project_profile import *  # noqa: F401,F403
 from .core.search_service import IndexPersistence  # noqa: F401
 from .core.session_store import *  # noqa: F401,F403
-from .core.slots import *  # noqa: F401,F403
 from .storage.paths import fingerprint_id, generate_id  # noqa: F401
 
 # ---------------------------------------------------------------------------
