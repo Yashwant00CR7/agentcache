@@ -138,6 +138,63 @@ def test_summarize_flushes_folder_observations(app_client, monkeypatch):
     assert meta["flushCursor"] == "2026-07-24T11:00:00Z"
 
 
+def test_summarize_accumulates_bounded_history(app_client, monkeypatch):
+    # #53 — each flush appends to meta["summaries"] instead of overwriting, so
+    # the consolidate() fact-merger has multiple episodic summaries to work with.
+    client = app_client
+    monkeypatch.setenv("GEMINI_API_KEY", "test-key")
+    monkeypatch.setattr(
+        llm_mod,
+        "generate_content",
+        lambda s, p: _fake_summary_xml(title="Session"),
+    )
+
+    import agentcache.app as app_mod
+    from agentcache.core.kv_scopes import KV
+    from agentcache.core.observation_store import normalize_folder_path
+
+    for i in range(3):
+        _observe(client, "histproj", "sess-h", f"Did {i}", f"2026-07-24T1{i}:00:00Z", 7)
+        result = llm_mod.summarize(
+            app_mod.kv,
+            {"sessionId": "sess-h", "project": "histproj", "cwd": "histproj"},
+        )
+        assert result["summarized"] == 1
+
+    meta = app_mod.kv.get(
+        KV.folder_meta(normalize_folder_path("histproj"), "sess-h"), "meta"
+    )
+    assert len(meta["summaries"]) == 3
+    # meta["summary"] still holds the latest for single-slot context injection.
+    assert meta["summary"] == meta["summaries"][-1]
+    assert meta["summaries"][0]["sessionId"] == "sess-h"
+
+
+def test_summarize_history_is_capped(app_client, monkeypatch):
+    client = app_client
+    monkeypatch.setenv("GEMINI_API_KEY", "test-key")
+    monkeypatch.setattr(llm_mod, "generate_content", lambda s, p: _fake_summary_xml())
+    monkeypatch.setattr(llm_mod, "SUMMARY_HISTORY_LIMIT", 2)
+
+    import agentcache.app as app_mod
+    from agentcache.core.kv_scopes import KV
+    from agentcache.core.observation_store import normalize_folder_path
+
+    for i in range(4):
+        _observe(
+            client, "capproj", "sess-cap", f"Did {i}", f"2026-07-24T1{i}:00:00Z", 7
+        )
+        llm_mod.summarize(
+            app_mod.kv,
+            {"sessionId": "sess-cap", "project": "capproj", "cwd": "capproj"},
+        )
+
+    meta = app_mod.kv.get(
+        KV.folder_meta(normalize_folder_path("capproj"), "sess-cap"), "meta"
+    )
+    assert len(meta["summaries"]) == 2  # oldest two dropped
+
+
 def test_summarize_advances_cursor_no_double_flush(app_client, monkeypatch):
     client = app_client
     _observe(client, "cursorproj", "sess-c", "First", "2026-07-24T10:00:00Z", 7)
@@ -259,3 +316,58 @@ def test_consolidate_callable_with_no_data(app_client):
     result = llm_mod.consolidate(app_mod.kv)
     assert result["success"] is True
     assert result["consolidated"] == 0  # nothing seeded, below min_observations
+
+
+def test_consolidate_fact_merger_fires_from_folder_history(app_client, monkeypatch):
+    # #53 — the semantic fact-merger fires once the folder-scoped summary history
+    # reaches 5 episodes, even on a single folder/agent.
+    client = app_client
+    for i in range(3):
+        _observe_concept(
+            client,
+            "semproj",
+            "ag-s",
+            f"Auth detail {i}",
+            f"2026-07-24T1{i}:00:00Z",
+            "auth",
+        )
+
+    import agentcache.app as app_mod
+    from agentcache.core.kv_scopes import KV
+    from agentcache.core.observation_store import normalize_folder_path
+
+    # Seed 5 episodic summaries into the folder's metadata history.
+    meta_scope = KV.folder_meta(normalize_folder_path("semproj"), "ag-s")
+    meta = app_mod.kv.get(meta_scope, "meta") or {}
+    meta["summaries"] = [
+        {
+            "title": f"Episode {i}",
+            "narrative": "Auth uses JWT tokens across sessions.",
+            "concepts": ["auth"],
+            "sessionId": "ag-s",
+            "createdAt": f"2026-07-24T0{i}:00:00Z",
+        }
+        for i in range(5)
+    ]
+    app_mod.kv.set(meta_scope, "meta", meta)
+
+    def _fake(system, prompt):
+        if "episodic memories" in system:
+            return '<facts><fact confidence="0.9">Auth uses JWT tokens.</fact></facts>'
+        if "related observations" in system:
+            return (
+                "<memory><type>architecture</type><title>Auth</title>"
+                "<content>JWT auth.</content><concepts><concept>auth</concept>"
+                "</concepts><strength>7</strength></memory>"
+            )
+        return ""
+
+    monkeypatch.setattr(llm_mod, "generate_content", _fake)
+
+    result = llm_mod.consolidate(app_mod.kv, {}, min_observations=3)
+    assert result["success"] is True
+    assert result["semantic"]["totalSummaries"] == 5
+    assert result["semantic"]["newFacts"] == 1
+
+    facts = [s.get("fact") for s in app_mod.kv.list(KV.semantic)]
+    assert "Auth uses JWT tokens." in facts

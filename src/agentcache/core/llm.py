@@ -53,6 +53,11 @@ def generate_content(system_instruction: str, prompt: str) -> str:
         raise RuntimeError(f"Gemini generateContent call failed: {e}")
 
 
+# Bounded per-(folder, agent) summary history retained for the consolidate()
+# fact-merger. Caps unbounded growth while keeping enough episodes to merge.
+SUMMARY_HISTORY_LIMIT = 20
+
+
 def _utc_now_iso() -> str:
     return (
         datetime.datetime.now(datetime.timezone.utc).isoformat().replace("+00:00", "Z")
@@ -163,16 +168,25 @@ def summarize(kv: StateKV, data: Dict[str, Any]) -> Dict[str, Any]:
         "title": title,
         "narrative": narrative,
         "concepts": concepts,
+        "folderPath": folder_path,
+        "sessionId": agent_id,
+        "createdAt": now,
         "updatedAt": now,
         "observationCount": len(observations),
     }
 
-    # Persist the summary into the folder's metadata.
+    # Persist the summary into the folder's metadata. ``summary`` holds the
+    # latest (context injection reads a single slot); ``summaries`` accumulates a
+    # bounded *history* so the consolidate() fact-merger has multiple episodic
+    # summaries to merge even on single-folder/single-agent projects (#53).
     meta_scope = KV.folder_meta(folder_path, agent_id)
     meta = kv.get(meta_scope, "meta") or new_folder_meta(
         folder_path, agent_id, now, obs_count=len(observations)
     )
     meta["summary"] = summary_obj
+    history = meta.get("summaries") or []
+    history.append(summary_obj)
+    meta["summaries"] = history[-SUMMARY_HISTORY_LIMIT:]
     kv.set(meta_scope, "meta", meta)
 
     # Advance the flush cursor to the newest observation flushed.
@@ -409,6 +423,110 @@ def consolidate(
         except Exception as e:
             print(f"[consolidate] Concept '{concept}' failed: {e}")
 
+    # === Semantic Memory Fact Merger ===
+    # Gather the bounded summary history stored per (folder, agent) by
+    # summarize() (#53). Sourcing from the folder-scoped history — rather than a
+    # single meta["summary"] slot — lets the merger fire on ordinary
+    # single-folder projects once enough sessions have been summarized.
+    summaries: List[Dict[str, Any]] = []
+    for entry in kv.list(KV.folders):
+        fp = entry.get("folderPath")
+        aid = entry.get("agentId")
+        if not fp or not aid:
+            continue
+        meta = kv.get(KV.folder_meta(fp, aid), "meta")
+        if meta and isinstance(meta, dict):
+            for s in meta.get("summaries") or []:
+                if isinstance(s, dict):
+                    summaries.append(s)
+
+    new_facts_count = 0
+    if len(summaries) >= 5:
+        recent_summaries = sorted(
+            summaries, key=lambda s: s.get("createdAt", ""), reverse=True
+        )[:20]
+
+        SEMANTIC_MERGE_SYSTEM = """You are a memory consolidation engine. Given overlapping episodic memories (session summaries), extract stable factual knowledge.
+
+        Output format (XML):
+        <facts>
+          <fact confidence="0.0-1.0">Concise factual statement</fact>
+        </facts>
+
+        Rules:
+        - Extract only facts that appear in 2+ episodes or are highly confident
+        - Confidence reflects how well-supported the fact is across episodes
+        - Combine overlapping information into single concise facts
+        - Skip ephemeral details (specific error messages, temporary states)"""
+
+        prompt_parts = []
+        for i, s in enumerate(recent_summaries):
+            prompt_parts.append(
+                f"[Episode {i + 1}]\nTitle: {s.get('title')}\nNarrative: {s.get('narrative') or ''}\nConcepts: {', '.join(s.get('concepts') or [])}"
+            )
+        merge_prompt = (
+            "Consolidate these episodic memories into stable facts:\n\n"
+            + "\n\n".join(prompt_parts)
+        )
+
+        try:
+            response = generate_content(SEMANTIC_MERGE_SYSTEM, merge_prompt)
+            fact_matches = re.findall(
+                r'<fact\s+confidence="([^"]+)">([^<]+)</fact>', response, re.DOTALL
+            )
+
+            existing_semantic = kv.list(KV.semantic)
+            now = (
+                datetime.datetime.now(datetime.timezone.utc)
+                .isoformat()
+                .replace("+00:00", "Z")
+            )
+
+            for conf_str, fact_text in fact_matches:
+                fact_text = fact_text.strip()
+                try:
+                    confidence = float(conf_str)
+                except Exception:
+                    confidence = 0.5
+
+                existing = None
+                for es in existing_semantic:
+                    if es.get("fact", "").lower() == fact_text.lower():
+                        existing = es
+                        break
+
+                if existing:
+                    existing["accessCount"] = (existing.get("accessCount") or 0) + 1
+                    existing["lastAccessedAt"] = now
+                    existing["updatedAt"] = now
+                    existing["confidence"] = max(
+                        existing.get("confidence", 0.5), confidence
+                    )
+                    kv.set(KV.semantic, existing["id"], existing)
+                else:
+                    sem = {
+                        "id": generate_id("sem"),
+                        "fact": fact_text,
+                        "confidence": confidence,
+                        "sourceSessionIds": list(
+                            {
+                                s["sessionId"]
+                                for s in recent_summaries
+                                if s.get("sessionId")
+                            }
+                        ),
+                        "sourceMemoryIds": [],
+                        "accessCount": 1,
+                        "lastAccessedAt": now,
+                        "strength": confidence,
+                        "createdAt": now,
+                        "updatedAt": now,
+                    }
+                    kv.set(KV.semantic, sem["id"], sem)
+                    new_facts_count += 1
+        except Exception as e:
+            print(f"[consolidate] Semantic merge failed: {e}")
+
     # === Procedural Memory Extraction ===
     memories = kv.list(KV.memories)
     new_procs_count = 0
@@ -500,6 +618,7 @@ def consolidate(
         "success": True,
         "consolidated": consolidated_count,
         "totalObservations": len(all_obs),
+        "semantic": {"newFacts": new_facts_count, "totalSummaries": len(summaries)},
         "procedural": {
             "newProcedures": new_procs_count,
             "patternsAnalyzed": len(patterns),
@@ -510,7 +629,7 @@ def consolidate(
     safe_audit(kv, "consolidate", "mem::consolidate-pipeline", [], res_summary)
     commit_if_enabled(
         kv,
-        f"Consolidation complete: consolidated={consolidated_count}, procs={new_procs_count}",
+        f"Consolidation complete: consolidated={consolidated_count}, facts={new_facts_count}, procs={new_procs_count}",
         "system",
     )
     return res_summary

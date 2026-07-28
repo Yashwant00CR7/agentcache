@@ -90,6 +90,7 @@ def new_folder_meta(
         "obsCount": obs_count,
         "lastUpdated": timestamp,
         "summary": None,
+        "summaries": [],
     }
 
 
