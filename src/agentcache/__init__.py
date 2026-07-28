@@ -2,7 +2,7 @@
 agentcache — A Python REST + WebSocket + MCP cache server for AI agents, backed by SQLite.
 """
 
-__version__ = "0.9.12"
+__version__ = "0.9.13"
 
 from .app import create_app
 from .connect import run_connect

@@ -5,6 +5,13 @@ All notable changes to `agentcache` will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.13] — 2026-07-28
+
+### Changed
+- Inkwell viewer redesigned around a "Floating Chrome" layout — header and tab bar consolidate into a single glass pill anchored top-center, footer shrinks to a pill at bottom-right, and every route gets a consistent Caveat page title. Content centers under the floating chrome up to a 1400px width.
+- Inkwell tools tab is now a split view: tool list on the left, JSON args/response panel on the right. The first tool is auto-selected on load so the panel is populated by default (applies to every theme).
+- Inkwell graph canvas gains its own dot-grid so it no longer reads as a flat panel over the body; tooltip and zoom controls are re-skinned to match.
+
 ## [0.9.12] — 2026-07-27
 
 ### Added
@@ -59,6 +66,7 @@ First PyPI release. Distributed as `agentcache-core` (the bare `agentcache` name
 
 Older 0.9.x builds predate this changelog and were never published to PyPI.
 
+[0.9.13]: https://github.com/Yashwant00CR7/agentcache/releases/tag/v0.9.13
 [0.9.12]: https://github.com/Yashwant00CR7/agentcache/releases/tag/v0.9.12
 [0.9.11]: https://github.com/Yashwant00CR7/agentcache/releases/tag/v0.9.11
 [0.9.10]: https://github.com/Yashwant00CR7/agentcache/releases/tag/v0.9.10
