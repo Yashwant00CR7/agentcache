@@ -5,7 +5,7 @@ from typing import Any, Dict, List, Optional
 
 from ..db import StateKV
 from .kv_scopes import KV
-from .observation_store import normalize_folder_path
+from .observation_store import resolve_folder_scope
 
 
 def strip_xml_wrappers(raw: str) -> str:
@@ -65,20 +65,13 @@ def context(kv: StateKV, data: Dict[str, Any]) -> Dict[str, Any]:
     into ``budget`` characters.
     """
     data = data or {}
-    session_id = data.get("sessionId")
     project = data.get("project")
-    cwd = data.get("cwd")
     try:
         budget = int(data.get("budget") or 1500)
     except (TypeError, ValueError):
         budget = 1500
 
-    folder_path_raw = cwd or project
-    if not folder_path_raw or not session_id:
-        raise ValueError("(cwd or project) and sessionId are required")
-
-    folder_path = normalize_folder_path(folder_path_raw)
-    agent_id = session_id  # identity mapping
+    folder_path, agent_id = resolve_folder_scope(data)
 
     from .session_store import _get_observation_store
 

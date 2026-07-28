@@ -74,9 +74,7 @@ def test_api_call_success_writes_no_error_log(hook_utils, monkeypatch):
         def read(self):
             return b'{"ok": true}'
 
-    monkeypatch.setattr(
-        hook_utils.urllib.request, "urlopen", lambda *_a, **_k: _Resp()
-    )
+    monkeypatch.setattr(hook_utils.urllib.request, "urlopen", lambda *_a, **_k: _Resp())
 
     result = hook_utils.api_call("context", {"a": 1})
     assert result == {"ok": True}

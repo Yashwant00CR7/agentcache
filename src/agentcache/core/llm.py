@@ -14,7 +14,7 @@ from .context_builder import get_xml_children, get_xml_tag, strip_xml_wrappers
 from .infer import vector_index_add_guarded
 from .kv_scopes import KV
 from .memory_store import memory_to_observation
-from .session_store import list_sessions
+from .observation_store import new_folder_meta, resolve_folder_scope
 
 
 def generate_content(system_instruction: str, prompt: str) -> str:
@@ -53,21 +53,169 @@ def generate_content(system_instruction: str, prompt: str) -> str:
         raise RuntimeError(f"Gemini generateContent call failed: {e}")
 
 
+def _utc_now_iso() -> str:
+    return (
+        datetime.datetime.now(datetime.timezone.utc).isoformat().replace("+00:00", "Z")
+    )
+
+
+def _render_observations(observations: List[Dict[str, Any]]) -> str:
+    """Render a chronological observation list into a compact LLM prompt block."""
+    parts = []
+    for o in observations:
+        files = ", ".join(o.get("files") or [])
+        parts.append(
+            f"[{o.get('type', 'other')}] {o.get('title') or o.get('text', '')}\n"
+            f"{o.get('text', '')}\n"
+            f"Files: {files}\nImportance: {o.get('importance', 5)}"
+        )
+    return "\n\n".join(parts)
+
+
+_SUMMARIZE_MAP_SYSTEM = """You are a session summarization engine. Given a chronological slice of coding-session observations for one project folder, produce a concise partial summary of what was done, decided, and learned. Keep it to 3-5 sentences of plain narrative."""
+
+_SUMMARIZE_REDUCE_SYSTEM = """You are a session summarization engine. Given several partial summaries of one coding session (in order), synthesize them into one final summary.
+
+Output XML:
+<summary>
+  <title>Concise title (max 80 chars)</title>
+  <narrative>3-6 sentence narrative of the work done, decisions made, and open threads</narrative>
+  <concepts>
+    <concept>key term</concept>
+  </concepts>
+</summary>"""
+
+
+def summarize(kv: StateKV, data: Dict[str, Any]) -> Dict[str, Any]:
+    """Summarize a folder's new observations and flush the cursor forward (#41/#46).
+
+    Ported off the old ``KV.sessions`` model onto folder-scoped storage.
+    Identity mapping mirrors ``agent_observe``: ``folderPath = cwd or project``
+    and ``agentId = sessionId``. Reads every observation after the stored flush
+    cursor, map-reduces them into a summary via Gemini, stores that summary into
+    the folder's metadata, and advances the flush cursor so the same
+    observations are never summarized twice.
+    """
+    folder_path, agent_id = resolve_folder_scope(data)
+
+    if not (os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")):
+        return {"success": False, "error": "GEMINI_API_KEY is not set"}
+
+    from .session_store import _get_observation_store
+
+    store = _get_observation_store(kv)
+
+    cursor = store.get_flush_cursor(folder_path, agent_id)
+    observations = store.observations_since(folder_path, agent_id, since=cursor)
+
+    if not observations:
+        return {
+            "success": True,
+            "summarized": 0,
+            "reason": "no_new_observations",
+            "folderPath": folder_path,
+            "agentId": agent_id,
+        }
+
+    # Map: chunk the observations and summarize each chunk independently.
+    CHUNK = 40
+    chunks = [observations[i : i + CHUNK] for i in range(0, len(observations), CHUNK)]
+    partials: List[str] = []
+    for chunk in chunks:
+        try:
+            partials.append(
+                generate_content(_SUMMARIZE_MAP_SYSTEM, _render_observations(chunk))
+            )
+        except Exception as e:  # noqa: BLE001
+            print(f"[summarize] map chunk failed: {e}")
+
+    if not partials:
+        return {
+            "success": False,
+            "error": "summarization_failed",
+            "folderPath": folder_path,
+            "agentId": agent_id,
+        }
+
+    # Reduce: fold the partials into one final XML summary.
+    if len(partials) == 1:
+        combined = partials[0]
+    else:
+        reduce_prompt = "\n\n".join(
+            f"[Part {i + 1}]\n{p}" for i, p in enumerate(partials)
+        )
+        try:
+            combined = generate_content(_SUMMARIZE_REDUCE_SYSTEM, reduce_prompt)
+        except Exception as e:  # noqa: BLE001
+            print(f"[summarize] reduce failed: {e}")
+            combined = partials[0]
+
+    cleaned = strip_xml_wrappers(combined)
+    title = (
+        get_xml_tag(cleaned, "title")
+        or f"Session summary ({len(observations)} observations)"
+    )
+    narrative = get_xml_tag(cleaned, "narrative") or cleaned.strip()
+    concepts = get_xml_children(cleaned, "concepts", "concept")
+
+    now = _utc_now_iso()
+    summary_obj = {
+        "title": title,
+        "narrative": narrative,
+        "concepts": concepts,
+        "updatedAt": now,
+        "observationCount": len(observations),
+    }
+
+    # Persist the summary into the folder's metadata.
+    meta_scope = KV.folder_meta(folder_path, agent_id)
+    meta = kv.get(meta_scope, "meta") or new_folder_meta(
+        folder_path, agent_id, now, obs_count=len(observations)
+    )
+    meta["summary"] = summary_obj
+    kv.set(meta_scope, "meta", meta)
+
+    # Advance the flush cursor to the newest observation flushed.
+    last_ts = observations[-1].get("timestamp")
+    if last_ts:
+        store.set_flush_cursor(folder_path, agent_id, last_ts)
+
+    safe_audit(
+        kv,
+        "summarize",
+        f"mem::folder:{folder_path}:{agent_id}",
+        [],
+        {"summarized": len(observations), "title": title},
+    )
+
+    return {
+        "success": True,
+        "summarized": len(observations),
+        "title": title,
+        "folderPath": folder_path,
+        "agentId": agent_id,
+        "flushCursor": last_ts,
+    }
+
+
 def consolidate(
-    kv: StateKV, project: Optional[str] = None, min_observations: int = 10
+    kv: StateKV, data: Optional[Dict[str, Any]] = None, min_observations: int = 10
 ) -> Dict[str, Any]:
     from .. import legacy as _legacy
 
-    sessions = list_sessions(kv)
-    if project:
-        sessions = [s for s in sessions if s.get("project") == project]
+    data = data or {}
+    project = data.get("project") if isinstance(data, dict) else None
 
-    all_obs = []
-    for s in sessions:
-        obs_list = kv.list(KV.observations(s["id"]))
-        for o in obs_list:
+    # Gather high-signal observations across every folder (folder-scoped model).
+    all_obs: List = []
+    for entry in kv.list(KV.folders):
+        fp = entry.get("folderPath")
+        aid = entry.get("agentId")
+        if not fp or not aid:
+            continue
+        for o in kv.list(KV.folder_obs(fp, aid)):
             if o.get("title") and o.get("importance", 5) >= 5:
-                all_obs.append((o, s["id"]))
+                all_obs.append((o, aid))
 
     if len(all_obs) < min_observations:
         return {
@@ -261,91 +409,6 @@ def consolidate(
         except Exception as e:
             print(f"[consolidate] Concept '{concept}' failed: {e}")
 
-    # === Semantic Memory Fact Merger ===
-    summaries = kv.list(KV.summaries)
-    new_facts_count = 0
-    if len(summaries) >= 5:
-        recent_summaries = sorted(
-            summaries, key=lambda s: s.get("createdAt", ""), reverse=True
-        )[:20]
-
-        SEMANTIC_MERGE_SYSTEM = """You are a memory consolidation engine. Given overlapping episodic memories (session summaries), extract stable factual knowledge.
-
-        Output format (XML):
-        <facts>
-          <fact confidence="0.0-1.0">Concise factual statement</fact>
-        </facts>
-
-        Rules:
-        - Extract only facts that appear in 2+ episodes or are highly confident
-        - Confidence reflects how well-supported the fact is across episodes
-        - Combine overlapping information into single concise facts
-        - Skip ephemeral details (specific error messages, temporary states)"""
-
-        prompt_parts = []
-        for i, s in enumerate(recent_summaries):
-            prompt_parts.append(
-                f"[Episode {i + 1}]\nTitle: {s.get('title')}\nNarrative: {s.get('narrative') or ''}\nConcepts: {', '.join(s.get('concepts') or [])}"
-            )
-        merge_prompt = (
-            "Consolidate these episodic memories into stable facts:\n\n"
-            + "\n\n".join(prompt_parts)
-        )
-
-        try:
-            response = generate_content(SEMANTIC_MERGE_SYSTEM, merge_prompt)
-            fact_matches = re.findall(
-                r'<fact\s+confidence="([^"]+)">([^<]+)</fact>', response, re.DOTALL
-            )
-
-            existing_semantic = kv.list(KV.semantic)
-            now = (
-                datetime.datetime.now(datetime.timezone.utc)
-                .isoformat()
-                .replace("+00:00", "Z")
-            )
-
-            for conf_str, fact_text in fact_matches:
-                fact_text = fact_text.strip()
-                try:
-                    confidence = float(conf_str)
-                except Exception:
-                    confidence = 0.5
-
-                existing = None
-                for es in existing_semantic:
-                    if es.get("fact", "").lower() == fact_text.lower():
-                        existing = es
-                        break
-
-                if existing:
-                    existing["accessCount"] = (existing.get("accessCount") or 0) + 1
-                    existing["lastAccessedAt"] = now
-                    existing["updatedAt"] = now
-                    existing["confidence"] = max(
-                        existing.get("confidence", 0.5), confidence
-                    )
-                    kv.set(KV.semantic, existing["id"], existing)
-                else:
-                    sem = {
-                        "id": generate_id("sem"),
-                        "fact": fact_text,
-                        "confidence": confidence,
-                        "sourceSessionIds": [
-                            s["sessionId"] for s in recent_summaries if "sessionId" in s
-                        ],
-                        "sourceMemoryIds": [],
-                        "accessCount": 1,
-                        "lastAccessedAt": now,
-                        "strength": confidence,
-                        "createdAt": now,
-                        "updatedAt": now,
-                    }
-                    kv.set(KV.semantic, sem["id"], sem)
-                    new_facts_count += 1
-        except Exception as e:
-            print(f"[consolidate] Semantic merge failed: {e}")
-
     # === Procedural Memory Extraction ===
     memories = kv.list(KV.memories)
     new_procs_count = 0
@@ -437,7 +500,6 @@ def consolidate(
         "success": True,
         "consolidated": consolidated_count,
         "totalObservations": len(all_obs),
-        "semantic": {"newFacts": new_facts_count, "totalSummaries": len(summaries)},
         "procedural": {
             "newProcedures": new_procs_count,
             "patternsAnalyzed": len(patterns),
@@ -448,7 +510,7 @@ def consolidate(
     safe_audit(kv, "consolidate", "mem::consolidate-pipeline", [], res_summary)
     commit_if_enabled(
         kv,
-        f"Consolidation complete: consolidated={consolidated_count}, facts={new_facts_count}, procs={new_procs_count}",
+        f"Consolidation complete: consolidated={consolidated_count}, procs={new_procs_count}",
         "system",
     )
     return res_summary

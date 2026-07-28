@@ -490,9 +490,7 @@ def test_observations_since_timestamp_cursor(tmp_db):
     store = ObservationStore(kv=tmp_db)
     _seed_since_fixture(store)
 
-    obs = store.observations_since(
-        "src/since", "agent_s", since="2026-07-24T11:00:00Z"
-    )
+    obs = store.observations_since("src/since", "agent_s", since="2026-07-24T11:00:00Z")
     assert [o["text"] for o in obs] == ["Third observation gamma"]
 
 

@@ -38,9 +38,10 @@ plugin/
 | `pre_compact.py` | `PreCompact` | Sync memory before context compaction |
 | `subagent_start.py` | `session_start` (SDK child) | Subagent session start |
 | `subagent_stop.py` | `session_end` (SDK child) | Subagent session end |
-| `stop.py` | `Stop` | Final cleanup on Claude exit |
+| `stop.py` | `Stop` | Flush session memory (summarize) + end session |
 | `task_completed.py` | `PostToolUse` (task done) | Log task completion |
 | `notification.py` | Various | Desktop/push notifications on events |
+| `notify.py` | (helper) | `confirm_flush(project)` — optional Save/Skip confirm before a flush (macOS dialog; Linux heads-up only) |
 
 ### Automation Scripts (non-hook)
 
@@ -61,6 +62,52 @@ Provides:
 - `api_call(path, body, timeout)` — sync REST call to agentmemory
 - `api_call_bg(path, body)` — background thread REST call
 
+## Flush / Pull Memory Pipeline (Claude Code hooks only)
+
+> **Scope warning:** The *flush* and *pull* steps described here are specific to
+> the **Claude Code** hook lifecycle (`Stop`, `PreCompact`, `SessionEnd`). Other
+> harnesses — **Cursor, Cline, Kiro, Codex** — integrate through
+> **continuous capture only** (each tool call is logged live via `agent_observe`
+> / MCP). They do **not** run the flush/pull pipeline, because they have no
+> equivalent Stop/PreCompact hook to trigger it. Do not assume this behaviour
+> exists outside Claude Code.
+
+The pipeline runs entirely on the **folder-scoped** memory model. Every step
+maps the hook payload to a `(folderPath, agentId)` scope using the same identity
+convention as `agent_observe`:
+
+```
+folderPath = cwd or project      agentId = sessionId
+```
+
+**Flush** (`Stop` → `POST /summarize`, and `PreCompact` before its pull):
+1. Read every observation after the folder's stored **flush cursor**
+   (`ObservationStore.observations_since`).
+2. Map-reduce them into a summary via Gemini and store it in the folder's
+   metadata (`folder_meta → meta["summary"]`).
+3. Advance the flush cursor to the newest observation so the same observations
+   are never summarized twice.
+4. If `GEMINI_API_KEY` is unset, `/summarize` no-ops with
+   `{"success": false, "error": "GEMINI_API_KEY is not set"}` — the flush is
+   skipped, never fatal.
+
+**Pull** (`PreCompact` → `POST /context`): builds an injected context block from
+prior folder summaries → relevant long-term memories → recent high-signal
+observations, greedily packed into a character budget.
+
+**Flush-before-pull:** `pre_compact.py` calls `/summarize` *before* `/context`,
+so the context injected at compaction reflects the latest work rather than a
+stale summary.
+
+**Consolidate** (`SessionEnd` → `POST /consolidate-pipeline`,
+`POST /crystals/auto`): iterates `KV.folders` / `folder_obs` (no longer sessions)
+to synthesize cross-folder long-term memories, semantic facts, and procedures.
+Gated by `CONSOLIDATION_ENABLED`.
+
+Hook failures are no longer silent: `hook_utils.api_call` logs `http_error`
+(e.g. a 404 from a missing route) distinctly from `network_error` (server down)
+to `~/.agentcache/hooks.log` (override with `AGENTCACHE_HOOK_LOG`).
+
 ## Environment Variables
 
 All scripts read from environment (or `~/.agentmemory/.env`):
@@ -75,6 +122,9 @@ All scripts read from environment (or `~/.agentmemory/.env`):
 | `AGENTMEMORY_INJECT_CONTEXT` | `true` to inject context into stdout on session start |
 | `AGENTMEMORY_AGENT_ID` | Agent identifier (default: `claude-code`) |
 | `CONSOLIDATION_ENABLED` | `true` to run consolidation on session end |
+| `GEMINI_API_KEY` / `GOOGLE_API_KEY` | Gemini key for `/summarize` + consolidation (flush no-ops without it) |
+| `AGENTCACHE_FLUSH_CONFIRM` | `true` to prompt Save/Skip before a flush (macOS dialog; Linux heads-up only). Skip suppresses that flush; unsupported/errored falls back to silent proceed (`notify.py`) |
+| `AGENTCACHE_HOOK_LOG` | Override path for the hook error log (default `~/.agentcache/hooks.log`) |
 
 ## Skills (`plugin/skills/`)
 

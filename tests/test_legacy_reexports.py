@@ -88,6 +88,7 @@ SYMBOL_MAP = {
     "rebuild_index": "agentcache.core.project_profile",
     # core/llm.py
     "generate_content": "agentcache.core.llm",
+    "summarize": "agentcache.core.llm",
     "consolidate": "agentcache.core.llm",
     # core/graph.py
     "folder_color": "agentcache.core.graph",
