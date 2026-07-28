@@ -12,6 +12,8 @@ import argparse
 import json
 import os
 
+from . import __version__
+
 
 def cmd_serve(args) -> None:
     """Start the Flask server."""
@@ -247,6 +249,11 @@ def main() -> None:
     parser = argparse.ArgumentParser(
         prog="agentcache",
         description="agentcache — AI agent cache server",
+    )
+    parser.add_argument(
+        "--version",
+        action="version",
+        version=f"agentcache {__version__}",
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
 

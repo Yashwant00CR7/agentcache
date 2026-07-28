@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="inkwell">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -49,36 +49,6 @@
       --font-ui: 'Inter', -apple-system, sans-serif;
       --font-mono: 'JetBrains Mono', 'SF Mono', 'Fira Code', monospace;
     }
-    html[data-theme="dark"] {
-      --bg: #1a1a1e;
-      --bg-alt: #232328;
-      --bg-subtle: #1f1f24;
-      --bg-inset: #2a2a30;
-      --border: #444;
-      --border-light: #3a3a42;
-      --border-heavy: #ccc;
-      --ink: #eee;
-      --ink-secondary: #ccc;
-      --ink-muted: #999;
-      --ink-faint: #777;
-      --cream: #2a2520;
-    }
-    html[data-theme="dark"] body {
-      background-image: radial-gradient(circle, #3a3a42 0.5px, transparent 0.5px);
-    }
-    html[data-theme="dark"] .graph-tooltip {
-      background: rgba(30,30,35,0.92);
-      border-color: rgba(255,255,255,0.1);
-      box-shadow: 0 8px 32px rgba(0,0,0,0.4);
-    }
-    html[data-theme="dark"] .graph-controls button {
-      background: rgba(30,30,35,0.92);
-      border-color: rgba(255,255,255,0.1);
-    }
-    html[data-theme="dark"] .graph-controls button:hover {
-      background: var(--ink);
-      color: var(--bg);
-    }
     /* CSP-safe row hover (inline event handlers are blocked by script-src-attr). */
     .folder-row:hover { background: var(--bg-subtle); }
     /* ============ INKWELL THEME ============
@@ -87,7 +57,7 @@
        to system serif / sans / mono if Google Fonts fails to load.
        ``!important`` is used only where an inline ``style="…"`` on the target
        element (there are many in this viewer) would otherwise win. */
-    html[data-theme="inkwell"] {
+    html[data-theme^="inkwell"] {
       --bg: #0b0b0d;
       --bg-alt: #131418;
       --bg-subtle: #17181c;
@@ -122,25 +92,66 @@
       --font-ui: 'Inter', -apple-system, sans-serif;
       --font-mono: 'JetBrains Mono', 'SF Mono', 'Fira Code', monospace;
     }
+    /* Inkwell Light: paper-white surface, deep ink text, keep Inkwell fonts +
+       accent language. Only surface / ink / border tokens change; node accent
+       colors are deepened for legibility against the light background. */
+    html[data-theme="inkwell-light"] {
+      --bg: #fbfaf5;
+      --bg-alt: #f4f2ea;
+      --bg-subtle: #efece2;
+      --bg-inset: #e8e4d6;
+      --border: #c9c4b3;
+      --border-light: #dcd8c9;
+      --border-heavy: #a8a493;
+      --ink: #1a1a1e;
+      --ink-secondary: #2f2f34;
+      --ink-muted: #6a6a72;
+      --ink-faint: #9a9a9f;
+      --accent: #c2185b;
+      --accent-light: #d63c7a;
+      --cream: #f4f2ea;
+      --node-file: #1f7a3d;
+      --node-function: #1e5aa8;
+      --node-concept: #b8860b;
+      --node-error: #c62139;
+      --node-decision: #6f4bb8;
+      --node-pattern: #0f6b8a;
+      --node-library: #b2600a;
+      --node-person: #1a1a1e;
+      --green: #1f7a3d;
+      --blue: #1e5aa8;
+      --yellow: #b8860b;
+      --red: #c62139;
+      --purple: #6f4bb8;
+      --orange: #b2600a;
+      --cyan: #0f6b8a;
+    }
     /* Body: dot-grid canvas over near-black background. */
-    html[data-theme="inkwell"] body {
+    html[data-theme^="inkwell"] body {
       background:
         radial-gradient(circle at 1px 1px, rgba(255,255,255,0.045) 1px, transparent 0) 0 0/18px 18px,
         var(--bg);
       color: var(--ink-secondary);
     }
+    /* Inkwell Light body: same dot-grid rhythm but ink-on-paper dots. */
+    html[data-theme="inkwell-light"] body {
+      background:
+        radial-gradient(circle at 1px 1px, rgba(0,0,0,0.06) 1px, transparent 0) 0 0/18px 18px,
+        var(--bg);
+      color: var(--ink-secondary);
+    }
     /* Header: subtle 1px divider (not the classic 4px brutalist rule). */
-    html[data-theme="inkwell"] .app-header {
+    html[data-theme^="inkwell"] .app-header {
       border-bottom: 1px solid var(--border-light);
     }
-    html[data-theme="inkwell"] .app-header .brand h1 {
+    html[data-theme^="inkwell"] .app-header .brand h1 {
       font-family: var(--font-display);
       font-size: 32px;
       font-weight: 700;
       letter-spacing: -0.01em;
       line-height: 1;
     }
-    html[data-theme="inkwell"] .app-header .version {
+    html[data-theme^="inkwell"] .app-header .version {
       font-family: var(--font-mono);
       font-size: 10px;
       color: var(--ink-faint);
@@ -148,20 +159,20 @@
       text-transform: uppercase;
     }
     /* Theme select: matches inkwell button styling. */
-    html[data-theme="inkwell"] #theme-select {
+    html[data-theme^="inkwell"] #theme-select {
       background: var(--bg-alt) !important;
       border: 1px solid var(--border-light) !important;
       color: var(--ink-secondary);
       border-radius: 8px !important;
     }
     /* Tab bar: connected pill-topped tabs — active tab visually seats into content. */
-    html[data-theme="inkwell"] .tab-bar {
+    html[data-theme^="inkwell"] .tab-bar {
       border-bottom: 1px solid var(--border-light);
       padding: 8px 24px 0;
       height: auto;
       gap: 4px;
     }
-    html[data-theme="inkwell"] .tab-bar button {
+    html[data-theme^="inkwell"] .tab-bar button {
       border: 1px solid transparent;
       border-radius: 8px 8px 0 0;
       padding: 8px 18px;
@@ -170,29 +181,29 @@
       margin-bottom: -1px;
       color: var(--ink-muted);
     }
-    html[data-theme="inkwell"] .tab-bar button:hover { color: var(--ink); }
-    html[data-theme="inkwell"] .tab-bar button.active {
+    html[data-theme^="inkwell"] .tab-bar button:hover { color: var(--ink); }
+    html[data-theme^="inkwell"] .tab-bar button.active {
       color: var(--ink);
       background: var(--bg-alt);
       border-color: var(--border-light);
       border-bottom-color: var(--bg-alt);
     }
     /* WS status pill with a glowing dot indicator. */
-    html[data-theme="inkwell"] .ws-status {
+    html[data-theme^="inkwell"] .ws-status {
       padding: 4px 12px;
       border-radius: 999px;
       background: var(--bg-alt);
       border: 1px solid var(--border-light);
       font-family: var(--font-mono);
     }
-    html[data-theme="inkwell"] .ws-status::before {
+    html[data-theme^="inkwell"] .ws-status::before {
       width: 6px; height: 6px; border-radius: 50%;
     }
-    html[data-theme="inkwell"] .ws-status.connected::before {
+    html[data-theme^="inkwell"] .ws-status.connected::before {
       background: var(--green); box-shadow: 0 0 8px var(--green);
     }
     /* Buttons: rounded 8px, no shadow chunk. */
-    html[data-theme="inkwell"] .btn {
+    html[data-theme^="inkwell"] .btn {
       background: var(--bg-alt) !important;
       border: 1px solid var(--border-light) !important;
       color: var(--ink-secondary) !important;
@@ -200,32 +211,32 @@
       box-shadow: none !important;
       transition: border-color 0.12s, color 0.12s;
     }
-    html[data-theme="inkwell"] .btn:hover {
+    html[data-theme^="inkwell"] .btn:hover {
       border-color: var(--border-heavy) !important;
       color: var(--ink) !important;
       box-shadow: none !important;
       background: var(--bg-subtle) !important;
     }
-    html[data-theme="inkwell"] .btn-primary {
+    html[data-theme^="inkwell"] .btn-primary {
       background: var(--ink) !important;
       color: var(--bg) !important;
       border-color: var(--ink) !important;
     }
-    html[data-theme="inkwell"] .btn-primary:hover {
+    html[data-theme^="inkwell"] .btn-primary:hover {
       background: var(--ink-secondary) !important;
       color: var(--bg) !important;
     }
-    html[data-theme="inkwell"] .btn-danger {
+    html[data-theme^="inkwell"] .btn-danger {
       background: transparent !important;
       border-color: var(--red) !important;
       color: var(--red) !important;
     }
-    html[data-theme="inkwell"] .btn-danger:hover {
+    html[data-theme^="inkwell"] .btn-danger:hover {
       background: rgba(239,77,118,0.08) !important;
       color: var(--red) !important;
     }
     /* Section headings: hand-drawn Caveat, larger. Overrides inline font-size. */
-    html[data-theme="inkwell"] h2[style*="font-display"] {
+    html[data-theme^="inkwell"] h2[style*="font-display"] {
       font-family: var(--font-display) !important;
       font-size: 28px !important;
       font-weight: 700 !important;
@@ -233,77 +244,77 @@
       color: var(--ink) !important;
     }
     /* Tables (folder list, memory list): use elev background, no visible outer border. */
-    html[data-theme="inkwell"] table { background: transparent; }
-    html[data-theme="inkwell"] th {
+    html[data-theme^="inkwell"] table { background: transparent; }
+    html[data-theme^="inkwell"] th {
       color: var(--ink-faint) !important;
       font-family: var(--font-mono) !important;
       font-size: 10px !important;
       text-transform: uppercase;
       letter-spacing: 0.12em;
     }
-    html[data-theme="inkwell"] td { color: var(--ink-secondary); }
-    html[data-theme="inkwell"] tr:hover td { background: var(--bg-subtle); }
-    html[data-theme="inkwell"] .folder-row:hover { background: var(--bg-subtle); }
+    html[data-theme^="inkwell"] td { color: var(--ink-secondary); }
+    html[data-theme^="inkwell"] tr:hover td { background: var(--bg-subtle); }
+    html[data-theme^="inkwell"] .folder-row:hover { background: var(--bg-subtle); }
     /* Observation detail cards: rounded corners, elev bg, subtle border. */
-    html[data-theme="inkwell"] .obs-detail-card {
+    html[data-theme^="inkwell"] .obs-detail-card {
       background: var(--bg-alt) !important;
       border: 1px solid var(--border-light) !important;
       border-radius: 10px !important;
       transition: border-color 0.12s;
     }
-    html[data-theme="inkwell"] .obs-detail-card:hover {
+    html[data-theme^="inkwell"] .obs-detail-card:hover {
       border-color: var(--border-heavy) !important;
     }
     /* Bulk toolbar (inline-styled div). */
-    html[data-theme="inkwell"] #obs-bulk-toolbar {
+    html[data-theme^="inkwell"] #obs-bulk-toolbar {
       background: var(--bg-alt) !important;
       border: 1px solid var(--border-light) !important;
       border-radius: 10px !important;
     }
     /* Modal: rounded, no brutalist shadow chunk. */
-    html[data-theme="inkwell"] .modal-overlay {
+    html[data-theme^="inkwell"] .modal-overlay {
       background: rgba(0,0,0,0.6);
       backdrop-filter: blur(2px);
     }
-    html[data-theme="inkwell"] .modal {
+    html[data-theme^="inkwell"] .modal {
       background: var(--bg-alt);
       border: 1px solid var(--border-light);
       border-radius: 14px;
       box-shadow: 0 20px 60px rgba(0,0,0,0.5);
     }
-    html[data-theme="inkwell"] .modal h3 {
+    html[data-theme^="inkwell"] .modal h3 {
       font-family: var(--font-display);
       font-size: 26px;
       font-weight: 700;
       color: var(--ink);
     }
     /* Empty state: big Caveat title, hand-drawn feel. */
-    html[data-theme="inkwell"] .empty-state .empty-icon {
+    html[data-theme^="inkwell"] .empty-state .empty-icon {
       font-family: var(--font-display);
       font-size: 56px;
       color: var(--ink-faint);
       opacity: 1;
     }
-    html[data-theme="inkwell"] .empty-state .empty-title {
+    html[data-theme^="inkwell"] .empty-state .empty-title {
       font-family: var(--font-display);
       font-size: 28px;
       font-weight: 700;
       color: var(--ink);
     }
-    html[data-theme="inkwell"] .empty-state .empty-lead,
-    html[data-theme="inkwell"] .empty-state p {
+    html[data-theme^="inkwell"] .empty-state .empty-lead,
+    html[data-theme^="inkwell"] .empty-state p {
       font-family: var(--font-body);
       font-style: normal;
       color: var(--ink-muted);
     }
-    html[data-theme="inkwell"] .empty-state pre.empty-cmd {
+    html[data-theme^="inkwell"] .empty-state pre.empty-cmd {
       background: var(--bg-inset);
       border: 1px solid var(--border-light);
       border-radius: 8px;
       color: var(--ink-secondary);
     }
     /* Footer: monospace uppercase spaced, subtle. */
-    html[data-theme="inkwell"] .viewer-footer {
+    html[data-theme^="inkwell"] .viewer-footer {
       background: var(--bg);
       border-top: 1px solid var(--border-light);
       color: var(--ink-faint);
@@ -312,70 +323,70 @@
       letter-spacing: 0.08em;
       text-transform: uppercase;
     }
-    html[data-theme="inkwell"] .viewer-footer a { color: var(--ink-muted); }
-    html[data-theme="inkwell"] .viewer-footer a:hover { color: var(--ink); }
+    html[data-theme^="inkwell"] .viewer-footer a { color: var(--ink-muted); }
+    html[data-theme^="inkwell"] .viewer-footer a:hover { color: var(--ink); }
     /* Scrollbars: thin, subtle. */
-    html[data-theme="inkwell"] ::-webkit-scrollbar { width: 6px; height: 6px; }
-    html[data-theme="inkwell"] ::-webkit-scrollbar-track { background: transparent; }
-    html[data-theme="inkwell"] ::-webkit-scrollbar-thumb {
+    html[data-theme^="inkwell"] ::-webkit-scrollbar { width: 6px; height: 6px; }
+    html[data-theme^="inkwell"] ::-webkit-scrollbar-track { background: transparent; }
+    html[data-theme^="inkwell"] ::-webkit-scrollbar-thumb {
       background: var(--border-heavy); border-radius: 3px;
     }
-    html[data-theme="inkwell"] ::-webkit-scrollbar-thumb:hover { background: var(--ink-faint); }
+    html[data-theme^="inkwell"] ::-webkit-scrollbar-thumb:hover { background: var(--ink-faint); }
     /* Inputs, selects, textareas: rounded with focus-blue border. */
-    html[data-theme="inkwell"] input[type="text"],
-    html[data-theme="inkwell"] input[type="search"],
-    html[data-theme="inkwell"] input[type="number"],
-    html[data-theme="inkwell"] textarea,
-    html[data-theme="inkwell"] select {
+    html[data-theme^="inkwell"] input[type="text"],
+    html[data-theme^="inkwell"] input[type="search"],
+    html[data-theme^="inkwell"] input[type="number"],
+    html[data-theme^="inkwell"] textarea,
+    html[data-theme^="inkwell"] select {
       background: var(--bg-alt);
       border: 1px solid var(--border-light);
       border-radius: 8px;
       color: var(--ink);
       outline: none;
     }
-    html[data-theme="inkwell"] input[type="text"]:focus,
-    html[data-theme="inkwell"] input[type="search"]:focus,
-    html[data-theme="inkwell"] textarea:focus,
-    html[data-theme="inkwell"] select:focus {
+    html[data-theme^="inkwell"] input[type="text"]:focus,
+    html[data-theme^="inkwell"] input[type="search"]:focus,
+    html[data-theme^="inkwell"] textarea:focus,
+    html[data-theme^="inkwell"] select:focus {
       border-color: var(--blue);
     }
-    html[data-theme="inkwell"] input::placeholder { color: var(--ink-faint); }
-    html[data-theme="inkwell"] code {
+    html[data-theme^="inkwell"] input::placeholder { color: var(--ink-faint); }
+    html[data-theme^="inkwell"] code {
       background: var(--bg-inset); color: var(--ink-secondary);
       padding: 1px 6px; border-radius: 4px;
     }
-    html[data-theme="inkwell"] pre {
+    html[data-theme^="inkwell"] pre {
       background: var(--bg-inset); color: var(--ink-secondary);
       padding: 12px 14px; border-radius: 8px; line-height: 1.5;
     }
     /* Graph tooltip and controls (unchanged colors from ink3-dark). */
-    html[data-theme="inkwell"] .graph-tooltip {
+    html[data-theme^="inkwell"] .graph-tooltip {
       background: rgba(19,20,24,0.94);
       border-color: var(--border-light);
       box-shadow: 0 8px 32px rgba(0,0,0,0.5);
     }
-    html[data-theme="inkwell"] .graph-controls button {
+    html[data-theme^="inkwell"] .graph-controls button {
       background: rgba(19,20,24,0.94);
       border-color: var(--border-light);
       color: var(--ink-secondary);
     }
-    html[data-theme="inkwell"] .graph-controls button:hover {
+    html[data-theme^="inkwell"] .graph-controls button:hover {
       background: var(--ink);
       color: var(--bg);
     }
-    html[data-theme="inkwell"] .type-chip {
+    html[data-theme^="inkwell"] .type-chip {
       background: var(--bg-alt);
       border-color: var(--border-light);
       color: var(--ink-muted);
     }
-    html[data-theme="inkwell"] .type-chip.active {
+    html[data-theme^="inkwell"] .type-chip.active {
       background: var(--ink);
       color: var(--bg);
       border-color: var(--ink);
     }
     /* Skeleton loading: shimmer + subtle border + rounded corners.
        Matches the original inkwell demo's .skel look. */
-    html[data-theme="inkwell"] .skeleton {
+    html[data-theme^="inkwell"] .skeleton {
       background: linear-gradient(90deg,
         var(--bg-inset) 25%,
         var(--bg-alt)   50%,
@@ -384,9 +395,9 @@
       border: 1px solid var(--border-light);
       border-radius: 10px;
     }
-    html[data-theme="inkwell"] .skeleton-card { height: 74px; margin-bottom: 10px; }
-    html[data-theme="inkwell"] .skeleton-line  { height: 14px; margin-bottom: 6px; }
-    html[data-theme="inkwell"] .loading {
+    html[data-theme^="inkwell"] .skeleton-card { height: 74px; margin-bottom: 10px; }
+    html[data-theme^="inkwell"] .skeleton-line  { height: 14px; margin-bottom: 6px; }
+    html[data-theme^="inkwell"] .loading {
       color: var(--ink-muted); font-family: var(--font-mono);
       font-size: 11px; letter-spacing: 0.06em;
     }
@@ -395,16 +406,16 @@
        The folder list is emitted with inline styles; the selectors below
        target those inline snippets by attribute-substring so we avoid a
        JS refactor. All ``!important`` marks are strictly to beat inline. */
-    html[data-theme="inkwell"] #view-folders > div:first-child { padding: 22px 24px !important; }
-    html[data-theme="inkwell"] #view-folders h2 {
+    html[data-theme^="inkwell"] #view-folders > div:first-child { padding: 0 !important; }
+    html[data-theme^="inkwell"] #view-folders h2 {
       font-family: var(--font-display) !important;
       font-size: 28px !important;
       font-weight: 700 !important;
       letter-spacing: -0.01em !important;
       color: var(--ink) !important;
-      margin-bottom: 14px !important;
+      margin: 0 0 14px !important;
     }
-    html[data-theme="inkwell"] #view-folders table {
+    html[data-theme^="inkwell"] #view-folders table {
       background: var(--bg-alt);
       border: 1px solid var(--border-light);
       border-radius: 12px;
@@ -412,11 +423,11 @@
       border-collapse: separate !important;
       border-spacing: 0;
     }
-    html[data-theme="inkwell"] #view-folders thead tr {
+    html[data-theme^="inkwell"] #view-folders thead tr {
       background: var(--bg-subtle);
       border-bottom: 1px solid var(--border-light) !important;
     }
-    html[data-theme="inkwell"] #view-folders thead th {
+    html[data-theme^="inkwell"] #view-folders thead th {
       padding: 10px 14px !important;
       border-bottom: 1px solid var(--border-light) !important;
       background: var(--bg-subtle);
@@ -427,16 +438,16 @@
       text-transform: uppercase;
       letter-spacing: 0.12em;
     }
-    html[data-theme="inkwell"] #view-folders .folder-row {
+    html[data-theme^="inkwell"] #view-folders .folder-row {
       border-bottom: 1px solid var(--border-light) !important;
       transition: background 0.12s ease;
     }
-    html[data-theme="inkwell"] #view-folders .folder-row:last-child { border-bottom: 0 !important; }
-    html[data-theme="inkwell"] #view-folders .folder-row:hover {
+    html[data-theme^="inkwell"] #view-folders .folder-row:last-child { border-bottom: 0 !important; }
+    html[data-theme^="inkwell"] #view-folders .folder-row:hover {
       background: var(--bg-subtle) !important;
     }
-    html[data-theme="inkwell"] #view-folders .folder-row td { padding: 12px 14px !important; }
-    html[data-theme="inkwell"] #view-folders .folder-row td span[style*="var(--bg-inset)"] {
+    html[data-theme^="inkwell"] #view-folders .folder-row td { padding: 12px 14px !important; }
+    html[data-theme^="inkwell"] #view-folders .folder-row td span[style*="var(--bg-inset)"] {
       background: var(--bg-inset) !important;
       color: var(--ink-secondary) !important;
       font-family: var(--font-mono) !important;
@@ -446,50 +457,50 @@
       padding: 3px 8px !important;
     }
     /* Observations count cell — vivid blue, mono, right-aligned */
-    html[data-theme="inkwell"] #view-folders .folder-row td[style*="color:var(--accent)"] {
+    html[data-theme^="inkwell"] #view-folders .folder-row td[style*="color:var(--accent)"] {
       color: var(--blue) !important;
       font-family: var(--font-mono) !important;
       font-weight: 600 !important;
     }
     /* Last-updated cell — mono muted */
-    html[data-theme="inkwell"] #view-folders .folder-row td[style*="color:var(--ink-muted)"] {
+    html[data-theme^="inkwell"] #view-folders .folder-row td[style*="color:var(--ink-muted)"] {
       color: var(--ink-faint) !important;
       font-family: var(--font-mono) !important;
       font-size: 11px !important;
     }
 
     /* -------- FOLDER DETAIL VIEW ------------------------------------ */
-    html[data-theme="inkwell"] #folder-detail-root { padding: 22px 24px !important; }
-    html[data-theme="inkwell"] #folder-detail-root > div:first-child span[style*="var(--font-mono)"] {
+    html[data-theme^="inkwell"] #folder-detail-root { padding: 22px 24px !important; }
+    html[data-theme^="inkwell"] #folder-detail-root > div:first-child span[style*="var(--font-mono)"] {
       color: var(--ink) !important;
       font-family: var(--font-mono) !important;
     }
-    html[data-theme="inkwell"] #folder-detail-root span[style*="var(--bg-inset)"] {
+    html[data-theme^="inkwell"] #folder-detail-root span[style*="var(--bg-inset)"] {
       background: var(--bg-inset) !important;
       color: var(--ink-secondary) !important;
       font-family: var(--font-mono) !important;
       border-radius: 4px !important;
     }
     /* Bulk toolbar overrides — pill-round */
-    html[data-theme="inkwell"] #obs-bulk-toolbar {
+    html[data-theme^="inkwell"] #obs-bulk-toolbar {
       background: rgba(255,255,255,0.02) !important;
       border: 1px solid var(--border-light) !important;
       border-radius: 10px !important;
       padding: 10px 14px !important;
     }
     /* Obs detail card: full override incl. inline background/border-radius */
-    html[data-theme="inkwell"] .obs-detail-card {
+    html[data-theme^="inkwell"] .obs-detail-card {
       background: var(--bg-alt) !important;
       border: 1px solid var(--border-light) !important;
       border-radius: 12px !important;
       padding: 14px 16px !important;
       margin-bottom: 10px !important;
     }
-    html[data-theme="inkwell"] .obs-detail-card:hover {
+    html[data-theme^="inkwell"] .obs-detail-card:hover {
       border-color: var(--border-heavy) !important;
     }
     /* Obs card type badge (colored via inline typeColor var) — pill w/ subtle bg */
-    html[data-theme="inkwell"] .obs-detail-card span[style*="text-transform:uppercase"] {
+    html[data-theme^="inkwell"] .obs-detail-card span[style*="text-transform:uppercase"] {
       background: rgba(255,255,255,0.04) !important;
       border: 1px solid rgba(255,255,255,0.06) !important;
       border-radius: 999px !important;
@@ -500,7 +511,7 @@
       letter-spacing: 0.12em !important;
     }
     /* Obs card timestamp — mono muted */
-    html[data-theme="inkwell"] .obs-detail-card span[style*="var(--font-mono)"] {
+    html[data-theme^="inkwell"] .obs-detail-card span[style*="var(--font-mono)"] {
       color: var(--ink-faint) !important;
       font-family: var(--font-mono) !important;
       font-size: 10px !important;
@@ -511,19 +522,19 @@
        The graph is rendered inside .graph-container with a canvas on the
        left and a fixed sidebar on the right. The sidebar contains the
        search, stat cards, filters, legend, and rebuild button. */
-    html[data-theme="inkwell"] .graph-container {
+    html[data-theme^="inkwell"] .graph-container {
       border-top: 1px solid var(--border-light) !important;
       background: var(--bg);
     }
-    html[data-theme="inkwell"] .graph-canvas-wrap {
+    html[data-theme^="inkwell"] .graph-canvas-wrap {
       background: var(--bg-alt) !important;
     }
-    html[data-theme="inkwell"] .graph-sidebar {
+    html[data-theme^="inkwell"] .graph-sidebar {
       background: var(--bg-alt) !important;
       border-left: 1px solid var(--border-light) !important;
       padding: 16px 16px 20px !important;
     }
-    html[data-theme="inkwell"] .graph-sidebar h3 {
+    html[data-theme^="inkwell"] .graph-sidebar h3 {
       color: var(--ink-faint) !important;
       font-family: var(--font-mono) !important;
       font-size: 10px !important;
@@ -535,7 +546,7 @@
       margin-bottom: 8px !important;
     }
     /* Graph search field */
-    html[data-theme="inkwell"] .graph-search {
+    html[data-theme^="inkwell"] .graph-search {
       background: var(--bg-inset) !important;
       border: 1px solid var(--border-light) !important;
       border-radius: 8px !important;
@@ -543,19 +554,19 @@
       padding: 7px 11px !important;
       font-family: var(--font-body) !important;
     }
-    html[data-theme="inkwell"] .graph-search:focus {
+    html[data-theme^="inkwell"] .graph-search:focus {
       border-color: var(--blue) !important;
       box-shadow: none !important;
     }
     /* Sidebar stat card block */
-    html[data-theme="inkwell"] .graph-sidebar div[style*="background:var(--bg-alt)"] {
+    html[data-theme^="inkwell"] .graph-sidebar div[style*="background:var(--bg-alt)"] {
       background: var(--bg-inset) !important;
       border: 1px solid var(--border-light) !important;
       border-radius: 10px !important;
       padding: 12px !important;
     }
     /* Sidebar stat number spans */
-    html[data-theme="inkwell"] .graph-sidebar span[style*="var(--font-display)"] {
+    html[data-theme^="inkwell"] .graph-sidebar span[style*="var(--font-display)"] {
       font-family: var(--font-display) !important;
       font-size: 34px !important;
       font-weight: 700 !important;
@@ -563,30 +574,30 @@
       line-height: 1 !important;
     }
     /* Filter items */
-    html[data-theme="inkwell"] .filter-item {
+    html[data-theme^="inkwell"] .filter-item {
       color: var(--ink-secondary);
       font-size: 12px;
       padding: 3px 0;
     }
-    html[data-theme="inkwell"] .filter-item input[type="checkbox"] { accent-color: var(--blue); }
-    html[data-theme="inkwell"] .filter-dot {
+    html[data-theme^="inkwell"] .filter-item input[type="checkbox"] { accent-color: var(--blue); }
+    html[data-theme^="inkwell"] .filter-dot {
       border-radius: 50% !important;
       width: 9px !important;
       height: 9px !important;
     }
     /* Legend rows */
-    html[data-theme="inkwell"] .graph-legend {
+    html[data-theme^="inkwell"] .graph-legend {
       border-top: 1px solid var(--border-light) !important;
       margin-top: 16px !important;
       padding-top: 16px !important;
     }
-    html[data-theme="inkwell"] .graph-legend-item {
+    html[data-theme^="inkwell"] .graph-legend-item {
       color: var(--ink-muted) !important;
       font-family: var(--font-body) !important;
       font-size: 11px !important;
     }
     /* Rebuild button already covered by generic .btn override */
-    html[data-theme="inkwell"] .graph-tooltip {
+    html[data-theme^="inkwell"] .graph-tooltip {
       background: rgba(19,20,24,0.94) !important;
       border: 1px solid var(--border-light) !important;
       border-radius: 8px !important;
@@ -597,15 +608,15 @@
       -webkit-backdrop-filter: none;
       box-shadow: 0 8px 24px rgba(0,0,0,0.5) !important;
     }
-    html[data-theme="inkwell"] .graph-tooltip .tt-name {
+    html[data-theme^="inkwell"] .graph-tooltip .tt-name {
       font-family: var(--font-display) !important;
       color: var(--ink) !important;
     }
-    html[data-theme="inkwell"] .graph-tooltip .tt-conns {
+    html[data-theme^="inkwell"] .graph-tooltip .tt-conns {
       border-top-color: var(--border-light) !important;
     }
     /* Graph zoom / recenter controls — rounded pill buttons */
-    html[data-theme="inkwell"] .graph-controls button {
+    html[data-theme^="inkwell"] .graph-controls button {
       width: 34px !important; height: 34px !important;
       background: rgba(19,20,24,0.85) !important;
       border: 1px solid var(--border-light) !important;
@@ -615,23 +626,23 @@
       -webkit-backdrop-filter: blur(8px);
       box-shadow: none !important;
     }
-    html[data-theme="inkwell"] .graph-controls button:hover {
+    html[data-theme^="inkwell"] .graph-controls button:hover {
       background: var(--bg-subtle) !important;
       color: var(--ink) !important;
       transform: none !important;
       box-shadow: none !important;
     }
-    html[data-theme="inkwell"] .graph-controls .ctrl-divider {
+    html[data-theme^="inkwell"] .graph-controls .ctrl-divider {
       background: var(--border-light) !important;
     }
     /* Selected node panel */
-    html[data-theme="inkwell"] #selected-node-panel > div {
+    html[data-theme^="inkwell"] #selected-node-panel > div {
       background: var(--bg-inset) !important;
       border: 1px solid var(--border-light) !important;
       border-radius: 10px !important;
     }
     /* Graph error notice */
-    html[data-theme="inkwell"] .graph-sidebar div[style*="border:1px solid var(--accent)"] {
+    html[data-theme^="inkwell"] .graph-sidebar div[style*="border:1px solid var(--accent)"] {
       background: rgba(239,77,118,0.04) !important;
       border: 1px solid rgba(239,77,118,0.35) !important;
       border-radius: 10px !important;
@@ -1460,7 +1471,6 @@
       font-size: 12px;
       box-shadow: 0 2px 8px rgba(204,0,0,0.10);
     }
-    html[data-theme="dark"] .viewer-auth-panel { background: #2a1a1a; }
     .viewer-auth-title { font-weight: 700; color: var(--accent); margin-bottom: 2px; font-size: 13px; }
     .viewer-auth-desc { color: var(--ink-muted); line-height: 1.4; }
     .viewer-auth-desc code { font-family: var(--font-mono); font-size: 10px; color: var(--ink); }
@@ -1854,11 +1864,11 @@
     /* --- Chrome harmonization: transparent header/footer so the body
        dot-grid runs edge-to-edge; graph canvas gets its own dot-grid;
        tooltip + zoom controls match the inkwell frame. --- */
-    html[data-theme="inkwell"] .app-header {
+    html[data-theme^="inkwell"] .app-header {
       background: transparent !important;
       padding: 12px 24px !important;
     }
-    html[data-theme="inkwell"] .viewer-footer {
+    html[data-theme^="inkwell"] .viewer-footer {
       background: transparent !important;
       border-top: 1px solid var(--border-light) !important;
       padding: 8px 24px !important;
@@ -1867,21 +1877,21 @@
       letter-spacing: 0.06em !important;
       color: var(--ink-faint) !important;
     }
-    html[data-theme="inkwell"] .tab-bar {
+    html[data-theme^="inkwell"] .tab-bar {
       background: transparent !important;
     }
-    html[data-theme="inkwell"] .graph-canvas-wrap {
+    html[data-theme^="inkwell"] .graph-canvas-wrap {
       background:
         radial-gradient(circle at 1px 1px, rgba(255,255,255,0.045) 1px, transparent 0) 0 0/18px 18px,
         var(--bg-alt) !important;
       border: 1px solid var(--border-light) !important;
       border-radius: 14px !important;
     }
-    html[data-theme="inkwell"] .graph-container {
+    html[data-theme^="inkwell"] .graph-container {
       background: transparent !important;
       border-top: 0 !important;
     }
-    html[data-theme="inkwell"] .graph-tooltip {
+    html[data-theme^="inkwell"] .graph-tooltip {
       background: rgba(23,24,28,0.95) !important;
       border: 1px solid var(--border) !important;
       border-radius: 8px !important;
@@ -1892,7 +1902,7 @@
       box-shadow: 0 8px 24px rgba(0,0,0,0.55) !important;
       backdrop-filter: none !important;
     }
-    html[data-theme="inkwell"] .graph-controls button {
+    html[data-theme^="inkwell"] .graph-controls button {
       width: 34px !important; height: 34px !important;
       background: rgba(23,24,28,0.85) !important;
       border: 1px solid var(--border-light) !important;
@@ -1901,27 +1911,27 @@
       backdrop-filter: blur(8px) !important;
       box-shadow: none !important;
     }
-    html[data-theme="inkwell"] .graph-controls button:hover {
+    html[data-theme^="inkwell"] .graph-controls button:hover {
       background: var(--bg-subtle) !important;
       color: var(--ink) !important;
       border-color: var(--border) !important;
       transform: none !important;
     }
-    html[data-theme="inkwell"] .graph-sidebar {
+    html[data-theme^="inkwell"] .graph-sidebar {
       background: var(--bg-alt) !important;
       border: 1px solid var(--border-light) !important;
       border-radius: 14px !important;
     }
-    html[data-theme="inkwell"] input:focus,
-    html[data-theme="inkwell"] textarea:focus,
-    html[data-theme="inkwell"] select:focus {
+    html[data-theme^="inkwell"] input:focus,
+    html[data-theme^="inkwell"] textarea:focus,
+    html[data-theme^="inkwell"] select:focus {
       box-shadow: none !important;
       outline: none !important;
       border-color: var(--blue) !important;
     }
 
     /* --- Floating pill header (top center) --- */
-    html[data-theme="inkwell"] .app-header {
+    html[data-theme^="inkwell"] .app-header {
       position: fixed !important;
       top: 14px !important;
       left: 50% !important;
@@ -1939,12 +1949,12 @@
       z-index: 100 !important;
       min-height: 52px !important;
     }
-    html[data-theme="inkwell"] .app-header .brand h1 {
+    html[data-theme^="inkwell"] .app-header .brand h1 {
       font-size: 22px !important;
     }
 
     /* --- Floating pill tab bar (top center, below header) --- */
-    html[data-theme="inkwell"] .tab-bar {
+    html[data-theme^="inkwell"] .tab-bar {
       position: fixed !important;
       top: 82px !important;
       left: 50% !important;
@@ -1962,7 +1972,7 @@
       overflow: visible !important;
       width: auto !important;
     }
-    html[data-theme="inkwell"] .tab-bar button {
+    html[data-theme^="inkwell"] .tab-bar button {
       border-radius: 999px !important;
       border: 1px solid transparent !important;
       border-bottom: 0 !important;
@@ -1971,7 +1981,7 @@
       margin-bottom: 0 !important;
       background: transparent !important;
     }
-    html[data-theme="inkwell"] .tab-bar button.active {
+    html[data-theme^="inkwell"] .tab-bar button.active {
       background: rgba(255,255,255,0.06) !important;
       border-color: transparent !important;
       color: var(--ink) !important;
@@ -1979,7 +1989,7 @@
 
     /* --- Centered content, full width up to a generous max, cleared past
        the floating chrome top/bottom. --- */
-    html[data-theme="inkwell"] .view {
+    html[data-theme^="inkwell"] .view {
       padding: 160px 40px 100px !important;
       max-width: 1400px !important;
       width: 100% !important;
@@ -1990,7 +2000,7 @@
     }
 
     /* --- Floating pill footer (bottom right) --- */
-    html[data-theme="inkwell"] .viewer-footer {
+    html[data-theme^="inkwell"] .viewer-footer {
       position: fixed !important;
       bottom: 16px !important;
       right: 16px !important;
@@ -2009,15 +2019,35 @@
       gap: 8px !important;
     }
 
+    /* Inkwell Light — paper-toned floating pills so the chrome blends with
+       the light surface instead of reading as a dark overlay. Placed after
+       the base inkwell chrome rules so it wins the cascade for the light
+       variant. Same shape, shadow, and backdrop-blur; only fill + shadow shift. */
+    html[data-theme="inkwell-light"] .app-header,
+    html[data-theme="inkwell-light"] .tab-bar,
+    html[data-theme="inkwell-light"] .viewer-footer {
+      background: rgba(251,250,245,0.82) !important;
+      border-color: var(--border-light) !important;
+      box-shadow: 0 4px 18px rgba(0,0,0,0.06) !important;
+    }
+    html[data-theme="inkwell-light"] .tab-bar button.active {
+      background: rgba(0,0,0,0.06) !important;
+      color: var(--ink) !important;
+    }
+    html[data-theme="inkwell-light"] .viewer-footer,
+    html[data-theme="inkwell-light"] .viewer-footer a {
+      color: var(--ink-secondary) !important;
+    }
+
     /* --- Tools: split view. Left column flexes for the tool list, right
        column is capped for the JSON panel. First row is auto-selected on
        load (see renderToolsTab) so the panel is populated by default. --- */
-    html[data-theme="inkwell"] #view-tools .tools-list,
-    html[data-theme="inkwell"] #view-tools #tool-panel {
+    html[data-theme^="inkwell"] #view-tools .tools-list,
+    html[data-theme^="inkwell"] #view-tools #tool-panel {
       max-width: none !important;
       width: 100% !important;
     }
-    html[data-theme="inkwell"] #view-tools > div {
+    html[data-theme^="inkwell"] #view-tools > div {
       display: grid !important;
       grid-template-columns: minmax(420px, 1fr) 520px !important;
       grid-template-rows: auto 1fr !important;
@@ -2026,25 +2056,25 @@
       max-width: none !important;
       margin: 0 !important;
     }
-    html[data-theme="inkwell"] #view-tools > div > h2 {
+    html[data-theme^="inkwell"] #view-tools > div > h2 {
       grid-column: 1 / -1 !important;
       margin-bottom: 0 !important;
     }
-    html[data-theme="inkwell"] #view-tools .tools-list {
+    html[data-theme^="inkwell"] #view-tools .tools-list {
       max-height: calc(100vh - 320px) !important;
       overflow-y: auto !important;
     }
-    html[data-theme="inkwell"] #view-tools #tool-panel {
+    html[data-theme^="inkwell"] #view-tools #tool-panel {
       margin-top: 0 !important;
       position: sticky !important;
       top: 160px !important;
     }
-    html[data-theme="inkwell"] #view-tools #tool-args-editor {
+    html[data-theme^="inkwell"] #view-tools #tool-args-editor {
       min-height: 260px !important;
       font-size: 14px !important;
       padding: 14px 16px !important;
     }
-    html[data-theme="inkwell"] #view-tools #tool-response {
+    html[data-theme^="inkwell"] #view-tools #tool-response {
       max-height: calc(100vh - 520px) !important;
       min-height: 180px !important;
       font-size: 13px !important;
@@ -2055,7 +2085,7 @@
        "Folder Memories" pattern). Injected via ::before so no JS refactor
        is needed. The inline h2s inside folders + tools are hidden so
        every route has a single consistent heading. --- */
-    html[data-theme="inkwell"] .view.active::before {
+    html[data-theme^="inkwell"] .view.active::before {
       display: block;
       font-family: var(--font-display) !important;
       font-size: 32px !important;
@@ -2065,33 +2095,33 @@
       margin: 0 0 20px !important;
       padding: 0 !important;
     }
-    html[data-theme="inkwell"] #view-folders.active::before  { content: "Folders"; }
-    html[data-theme="inkwell"] #view-memories.active::before { content: "Memories"; }
-    html[data-theme="inkwell"] #view-timeline.active::before { content: "Timeline"; }
-    html[data-theme="inkwell"] #view-tools.active::before    { content: "Tools"; }
-    html[data-theme="inkwell"] #view-graph.active::before    { content: "Graph"; }
-    html[data-theme="inkwell"] #view-folders h2,
-    html[data-theme="inkwell"] #view-tools h2 {
+    html[data-theme^="inkwell"] #view-folders.active::before  { content: "Folders"; }
+    html[data-theme^="inkwell"] #view-memories.active::before { content: "Memories"; }
+    html[data-theme^="inkwell"] #view-timeline.active::before { content: "Timeline"; }
+    html[data-theme^="inkwell"] #view-tools.active::before    { content: "Tools"; }
+    html[data-theme^="inkwell"] #view-graph.active::before    { content: "Graph"; }
+    html[data-theme^="inkwell"] #view-folders h2,
+    html[data-theme^="inkwell"] #view-tools h2 {
       display: none !important;
     }
-    html[data-theme="inkwell"] #view-folders > div,
-    html[data-theme="inkwell"] #view-tools > div {
+    html[data-theme^="inkwell"] #view-folders > div,
+    html[data-theme^="inkwell"] #view-tools > div {
       padding: 0 !important;
     }
 
     /* --- Graph: escape .view's max-width + padding so the canvas fills
        the viewport minus the floating chrome. Sidebar sits inline on the
        right, capped width. --- */
-    html[data-theme="inkwell"] #view-graph.active {
+    html[data-theme^="inkwell"] #view-graph.active {
       max-width: none !important;
       width: 100% !important;
       margin: 0 !important;
       padding: 130px 24px 70px !important;
     }
-    html[data-theme="inkwell"] #view-graph.active::before {
+    html[data-theme^="inkwell"] #view-graph.active::before {
       margin: 0 0 16px !important;
     }
-    html[data-theme="inkwell"] .graph-container {
+    html[data-theme^="inkwell"] .graph-container {
       flex-direction: row !important;
       height: calc(100vh - 260px) !important;
       margin: 0 !important;
@@ -2099,11 +2129,11 @@
       border-top: 0 !important;
       gap: 16px !important;
     }
-    html[data-theme="inkwell"] .graph-canvas-wrap {
+    html[data-theme^="inkwell"] .graph-canvas-wrap {
       flex: 1 1 auto !important;
       min-height: 0 !important;
     }
-    html[data-theme="inkwell"] .graph-sidebar {
+    html[data-theme^="inkwell"] .graph-sidebar {
       width: 260px !important;
       height: auto !important;
       flex: 0 0 260px !important;
@@ -2127,9 +2157,8 @@
       <span class="dateline" id="dateline"></span>
       <label for="theme-select" class="sr-only" style="position:absolute;left:-9999px;">Theme</label>
       <select id="theme-select" class="btn" style="font-size:10px;padding:3px 8px;letter-spacing:0.08em;margin-right:8px;text-transform:uppercase;cursor:pointer;" aria-label="Theme">
-        <option value="light">Light</option>
-        <option value="dark">Dark</option>
         <option value="inkwell">Inkwell</option>
+        <option value="inkwell-light">Inkwell Light</option>
       </select>
       <span id="ws-status" class="ws-status disconnected">live updates off</span>
     </div>
@@ -2169,9 +2198,9 @@
   <footer id="viewer-footer" class="viewer-footer">
     <span>agentcache viewer &middot; <span id="footer-version">loading...</span></span>
     <span class="footer-sep">&middot;</span>
-    <a href="https://github.com/rohitg00/agentmemory" target="_blank" rel="noopener">github</a>
+    <a href="https://github.com/Yashwant00CR7/agentcache" target="_blank" rel="noopener">github</a>
     <span class="footer-sep">&middot;</span>
-    <a href="https://github.com/rohitg00/agentmemory#readme" target="_blank" rel="noopener">docs</a>
+    <a href="https://github.com/Yashwant00CR7/agentcache#readme" target="_blank" rel="noopener">docs</a>
     <span class="footer-sep">&middot;</span>
     <a id="footer-feedback" href="#" target="_blank" rel="noopener">report issue &rarr;</a>
   </footer>
@@ -2218,7 +2247,7 @@
     var dateEl = document.getElementById('dateline');
     if (dateEl) dateEl.textContent = new Date().toLocaleDateString('en-US', { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' });
 
-    var THEMES = ['light', 'dark', 'inkwell'];
+    var THEMES = ['inkwell', 'inkwell-light'];
     var INKWELL_FONTS_HREF = 'https://fonts.googleapis.com/css2?family=Caveat:wght@400;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap';
     function ensureInkwellFonts() {
       if (document.getElementById('inkwell-fonts')) return;
@@ -2229,13 +2258,12 @@
       document.head.appendChild(link);
     }
     function isDarkMode() {
-      var t = document.documentElement.dataset.theme;
-      return t === 'dark' || t === 'inkwell';
+      return document.documentElement.dataset.theme === 'inkwell';
     }
     function applyTheme(theme, persist) {
-      if (THEMES.indexOf(theme) < 0) theme = 'light';
+      if (THEMES.indexOf(theme) < 0) theme = 'inkwell';
       document.documentElement.dataset.theme = theme;
-      if (theme === 'inkwell') ensureInkwellFonts();
+      ensureInkwellFonts();
       var sel = document.getElementById('theme-select');
       if (sel && sel.value !== theme) sel.value = theme;
       if (persist) safeStorage.setItem('agentcache-theme', theme);
@@ -2251,22 +2279,18 @@
         try { renderGraphSidebar(); renderGraph(); } catch (e) { /* graph not mounted */ }
       }
     }
-    // Legacy toggle kept for any external callers / bookmarklets: cycles L → D → I → L.
+    // Legacy toggle kept for any external callers / bookmarklets.
     window.toggleTheme = function() {
-      var cur = document.documentElement.dataset.theme || 'light';
+      var cur = document.documentElement.dataset.theme || 'inkwell';
       var next = THEMES[(THEMES.indexOf(cur) + 1) % THEMES.length];
       applyTheme(next, true);
     };
     var savedTheme = safeStorage.getItem('agentcache-theme');
     if (savedTheme && THEMES.indexOf(savedTheme) >= 0) {
       applyTheme(savedTheme, false);
-    } else if (savedTheme === 'dark' || savedTheme === 'light') {
-      // Legacy binary value from a previous release — treat as valid.
-      applyTheme(savedTheme, false);
-    } else if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
-      applyTheme('dark', false);
     } else {
-      applyTheme('light', false);
+      // Migrate legacy 'light'/'dark' preferences and cold-boot default → inkwell.
+      applyTheme('inkwell', !!savedTheme);
     }
     (function wireThemeSelect() {
       var sel = document.getElementById('theme-select');
@@ -2290,17 +2314,26 @@
       decision: '#a78bfa', pattern: '#6ee7f7', library: '#f0b64e', person: '#f2f2f4',
       folder: '#5fa8ff'
     };
+    // Inkwell Light: deeper hues so nodes stay legible on a paper-white bg.
+    var NODE_COLORS_INKWELL_LIGHT = {
+      file: '#1f7a3d', function: '#1e5aa8', concept: '#b8860b', error: '#c62139',
+      decision: '#6f4bb8', pattern: '#0f6b8a', library: '#b2600a', person: '#1a1a1e',
+      folder: '#1e5aa8'
+    };
     function applyNodeColorsForTheme(theme) {
-      // Guarded because applyTheme() runs at cold boot before the two
-      // color-map vars are assigned (their `var` declarations hoist but
-      // the object literals don't).
-      var src = theme === 'inkwell' ? NODE_COLORS_INKWELL : NODE_COLORS_DEFAULT;
+      // Guarded because applyTheme() runs at cold boot before the color-map
+      // vars are assigned (their `var` declarations hoist but the object
+      // literals don't).
+      var src;
+      if (theme === 'inkwell') src = NODE_COLORS_INKWELL;
+      else if (theme === 'inkwell-light') src = NODE_COLORS_INKWELL_LIGHT;
+      else src = NODE_COLORS_DEFAULT;
       if (!src || typeof NODE_COLORS === 'undefined') return;
       Object.keys(src).forEach(function (k) { NODE_COLORS[k] = src[k]; });
     }
     // Catch up on cold-boot theme (applyTheme already ran before this var
     // existed, so it couldn't swap colors then).
-    applyNodeColorsForTheme(document.documentElement.dataset.theme || 'light');
+    applyNodeColorsForTheme(document.documentElement.dataset.theme || 'inkwell');
 
     function folderColor(id) {
       var h = 0;
@@ -2602,8 +2635,8 @@
         el.innerHTML = '<div class="empty-state"><div class="empty-icon">&#128193;</div><p>No folder memories yet.</p><p style="font-size:13px;color:var(--ink-muted);margin-top:8px;">Use <code>agent_observe</code> with a <code>folderPath</code> to start recording.</p></div>';
         return;
       }
-      var html = '<div style="padding:20px 24px;">';
-      html += '<h2 style="font-family:var(--font-display);font-size:18px;font-weight:700;color:var(--ink);margin-bottom:16px;">Folder Memories</h2>';
+      var html = '<div>';
+      html += '<h2 style="font-family:var(--font-display);font-size:18px;font-weight:700;color:var(--ink);margin:0 0 16px;">Folder Memories</h2>';
       html += '<table style="width:100%;border-collapse:collapse;font-family:var(--font-ui);font-size:13px;">';
       html += '<thead><tr style="border-bottom:2px solid var(--border);">';
       html += '<th style="text-align:left;padding:8px 12px;color:var(--ink-muted);font-weight:600;">Folder</th>';
@@ -3643,7 +3676,7 @@
           '<div class="empty-title">No memories yet</div>' +
           '<div class="empty-lead">Memories are the distilled facts agentcache keeps across sessions &mdash; things like file paths, architectural decisions, and user preferences. Hooks capture them automatically during coding sessions; you can also save one directly.</div>' +
           '<pre class="empty-cmd">agent_cache {\n  title: "auth uses jose middleware",\n  content: "src/middleware/auth.ts handles JWT validation",\n  type: "architecture"\n}</pre>' +
-          '<div><a class="empty-link" href="https://github.com/rohitg00/agentmemory#memories" target="_blank" rel="noopener">Memory types &rarr;</a></div>' +
+          '<div><a class="empty-link" href="https://github.com/Yashwant00CR7/agentcache" target="_blank" rel="noopener">Memory types &rarr;</a></div>' +
           '</div>';
       } else {
         html += '<table><tr><th>Title</th><th>Type</th><th>Strength</th><th>Version</th><th>Updated</th><th>Actions</th></tr>';
@@ -4401,7 +4434,7 @@
           keyLabel: 'OPENAI_API_KEY',
           desc: 'Semantic vector search is off. BM25 keyword search is active and good for exact matches.',
           enable: 'export OPENAI_API_KEY=sk-...\n# or VOYAGE_API_KEY, COHERE_API_KEY, OLLAMA_HOST',
-          docs: 'https://github.com/rohitg00/agentmemory#embedding-providers',
+          docs: 'https://github.com/Yashwant00CR7/agentcache',
           dismissKey: '__embedding_none',
         });
       }

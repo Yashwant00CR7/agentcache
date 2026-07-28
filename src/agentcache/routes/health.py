@@ -109,7 +109,7 @@ def create_health_bp(kv=None, embedding_provider=None):
                 "needsLlm": True,
                 "description": "Extracts entities and relations from observations into a knowledge graph.",
                 "enableHow": "Set GRAPH_EXTRACTION_ENABLED=true and restart.",
-                "docsHref": "https://github.com/rohitg00/agentmemory#knowledge-graph",
+                "docsHref": "https://github.com/Yashwant00CR7/agentcache",
             },
             {
                 "key": "CONSOLIDATION_ENABLED",
@@ -120,12 +120,12 @@ def create_health_bp(kv=None, embedding_provider=None):
                 "needsLlm": True,
                 "description": "Periodically summarizes sessions into semantic facts + procedures.",
                 "enableHow": "Set CONSOLIDATION_ENABLED=true and restart.",
-                "docsHref": "https://github.com/rohitg00/agentmemory#consolidation",
+                "docsHref": "https://github.com/Yashwant00CR7/agentcache",
             },
         ]
         return jsonify(
             {
-                "version": "0.9.13",
+                "version": "0.9.14",
                 "provider": provider_kind,
                 "embeddingProvider": embedding_prov,
                 "flags": flags,
