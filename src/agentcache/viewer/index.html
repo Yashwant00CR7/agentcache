@@ -4118,18 +4118,6 @@
           dismissKey: f.key,
         });
       });
-      if (cfg.provider === 'noop' && !dismissed['__provider_noop']) {
-        banners.unshift({
-          kind: 'warn',
-          icon: '&#128274;',
-          title: 'No LLM provider key set',
-          keyLabel: 'ANTHROPIC_API_KEY',
-          desc: 'Compression, summarization, and graph extraction stay disabled until a key is provided.',
-          enable: 'export ANTHROPIC_API_KEY=sk-ant-...\n# then restart: npx @agentcache/agentcache',
-          docs: 'https://github.com/rohitg00/agentmemory#quick-start',
-          dismissKey: '__provider_noop',
-        });
-      }
       if (cfg.embeddingProvider === 'none' && !dismissed['__embedding_none']) {
         banners.push({
           kind: 'info',

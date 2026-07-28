@@ -50,7 +50,6 @@ EMBEDDING_PROVIDER=gemini
 CONSOLIDATION_ENABLED=true
 GRAPH_EXTRACTION_ENABLED=true
 AGENTCACHE_REFLECT=true
-AGENTCACHE_AUTO_COMPRESS=true
 EOF
 
 # Set the port for Flask application to run on (Hugging Face Space expects 7860)

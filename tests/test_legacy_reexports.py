@@ -23,7 +23,6 @@ SYMBOL_MAP = {
     # core/config.py
     "get_agent_id": "agentcache.core.config",
     "is_agent_scope_isolated": "agentcache.core.config",
-    "is_auto_compress_enabled": "agentcache.core.config",
     "is_graph_extraction_enabled": "agentcache.core.config",
     "is_consolidation_enabled": "agentcache.core.config",
     "commit_if_enabled": "agentcache.core.config",

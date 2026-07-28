@@ -22,12 +22,6 @@ def is_agent_scope_isolated() -> bool:
     ) == "isolated"
 
 
-def is_auto_compress_enabled() -> bool:
-    return (
-        os.getenv("AGENTCACHE_AUTO_COMPRESS") or os.getenv("AGENTMEMORY_AUTO_COMPRESS")
-    ) == "true"
-
-
 def is_graph_extraction_enabled() -> bool:
     return os.getenv("GRAPH_EXTRACTION_ENABLED") == "true"
 
