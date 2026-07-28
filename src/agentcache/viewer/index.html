@@ -1840,6 +1840,281 @@
     .personal-status-indicator.error {
       color: var(--accent);
     }
+
+    /* =====================================================================
+       INKWELL LAYOUT — "Floating Chrome".
+       Header + tabs consolidate into a single floating pill at TOP CENTER.
+       Footer becomes a small pill at BOTTOM RIGHT. Content is centered
+       under the floating chrome. Graph runs full-width with the sidebar
+       inline. Tools tab is a split view (list left, JSON panel right).
+       Every route gets a Caveat-style page title via ::before so all
+       views share one consistent heading treatment.
+       ===================================================================== */
+
+    /* --- Chrome harmonization: transparent header/footer so the body
+       dot-grid runs edge-to-edge; graph canvas gets its own dot-grid;
+       tooltip + zoom controls match the inkwell frame. --- */
+    html[data-theme="inkwell"] .app-header {
+      background: transparent !important;
+      padding: 12px 24px !important;
+    }
+    html[data-theme="inkwell"] .viewer-footer {
+      background: transparent !important;
+      border-top: 1px solid var(--border-light) !important;
+      padding: 8px 24px !important;
+      font-family: var(--font-mono) !important;
+      font-size: 10px !important;
+      letter-spacing: 0.06em !important;
+      color: var(--ink-faint) !important;
+    }
+    html[data-theme="inkwell"] .tab-bar {
+      background: transparent !important;
+    }
+    html[data-theme="inkwell"] .graph-canvas-wrap {
+      background:
+        radial-gradient(circle at 1px 1px, rgba(255,255,255,0.045) 1px, transparent 0) 0 0/18px 18px,
+        var(--bg-alt) !important;
+      border: 1px solid var(--border-light) !important;
+      border-radius: 14px !important;
+    }
+    html[data-theme="inkwell"] .graph-container {
+      background: transparent !important;
+      border-top: 0 !important;
+    }
+    html[data-theme="inkwell"] .graph-tooltip {
+      background: rgba(23,24,28,0.95) !important;
+      border: 1px solid var(--border) !important;
+      border-radius: 8px !important;
+      padding: 6px 10px !important;
+      font-family: var(--font-mono) !important;
+      font-size: 11px !important;
+      color: var(--ink) !important;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.55) !important;
+      backdrop-filter: none !important;
+    }
+    html[data-theme="inkwell"] .graph-controls button {
+      width: 34px !important; height: 34px !important;
+      background: rgba(23,24,28,0.85) !important;
+      border: 1px solid var(--border-light) !important;
+      border-radius: 8px !important;
+      color: var(--ink-secondary) !important;
+      backdrop-filter: blur(8px) !important;
+      box-shadow: none !important;
+    }
+    html[data-theme="inkwell"] .graph-controls button:hover {
+      background: var(--bg-subtle) !important;
+      color: var(--ink) !important;
+      border-color: var(--border) !important;
+      transform: none !important;
+    }
+    html[data-theme="inkwell"] .graph-sidebar {
+      background: var(--bg-alt) !important;
+      border: 1px solid var(--border-light) !important;
+      border-radius: 14px !important;
+    }
+    html[data-theme="inkwell"] input:focus,
+    html[data-theme="inkwell"] textarea:focus,
+    html[data-theme="inkwell"] select:focus {
+      box-shadow: none !important;
+      outline: none !important;
+      border-color: var(--blue) !important;
+    }
+
+    /* --- Floating pill header (top center) --- */
+    html[data-theme="inkwell"] .app-header {
+      position: fixed !important;
+      top: 14px !important;
+      left: 50% !important;
+      transform: translateX(-50%) !important;
+      border: 1px solid var(--border-light) !important;
+      border-bottom: 1px solid var(--border-light) !important;
+      border-radius: 999px !important;
+      background: rgba(19,20,24,0.82) !important;
+      -webkit-backdrop-filter: blur(14px) !important;
+      backdrop-filter: blur(14px) !important;
+      padding: 12px 28px !important;
+      gap: 28px !important;
+      min-width: 520px !important;
+      max-width: calc(100vw - 40px) !important;
+      z-index: 100 !important;
+      min-height: 52px !important;
+    }
+    html[data-theme="inkwell"] .app-header .brand h1 {
+      font-size: 22px !important;
+    }
+
+    /* --- Floating pill tab bar (top center, below header) --- */
+    html[data-theme="inkwell"] .tab-bar {
+      position: fixed !important;
+      top: 82px !important;
+      left: 50% !important;
+      transform: translateX(-50%) !important;
+      height: auto !important;
+      border: 1px solid var(--border-light) !important;
+      border-bottom: 1px solid var(--border-light) !important;
+      border-radius: 999px !important;
+      background: rgba(19,20,24,0.82) !important;
+      -webkit-backdrop-filter: blur(14px) !important;
+      backdrop-filter: blur(14px) !important;
+      padding: 6px 8px !important;
+      gap: 4px !important;
+      z-index: 99 !important;
+      overflow: visible !important;
+      width: auto !important;
+    }
+    html[data-theme="inkwell"] .tab-bar button {
+      border-radius: 999px !important;
+      border: 1px solid transparent !important;
+      border-bottom: 0 !important;
+      padding: 8px 18px !important;
+      font-size: 11px !important;
+      margin-bottom: 0 !important;
+      background: transparent !important;
+    }
+    html[data-theme="inkwell"] .tab-bar button.active {
+      background: rgba(255,255,255,0.06) !important;
+      border-color: transparent !important;
+      color: var(--ink) !important;
+    }
+
+    /* --- Centered content, full width up to a generous max, cleared past
+       the floating chrome top/bottom. --- */
+    html[data-theme="inkwell"] .view {
+      padding: 160px 40px 100px !important;
+      max-width: 1400px !important;
+      width: 100% !important;
+      margin: 0 auto !important;
+      box-sizing: border-box !important;
+      align-self: center !important;
+      align-content: start !important;
+    }
+
+    /* --- Floating pill footer (bottom right) --- */
+    html[data-theme="inkwell"] .viewer-footer {
+      position: fixed !important;
+      bottom: 16px !important;
+      right: 16px !important;
+      left: auto !important;
+      margin: 0 !important;
+      padding: 5px 14px !important;
+      background: rgba(19,20,24,0.82) !important;
+      -webkit-backdrop-filter: blur(14px) !important;
+      backdrop-filter: blur(14px) !important;
+      border: 1px solid var(--border-light) !important;
+      border-radius: 999px !important;
+      border-top: 1px solid var(--border-light) !important;
+      font-size: 9px !important;
+      z-index: 98 !important;
+      min-height: 24px !important;
+      gap: 8px !important;
+    }
+
+    /* --- Tools: split view. Left column flexes for the tool list, right
+       column is capped for the JSON panel. First row is auto-selected on
+       load (see renderToolsTab) so the panel is populated by default. --- */
+    html[data-theme="inkwell"] #view-tools .tools-list,
+    html[data-theme="inkwell"] #view-tools #tool-panel {
+      max-width: none !important;
+      width: 100% !important;
+    }
+    html[data-theme="inkwell"] #view-tools > div {
+      display: grid !important;
+      grid-template-columns: minmax(420px, 1fr) 520px !important;
+      grid-template-rows: auto 1fr !important;
+      gap: 20px 32px !important;
+      align-items: start !important;
+      max-width: none !important;
+      margin: 0 !important;
+    }
+    html[data-theme="inkwell"] #view-tools > div > h2 {
+      grid-column: 1 / -1 !important;
+      margin-bottom: 0 !important;
+    }
+    html[data-theme="inkwell"] #view-tools .tools-list {
+      max-height: calc(100vh - 320px) !important;
+      overflow-y: auto !important;
+    }
+    html[data-theme="inkwell"] #view-tools #tool-panel {
+      margin-top: 0 !important;
+      position: sticky !important;
+      top: 160px !important;
+    }
+    html[data-theme="inkwell"] #view-tools #tool-args-editor {
+      min-height: 260px !important;
+      font-size: 14px !important;
+      padding: 14px 16px !important;
+    }
+    html[data-theme="inkwell"] #view-tools #tool-response {
+      max-height: calc(100vh - 520px) !important;
+      min-height: 180px !important;
+      font-size: 13px !important;
+      padding: 14px 16px !important;
+    }
+
+    /* --- Per-view page title (Caveat display, matches the existing
+       "Folder Memories" pattern). Injected via ::before so no JS refactor
+       is needed. The inline h2s inside folders + tools are hidden so
+       every route has a single consistent heading. --- */
+    html[data-theme="inkwell"] .view.active::before {
+      display: block;
+      font-family: var(--font-display) !important;
+      font-size: 32px !important;
+      font-weight: 700 !important;
+      letter-spacing: -0.01em !important;
+      color: var(--ink) !important;
+      margin: 0 0 20px !important;
+      padding: 0 !important;
+    }
+    html[data-theme="inkwell"] #view-folders.active::before  { content: "Folders"; }
+    html[data-theme="inkwell"] #view-memories.active::before { content: "Memories"; }
+    html[data-theme="inkwell"] #view-timeline.active::before { content: "Timeline"; }
+    html[data-theme="inkwell"] #view-tools.active::before    { content: "Tools"; }
+    html[data-theme="inkwell"] #view-graph.active::before    { content: "Graph"; }
+    html[data-theme="inkwell"] #view-folders h2,
+    html[data-theme="inkwell"] #view-tools h2 {
+      display: none !important;
+    }
+    html[data-theme="inkwell"] #view-folders > div,
+    html[data-theme="inkwell"] #view-tools > div {
+      padding: 0 !important;
+    }
+
+    /* --- Graph: escape .view's max-width + padding so the canvas fills
+       the viewport minus the floating chrome. Sidebar sits inline on the
+       right, capped width. --- */
+    html[data-theme="inkwell"] #view-graph.active {
+      max-width: none !important;
+      width: 100% !important;
+      margin: 0 !important;
+      padding: 130px 24px 70px !important;
+    }
+    html[data-theme="inkwell"] #view-graph.active::before {
+      margin: 0 0 16px !important;
+    }
+    html[data-theme="inkwell"] .graph-container {
+      flex-direction: row !important;
+      height: calc(100vh - 260px) !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      border-top: 0 !important;
+      gap: 16px !important;
+    }
+    html[data-theme="inkwell"] .graph-canvas-wrap {
+      flex: 1 1 auto !important;
+      min-height: 0 !important;
+    }
+    html[data-theme="inkwell"] .graph-sidebar {
+      width: 260px !important;
+      height: auto !important;
+      flex: 0 0 260px !important;
+      border: 1px solid var(--border-light) !important;
+      border-radius: 12px !important;
+      display: block !important;
+      grid-template-columns: none !important;
+      gap: 0 !important;
+      overflow-y: auto !important;
+      padding: 16px !important;
+    }
   </style>
 </head>
 <body>
@@ -4585,6 +4860,10 @@
         });
       });
 
+      // Auto-select the first tool so the JSON panel is populated by default.
+      var firstRow = el.querySelector('.tool-row');
+      if (firstRow) firstRow.click();
+
       document.getElementById('tool-run-btn').addEventListener('click', async function() {
         var btn = this;
         var name = _selectedTool;
@@ -4861,6 +5140,7 @@
     var _origLoadMemories = typeof loadMemories === 'function' ? loadMemories : null;
 
   </script>
+
 </body>
 </html>
 

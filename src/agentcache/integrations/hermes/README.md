@@ -21,7 +21,7 @@ agentcache serve --port 3111
 
 (The distribution is `agentcache-core` on PyPI but installs the `agentcache` import + CLI.)
 
-Health check: `curl http://localhost:3111/agentcache/health` should return a JSON payload with `"version": "0.9.12"`.
+Health check: `curl http://localhost:3111/agentcache/health` should return a JSON payload with `"version": "0.9.13"`.
 
 **2. Wire it into Hermes with a single command:**
 
