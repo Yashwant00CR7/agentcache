@@ -107,9 +107,21 @@ def create_health_bp(kv=None, embedding_provider=None):
                 "default": False,
                 "affects": ["Graph", "Dashboard"],
                 "needsLlm": True,
-                "description": "Extracts entities and relations from observations into a knowledge graph.",
-                "enableHow": "Set GRAPH_EXTRACTION_ENABLED=true and restart.",
-                "docsHref": "https://github.com/Yashwant00CR7/agentcache",
+                "description": (
+                    "Turns each observation into entities + relations so the /graph view "
+                    "shows how your project's concepts connect. Needs an LLM provider key "
+                    "to do the extraction (Gemini or OpenAI)."
+                ),
+                "enableHow": (
+                    "# Add to  ~/.agentcache/.env   (Linux/macOS)\n"
+                    "#     or  %USERPROFILE%\\.agentcache\\.env   (Windows)\n"
+                    "GEMINI_API_KEY=...              # or OPENAI_API_KEY=sk-...\n"
+                    "GRAPH_EXTRACTION_ENABLED=true\n"
+                    "\n"
+                    "# then restart the server:\n"
+                    "agentcache serve"
+                ),
+                "docsHref": "https://github.com/Yashwant00CR7/agentcache#quickstart",
             },
             {
                 "key": "CONSOLIDATION_ENABLED",
@@ -118,9 +130,20 @@ def create_health_bp(kv=None, embedding_provider=None):
                 "default": False,
                 "affects": ["Dashboard", "Memories", "Crystals"],
                 "needsLlm": True,
-                "description": "Periodically summarizes sessions into semantic facts + procedures.",
-                "enableHow": "Set CONSOLIDATION_ENABLED=true and restart.",
-                "docsHref": "https://github.com/Yashwant00CR7/agentcache",
+                "description": (
+                    "Background worker that periodically summarises finished sessions into "
+                    "semantic facts (long-term memories) and procedures. Needs an LLM key."
+                ),
+                "enableHow": (
+                    "# Add to  ~/.agentcache/.env   (Linux/macOS)\n"
+                    "#     or  %USERPROFILE%\\.agentcache\\.env   (Windows)\n"
+                    "GEMINI_API_KEY=...              # or OPENAI_API_KEY=sk-...\n"
+                    "CONSOLIDATION_ENABLED=true\n"
+                    "\n"
+                    "# then restart the server:\n"
+                    "agentcache serve"
+                ),
+                "docsHref": "https://github.com/Yashwant00CR7/agentcache#quickstart",
             },
         ]
         return jsonify(
