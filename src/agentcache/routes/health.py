@@ -122,17 +122,6 @@ def create_health_bp(kv=None, embedding_provider=None):
                 "enableHow": "Set CONSOLIDATION_ENABLED=true and restart.",
                 "docsHref": "https://github.com/rohitg00/agentmemory#consolidation",
             },
-            {
-                "key": "AGENTCACHE_AUTO_COMPRESS",
-                "label": "LLM-powered observation compression",
-                "enabled": functions.is_auto_compress_enabled(),
-                "default": False,
-                "affects": ["Memories", "Timeline"],
-                "needsLlm": True,
-                "description": "Every observation is compressed by the LLM for richer summaries. OFF uses synthetic compression.",
-                "enableHow": "Set AGENTCACHE_AUTO_COMPRESS=true.",
-                "docsHref": "https://github.com/rohitg00/agentmemory/issues/138",
-            },
         ]
         return jsonify(
             {

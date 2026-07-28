@@ -15,7 +15,7 @@ from typing import Optional
 from flask import Blueprint, jsonify, request
 
 from ..core.kv_scopes import KV
-from ..core.observation_store import ObservationStore
+from ..core.observation_store import ObservationStore, resolve_folder_scope
 from ._deps import get_observation_store
 from .auth import require_auth
 
@@ -24,6 +24,25 @@ def _datetime_now_iso() -> str:
     return (
         datetime.datetime.now(datetime.timezone.utc).isoformat().replace("+00:00", "Z")
     )
+
+
+def _render_legacy_observation_text(data: dict) -> str:
+    """Render a legacy ``post_tool_use`` ``data`` block into observation text.
+
+    The hook posts ``{tool_name, tool_input, tool_output}``; the folder contract
+    wants a single ``text`` string. We flatten it the same way the synthetic
+    narrative does (tool name, then stringified input, then output), dropping
+    empty parts so the title (``text[:80]``) leads with the tool name.
+    """
+    from ..core.infer import stringify_for_narrative
+
+    tool_name = data.get("tool_name") or ""
+    parts = [
+        tool_name,
+        stringify_for_narrative(data.get("tool_input")),
+        stringify_for_narrative(data.get("tool_output")),
+    ]
+    return "\n".join(p for p in parts if p)
 
 
 def create_observations_bp(
@@ -51,6 +70,19 @@ def create_observations_bp(
             folder_path = body.get("folderPath")
             agent_id = body.get("agentId")
             text = body.get("text") or body.get("content") or ""
+
+            # #52 — accept the legacy post_tool_use hook payload
+            # ({sessionId, project, cwd, data:{tool_name, tool_input,
+            # tool_output}}) by mapping it to the folder contract
+            # server-side (folderPath = cwd or project, agentId = sessionId).
+            if (not folder_path or not agent_id or not text) and isinstance(
+                body.get("data"), dict
+            ):
+                try:
+                    folder_path, agent_id = resolve_folder_scope(body)
+                    text = _render_legacy_observation_text(body["data"])
+                except ValueError:
+                    pass  # fall through to the 400 below
 
             if not folder_path or not agent_id or not text:
                 return (

@@ -23,7 +23,6 @@ SYMBOL_MAP = {
     # core/config.py
     "get_agent_id": "agentcache.core.config",
     "is_agent_scope_isolated": "agentcache.core.config",
-    "is_auto_compress_enabled": "agentcache.core.config",
     "is_graph_extraction_enabled": "agentcache.core.config",
     "is_consolidation_enabled": "agentcache.core.config",
     "commit_if_enabled": "agentcache.core.config",
@@ -62,6 +61,7 @@ SYMBOL_MAP = {
     "strip_xml_wrappers": "agentcache.core.context_builder",
     "get_xml_tag": "agentcache.core.context_builder",
     "get_xml_children": "agentcache.core.context_builder",
+    "context": "agentcache.core.context_builder",
     # core/session_store.py
     "observe": "agentcache.core.session_store",
     "list_sessions": "agentcache.core.session_store",
@@ -87,6 +87,7 @@ SYMBOL_MAP = {
     "rebuild_index": "agentcache.core.project_profile",
     # core/llm.py
     "generate_content": "agentcache.core.llm",
+    "summarize": "agentcache.core.llm",
     "consolidate": "agentcache.core.llm",
     # core/graph.py
     "folder_color": "agentcache.core.graph",
