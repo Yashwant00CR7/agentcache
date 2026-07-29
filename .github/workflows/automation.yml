@@ -35,6 +35,30 @@ jobs:
       - name: Check Code Formatting
         run: ruff format --check src/ tests/
 
+  version-guard:
+    name: Version & CHANGELOG Guard
+    # Only meaningful on PRs, where we have a base ref to compare against.
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          # Need history back to the PR base so `git show origin/main:...` works.
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install packaging
+        run: pip install "packaging>=23.0"
+
+      - name: Check version monotonicity & CHANGELOG entry
+        run: |
+          python scripts/check_version_bump.py "origin/${{ github.base_ref }}"
+
   security-checks:
     name: Security Scanning (Bandit)
     runs-on: ubuntu-latest
